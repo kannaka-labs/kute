@@ -1,0 +1,110 @@
+"""Sizes from general-purpose compressors on one evaluation file, for
+comparison with a KUTE container of the same data.
+
+    python benchmarks/compressor_compare.py EVAL_FILE [--train TRAIN_FILE]
+        [--kute-container BYTES] [--kute-vocabulary BYTES] [--output report.json]
+
+Every compressor sees the evaluation file whole. With --train, Zstandard is
+also run with a dictionary trained on the training file: that is the closest
+rival to a shared vocabulary, since both sides hold something learned from
+other data in advance. The dictionary's size is reported and counted the same
+way the vocabulary's is.
+
+Needs the `zstandard` and `lz4` packages. Sizes only; nothing is timed.
+"""
+import argparse
+import gzip
+import hashlib
+import json
+import lzma
+import pathlib
+import sys
+
+import lz4.frame
+import zstandard
+
+DICT_SIZES = [112_640, 1_048_576]
+SAMPLE_BYTES = 64 * 1024
+MAX_TRAIN_BYTES = 256 * 1024 * 1024
+
+
+def samples_of(path: pathlib.Path) -> list[bytes]:
+    """The training file cut into 64 KiB pieces at line ends."""
+    out, total = [], 0
+    with open(path, "rb") as f:
+        while total < MAX_TRAIN_BYTES:
+            chunk = f.read(SAMPLE_BYTES)
+            if not chunk:
+                break
+            chunk += f.readline()
+            out.append(chunk)
+            total += len(chunk)
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("eval_file", type=pathlib.Path)
+    ap.add_argument("--train", type=pathlib.Path)
+    ap.add_argument("--kute-container", type=int)
+    ap.add_argument("--kute-vocabulary", type=int)
+    ap.add_argument("--output", type=pathlib.Path)
+    args = ap.parse_args()
+
+    data = args.eval_file.read_bytes()
+    raw = len(data)
+    rows = []
+
+    def row(name, size, shared=0, note=None):
+        rows.append({
+            "method": name,
+            "bytes": size,
+            "ratio": round(raw / size, 3),
+            "shared_bytes": shared,
+            "ratio_with_shared": round(raw / (size + shared), 3),
+            **({"note": note} if note else {}),
+        })
+
+    row("lz4 (default)", len(lz4.frame.compress(data)))
+    row("lz4 (level 12)", len(lz4.frame.compress(data, compression_level=12)))
+    row("gzip -9", len(gzip.compress(data, compresslevel=9)))
+    row("zstd -3", len(zstandard.ZstdCompressor(level=3).compress(data)))
+    row("zstd -19", len(zstandard.ZstdCompressor(level=19).compress(data)))
+    params = zstandard.ZstdCompressionParameters.from_level(22, enable_ldm=True, window_log=27)
+    row("zstd -22 --long=27", len(zstandard.ZstdCompressor(compression_params=params).compress(data)))
+    row("xz -9", len(lzma.compress(data, preset=9)))
+    train_info = None
+    if args.train:
+        samples = samples_of(args.train)
+        train_info = {"path": str(args.train), "bytes_used": sum(map(len, samples)), "samples": len(samples)}
+        for size in DICT_SIZES:
+            try:
+                dictionary = zstandard.train_dictionary(size, samples, level=19)
+            except zstandard.ZstdError as e:
+                rows.append({"method": f"zstd -19 with a {size}-byte trained dictionary", "error": str(e)})
+                continue
+            used = len(dictionary.as_bytes())
+            compressed = len(zstandard.ZstdCompressor(level=19, dict_data=dictionary).compress(data))
+            row(f"zstd -19 with a trained dictionary ({used:,} bytes)", compressed, shared=used)
+    if args.kute_container:
+        row("KUTE compressed container", args.kute_container, shared=args.kute_vocabulary or 0,
+            note="sizes supplied on the command line from a kute run on the same file")
+
+    report = {
+        "eval_file": {"path": str(args.eval_file), "bytes": raw, "sha256": hashlib.sha256(data).hexdigest()},
+        "train_file": train_info,
+        "versions": {"python": sys.version.split()[0], "zstandard": zstandard.__version__,
+                     "libzstd": ".".join(map(str, zstandard.ZSTD_VERSION)), "lz4": lz4.__version__},
+        "what": "bytes: compressed size of the evaluation file. shared_bytes: what both sides must already hold "
+                "(a dictionary or a vocabulary). ratio = raw / bytes; ratio_with_shared = raw / (bytes + shared_bytes).",
+        "results": sorted(rows, key=lambda r: r.get("bytes", 1 << 62)),
+    }
+    text = json.dumps(report, indent=2)
+    if args.output:
+        args.output.write_text(text + "\n", encoding="utf-8")
+    print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -60,6 +60,10 @@ On the development branch, after v0.3.0 (not yet released):
 * Typed events: `kute discover --symbol-field event --group-field device
   --time-field t` reads one event per line, separates the entities a file
   interleaves, and reports how long each discovered pattern takes.
+* A comparison with Zstandard, xz and LZ4 on real data. On 1.8 million
+  held-out log events the KUTE container is the smallest, 15 to 30 percent
+  under the best of them; on English text it is 11 to 13 percent larger
+  than `zstd -19` and `xz -9`. See `benchmarks/README.md`.
 
 ## Quick start
 

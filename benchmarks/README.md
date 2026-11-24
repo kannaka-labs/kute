@@ -284,6 +284,68 @@ file. What the times add, in seconds, searched part then held-out part:
 * Reading the 644 MB event file and holding it with its timestamps peaked
   at 1.1 GiB. The whole file is held in memory; this path is not streamed.
 
+## Against general-purpose compressors (development branch, after v0.3.0)
+
+Files: `results/compressors-enwik8.json`, `results/compressors-hdfs-v1.json`,
+script `compressor_compare.py` (Zstandard 1.5.7, LZ4, xz, gzip; sizes only,
+nothing timed). "With shared" adds what both sides must already hold: the
+vocabulary for KUTE, the dictionary for Zstandard.
+
+**Text: 10 MB of held-out enwik8.** KUTE is the compressed container from
+the recorded run with the compact vocabulary file.
+
+| method | bytes | ratio | with shared |
+|--------|------:|------:|------------:|
+| xz -9 | 2,680,608 | 3.73 | 3.73 |
+| zstd -22 --long=27 | 2,745,331 | 3.64 | 3.64 |
+| zstd -19 | 2,746,612 | 3.64 | 3.64 |
+| zstd -19, 1 MiB dictionary trained on the 90 MB | 2,756,297 | 3.63 | 2.63 |
+| zstd -19, 110 KiB trained dictionary | 3,068,943 | 3.26 | 3.14 |
+| **KUTE**, 32,768-token vocabulary (155 KB) | 3,084,101 | 3.24 | 3.09 |
+| zstd -3 | 3,489,545 | 2.87 | 2.87 |
+| gzip -9 | 3,590,266 | 2.79 | 2.79 |
+| lz4, level 12 | 4,124,097 | 2.43 | 2.43 |
+
+**On text KUTE is not competitive with a strong compressor.** It is ahead of
+gzip and of Zstandard at its default level, level with Zstandard using a
+small trained dictionary, and 11 to 13 percent larger than `zstd -19` and
+`xz -9`, which need nothing shared. Its container entropy-codes ids with
+zlib; that is the weaker half.
+
+**Events: HDFS_v1, the last 20 percent of blocks (115,012 blocks, 1,766,436
+events).** The vocabulary is `sequence-bpe` with 256 tokens trained on the
+first 80 percent, with a marker event at the end of each block so that block
+boundaries are kept. Decoding the container gives back the evaluation file
+exactly. The compressors were given the same events as text, one block per
+line (`E5 E22 E5 ...`, 6,374,580 bytes), and ratios are against that.
+
+| method | bytes | ratio | with shared |
+|--------|------:|------:|------------:|
+| **KUTE**, 256-token vocabulary (1,827 bytes) | 80,789 | 78.9 | 77.2 |
+| zstd -22 --long=27 | 116,007 | 55.0 | 55.0 |
+| zstd -19 | 127,914 | 49.8 | 49.8 |
+| gzip -9 | 145,348 | 43.9 | 43.9 |
+| zstd -19, 6.5 KB trained dictionary | 153,423 | 41.5 | 39.9 |
+| xz -9 | 159,296 | 40.0 | 40.0 |
+| lz4, level 12 | 177,820 | 35.8 | 35.8 |
+| zstd -3 | 362,173 | 17.6 | 17.6 |
+
+* **On this event data the KUTE container is the smallest, 30 percent under
+  the best general compressor on the text form.**
+* The text form flatters KUTE, so the compressors were also given a form
+  that costs them nothing to parse: one byte per event and a zero byte per
+  block end (1,881,448 bytes; not in the script). Then `zstd -19` reaches
+  95,401 bytes, `xz -9` 106,896 and `gzip -9` 114,295. KUTE's 80,789 is
+  still 15 percent smaller than the best of them, and 29 percent smaller
+  than gzip, which uses the same entropy coder as the container: that gap
+  is what the learned sequences contribute.
+* A larger vocabulary was worse: 4,096 tokens gave 92,597 bytes. Fewer,
+  longer tokens left the entropy coder less to work with.
+* This is one dataset with 22 to 29 event types and long runs of one event.
+  Nothing here says how it goes on events with many types or little
+  repetition, and the binary record formats in the directive's matrix
+  (CBOR, MessagePack, Protobuf) were not compared.
+
 ## Compact vocabulary file (development branch, after v0.3.0)
 
 `kute convert --input enwik8-32k.kvf --output enwik8-32k.kvfb` on the

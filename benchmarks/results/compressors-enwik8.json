@@ -1,0 +1,92 @@
+{
+  "eval_file": {
+    "path": "eval.txt",
+    "bytes": 9999811,
+    "sha256": "bf11ba9105280fa85210681704dfbc6b7ee1f400e9e07e560923dedcb1b65302"
+  },
+  "train_file": {
+    "path": "train.txt",
+    "bytes_used": 90000189,
+    "samples": 1369
+  },
+  "versions": {
+    "python": "3.14.3",
+    "zstandard": "0.25.0",
+    "libzstd": "1.5.7",
+    "lz4": "4.4.5"
+  },
+  "what": "bytes: compressed size of the evaluation file. shared_bytes: what both sides must already hold (a dictionary or a vocabulary). ratio = raw / bytes; ratio_with_shared = raw / (bytes + shared_bytes).",
+  "results": [
+    {
+      "method": "xz -9",
+      "bytes": 2680608,
+      "ratio": 3.73,
+      "shared_bytes": 0,
+      "ratio_with_shared": 3.73
+    },
+    {
+      "method": "zstd -22 --long=27",
+      "bytes": 2745331,
+      "ratio": 3.642,
+      "shared_bytes": 0,
+      "ratio_with_shared": 3.642
+    },
+    {
+      "method": "zstd -19",
+      "bytes": 2746612,
+      "ratio": 3.641,
+      "shared_bytes": 0,
+      "ratio_with_shared": 3.641
+    },
+    {
+      "method": "zstd -19 with a trained dictionary (1,048,576 bytes)",
+      "bytes": 2756297,
+      "ratio": 3.628,
+      "shared_bytes": 1048576,
+      "ratio_with_shared": 2.628
+    },
+    {
+      "method": "zstd -19 with a trained dictionary (112,640 bytes)",
+      "bytes": 3068943,
+      "ratio": 3.258,
+      "shared_bytes": 112640,
+      "ratio_with_shared": 3.143
+    },
+    {
+      "method": "KUTE compressed container",
+      "bytes": 3084101,
+      "ratio": 3.242,
+      "shared_bytes": 155266,
+      "ratio_with_shared": 3.087,
+      "note": "sizes supplied on the command line from a kute run on the same file"
+    },
+    {
+      "method": "zstd -3",
+      "bytes": 3489545,
+      "ratio": 2.866,
+      "shared_bytes": 0,
+      "ratio_with_shared": 2.866
+    },
+    {
+      "method": "gzip -9",
+      "bytes": 3590266,
+      "ratio": 2.785,
+      "shared_bytes": 0,
+      "ratio_with_shared": 2.785
+    },
+    {
+      "method": "lz4 (level 12)",
+      "bytes": 4124097,
+      "ratio": 2.425,
+      "shared_bytes": 0,
+      "ratio_with_shared": 2.425
+    },
+    {
+      "method": "lz4 (default)",
+      "bytes": 5626669,
+      "ratio": 1.777,
+      "shared_bytes": 0,
+      "ratio_with_shared": 1.777
+    }
+  ]
+}
