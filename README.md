@@ -6,6 +6,27 @@ every vocabulary is a versioned, checkable file.
 
 Status: v0.5, experimental. Formats and APIs may change before 1.0.
 
+## Measured against Hugging Face `tokenizers`
+
+Byte-level BPE, 32,768 tokens, trained on 90 MB of enwik8 and applied to
+10 MB neither tool saw. Ten runs each, called from Python, on one 8-thread
+laptop:
+
+| | KUTE 0.5.0 | tokenizers 0.23.2 |
+|---|---:|---:|
+| train (median) | 14.6 s | 27.0 s |
+| tokens for the held-out text | 2,551,171 | 2,703,872 |
+| encode the held-out text (median) | 0.31 s | 2.99 s as a batch of lines, 9.48 s as one document |
+
+Both decode back to the input exactly. The two tools split text differently
+before merging, so this compares them as used, on one dataset and one
+machine. Method, ranges, limits and the command to rerun it:
+[`benchmarks/README.md`](benchmarks/README.md#against-hugging-face-tokenizers-on-text-v050).
+
+```
+pip install kute-engine
+```
+
 ## What works in v0.5
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new

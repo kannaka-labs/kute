@@ -386,6 +386,53 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
+## Against Hugging Face `tokenizers` on text (v0.5.0)
+
+`benchmarks/hf_repeat.py` calls both libraries from Python in one process,
+in alternation, ten times each. Each trains a byte-level BPE vocabulary of
+32,768 tokens on the first 90,000,189 bytes of enwik8, then encodes the last
+9,999,811 bytes, which neither saw. KUTE is the `kute-engine` 0.5.0 wheel
+from PyPI; `tokenizers` is 0.23.2. Machine: one 8-thread laptop (Intel Ice
+Lake, Windows 11, Python 3.14), not idle. Report:
+`results/tokenizers-enwik8-10runs.json`.
+
+| | KUTE 0.5.0 | tokenizers 0.23.2 |
+|---|---:|---:|
+| train, median of 10 (range) | 14.6 s (12.9 to 18.6) | 27.0 s (22.5 to 57.8) |
+| tokens for the held-out text | 2,551,171 | 2,703,872 |
+| encode as one document, median (range) | 0.31 s (0.26 to 0.38) | 9.48 s (8.31 to 11.75) |
+| encode as a batch of lines, median (range) | not run | 2.99 s (2.69 to 3.55) |
+| decodes back to the input exactly | yes, all runs | yes, all runs |
+
+So on this text and this machine KUTE trained 1.8 times faster, produced
+5.6% fewer tokens, and encoded the held-out text about 10 times faster than
+`tokenizers` did in its faster form. All ten KUTE runs gave the same
+vocabulary digest.
+
+How to read it:
+
+- The two trainers split text differently before merging, each by its
+  default (`tokenizers` with its ByteLevel pre-tokenizer). Their vocabularies
+  differ, and so the token counts compare the tools as people use them, not
+  one algorithm against itself.
+- `tokenizers` encodes one document on one thread and a batch on several.
+  KUTE spreads one long document over every core. On a single thread the gap
+  in encode time would be smaller; that was not measured here.
+- The slowest `tokenizers` training run (57.8 s) was the first; the other
+  nine took 22.5 to 29.9 s.
+- One dataset, one machine. Nothing here says how either tool does on other
+  text, on code, or on other hardware.
+
+To reproduce:
+
+```
+pip install kute-engine==0.5.0 tokenizers==0.23.2
+python benchmarks/hf_repeat.py --train train.txt --eval eval.txt --runs 10
+```
+
+with `train.txt` and `eval.txt` the first 90,000,189 and last 9,999,811
+bytes of [enwik8](https://mattmahoney.net/dc/textdata.html).
+
 ## Resumed training (v0.5.0)
 
 90 MB of enwik8, byte BPE, single runs on one machine that was not idle.
