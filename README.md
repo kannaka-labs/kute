@@ -4,9 +4,9 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.2, experimental. Formats and APIs may change before 1.0.
+Status: v0.3, experimental. Formats and APIs may change before 1.0.
 
-## What works in v0.2
+## What works in v0.3
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -28,7 +28,7 @@ Status: v0.2, experimental. Formats and APIs may change before 1.0.
 * An experimental adapter contract for Holographic Resonance Medium (HRM)
   research. It is an interface only. See "What KUTE does not claim".
 
-On the development branch, after v0.2.0 (not yet released):
+New in v0.3:
 
 * `kute discover`: recurring patterns in event streams, with support,
   evidence and a held-out check, no tokenizer needed. Measured on a public

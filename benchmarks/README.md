@@ -128,7 +128,7 @@ real dataset, no compressed container, and encoded text at 2 to 3 MB/s.
 * The large text case was added, so there is now one measurement where the
   dataset is big enough for a 32K vocabulary to make sense.
 
-## Discovery on real event data (development branch, after v0.2.0)
+## Discovery on real event data (v0.3.0)
 
 `kute discover` looks for recurring patterns in symbol streams without
 training a tokenizer. This run uses a public, non-text dataset: HDFS_v1 from
@@ -178,7 +178,7 @@ What this does and does not show:
   noise and checks that both are found with exact counts and that the
   shuffled control comes back nearly empty. That data is synthetic.
 
-## Training memory with streaming (development branch, after v0.2.0)
+## Training memory with streaming (v0.3.0)
 
 `kute train --stream-bytes N` reads input in pieces of about N bytes, cut
 after a line feed. `train` now reports the peak resident memory of the

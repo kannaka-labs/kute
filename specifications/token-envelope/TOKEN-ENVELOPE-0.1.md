@@ -1,7 +1,7 @@
 # KUTE token envelope and token sequence container 0.1
 
 Status: published with KUTE v0.1.0; container format 2 (section 2.1) added in
-v0.2.0. Experimental.
+v0.2.0; escaped symbols (section 2.2) in v0.3.0. Experimental.
 
 Two small formats for tokens that leave their vocabulary file:
 
