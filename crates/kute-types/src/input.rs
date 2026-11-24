@@ -116,6 +116,8 @@ const MAX_HEADER: usize = 64 * 1024;
 /// DEFLATE cannot expand by more than about 1032 to 1, so a body that claims
 /// more output than this for its size is rejected before any is produced.
 const MAX_INFLATE_RATIO: u64 = 1040;
+/// Largest buffer reserved on the word of a container header alone.
+const MAX_PREALLOCATE: u64 = 1 << 20;
 
 impl TokenSequence {
     /// Serialize to the `.kute` container: magic, little-endian header length,
@@ -211,7 +213,11 @@ impl TokenSequence {
                 return Err(bad("declared token count exceeds what the data can hold"));
             }
             let mut decoder = flate2::read::ZlibDecoder::new(&bytes[pos..]);
-            let mut plain = Vec::with_capacity(expected as usize);
+            // The count comes from the file, so it only sizes the buffer up to a
+            // fixed bound. Past that the buffer grows as real data arrives; a
+            // header that claims gigabytes over a short or corrupt stream costs
+            // nothing.
+            let mut plain = Vec::with_capacity(expected.min(MAX_PREALLOCATE) as usize);
             // One byte past the expected length, so a longer stream is caught
             // and the stream checksum is verified.
             (&mut decoder).take(expected + 1).read_to_end(&mut plain).map_err(|e| bad(&format!("compressed ids: {e}")))?;
@@ -339,6 +345,20 @@ mod tests {
             forged.extend_from_slice(&bytes[9 + header_len..]);
             assert!(TokenSequence::from_bytes(&forged).is_err(), "count {claim}");
         }
+        // A header may claim as many ids as the ratio limit allows over a body
+        // that is not a zlib stream at all. The reader must refuse it without
+        // first reserving the claimed size (64 GiB here).
+        let junk = 64usize << 20;
+        let header = format!(
+            "{{\"vocabulary_id\":\"kute:test\",\"vocabulary_version\":\"1.0.0\",\"vocabulary_digest\":\"sha256:00\",\"modality\":\"text\",\"count\":{},\"id_bytes\":1}}",
+            junk as u64 * 1024
+        );
+        let mut bomb = Vec::with_capacity(9 + header.len() + junk);
+        bomb.extend_from_slice(MAGIC_COMPRESSED);
+        bomb.extend_from_slice(&(header.len() as u32).to_le_bytes());
+        bomb.extend_from_slice(header.as_bytes());
+        bomb.resize(bomb.len() + junk, 0xaa);
+        assert!(TokenSequence::from_bytes(&bomb).is_err());
         let mut flipped = bytes.clone();
         let last = flipped.len() - 6;
         flipped[last] ^= 0x40;
