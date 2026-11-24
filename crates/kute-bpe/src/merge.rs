@@ -198,7 +198,7 @@ fn apply_merges_small(ids: &mut Vec<u32>, ranks: &FxHashMap<Pair, u32>) {
         let mut best: Option<(usize, u32)> = None;
         for i in 0..ids.len() - 1 {
             if let Some(&rank) = ranks.get(&(ids[i], ids[i + 1])) {
-                if best.map_or(true, |(_, b)| rank < b) {
+                if best.is_none_or(|(_, b)| rank < b) {
                     best = Some((i, rank));
                 }
             }

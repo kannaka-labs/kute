@@ -4,7 +4,7 @@ description = "The rustbpe reference backend for KUTE, and a kute command with i
 version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-rust-version = "1.80"
+rust-version = "1.85"
 authors = ["Kannaka Labs"]
 repository = "https://github.com/kannaka-labs/kute"
 # Not published: rustbpe is pinned to a git revision (see below), which

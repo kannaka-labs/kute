@@ -46,7 +46,8 @@ pub fn binary_records(seed: u64, records: usize) -> Vec<u8> {
         out.extend_from_slice(b"KTF\x01");
         out.extend_from_slice(&[*rng.pick(&[0x10u8, 0x11, 0x20, 0x21, 0x7f]), 0x00]);
         out.extend_from_slice(&(i as u32).to_le_bytes());
-        out.extend_from_slice(rng.pick(&payloads));
+        let payload: &[u8; 8] = rng.pick(&payloads);
+        out.extend_from_slice(payload);
         out.extend_from_slice(&((rng.next_u64() >> 48) as u16).to_le_bytes());
         out.extend_from_slice(&[0u8; 12]);
     }
@@ -116,9 +117,9 @@ pub fn invented_words(seed: u64, words: usize) -> Vec<u8> {
         .map(|_| {
             let mut w = String::new();
             for _ in 0..2 + rng.below(3) {
-                w.push_str(rng.pick(ONSETS));
-                w.push_str(rng.pick(VOWELS));
-                w.push_str(rng.pick(CODAS));
+                w.push_str(rng.pick::<&str>(ONSETS));
+                w.push_str(rng.pick::<&str>(VOWELS));
+                w.push_str(rng.pick::<&str>(CODAS));
             }
             w
         })
