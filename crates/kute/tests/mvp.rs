@@ -568,3 +568,45 @@ fn tempdir(name: &str) -> std::path::PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
+
+#[test]
+fn a_resumed_run_gives_the_vocabulary_of_one_run() {
+    let engine = Engine::new();
+    let mut docs: Vec<Vec<u8>> = Vec::new();
+    for i in 0..400u32 {
+        docs.push(format!("{TEXT} record {i} of the resumed run, {} and {}", i * 7 % 13, i * 31 % 17).into_bytes());
+    }
+    let train = |size: u32, from: Option<&Vocabulary>, limit: Option<usize>| {
+        let mut c = config("test:resume", size);
+        c.max_token_length = limit;
+        c.resume_from = from.map(|v| Box::new(v.clone()));
+        engine.train("bpe", "text", &AdapterConfig::default(), &docs, &c)
+    };
+    for limit in [None, Some(6)] {
+        let whole = train(700, None, limit).unwrap();
+        let first = train(400, None, limit).unwrap();
+        assert!(first.merges.len() < whole.merges.len());
+        let resumed = train(700, Some(&first), limit).unwrap();
+        assert_eq!(resumed, whole);
+        assert_eq!(resumed.digest().unwrap(), whole.digest().unwrap());
+        // in two more steps, and from a vocabulary that is already complete
+        let second = train(550, Some(&first), limit).unwrap();
+        assert_eq!(train(700, Some(&second), limit).unwrap(), whole);
+        assert_eq!(train(700, Some(&whole), limit).unwrap(), whole);
+    }
+
+    let first = train(400, None, None).unwrap();
+    // a different corpus, different settings, a smaller target, another algorithm
+    let mut c = config("test:resume", 700);
+    c.resume_from = Some(Box::new(first.clone()));
+    let other: Vec<Vec<u8>> = docs.iter().skip(1).cloned().collect();
+    let err = engine.train("bpe", "text", &AdapterConfig::default(), &other, &c).unwrap_err();
+    assert!(err.to_string().contains("different corpus"), "{err}");
+    c.min_frequency = 3;
+    let err = engine.train("bpe", "text", &AdapterConfig::default(), &docs, &c).unwrap_err();
+    assert!(err.to_string().contains("min_frequency differs"), "{err}");
+    assert!(train(300, Some(&first), None).is_err());
+    let mut c = config("test:resume", 700);
+    c.resume_from = Some(Box::new(first));
+    assert!(engine.train("unigram", "text", &AdapterConfig::default(), &docs, &c).is_err());
+}

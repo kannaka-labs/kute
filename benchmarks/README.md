@@ -367,6 +367,22 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
+## Resumed training (after v0.4.0)
+
+90 MB of enwik8, byte BPE, single runs on one machine that was not idle.
+
+| run | seconds | peak memory | merges |
+|-----|--------:|------------:|-------:|
+| one run to 32,768 tokens | 17.0 | 221 MiB | 32,512 |
+| one run to 16,384 tokens | 14.6 | 217 MiB | 16,128 |
+| resumed from 16,384 to 32,768 | 7.5 | 178 MiB | 32,512 |
+| resumed from the finished 32,768 | 6.7 | 179 MiB | 32,512 |
+
+The resumed file is byte for byte the file of the single run. The last row
+is the floor: reading the corpus and applying known merges, learning
+nothing. Most of a run's time goes to the early merges, so stopping halfway
+by size is well past halfway by time.
+
 ## Compact vocabulary file (v0.4.0)
 
 `kute convert --input enwik8-32k.kvf --output enwik8-32k.kvfb` on the

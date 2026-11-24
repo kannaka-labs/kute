@@ -349,9 +349,29 @@ is not implemented.
 Token ids in the plain container must be in their shortest varint form;
 padded forms are refused (issue #4).
 
+## ADR-0028: A vocabulary is its own training checkpoint
+
+A byte-BPE run can continue from a vocabulary trained earlier on the same
+corpus with the same settings and a smaller size (`TrainingConfig::
+resume_from`, `kute train --resume-from`). The corpus is read again, the
+earlier merges are applied to it, and learning goes on. Which pair is merged
+next depends only on the state of the corpus under the merges so far, so the
+result is the vocabulary one run to the new size would give: same tokens,
+same digest, same file. The tests check that, with and without a token
+length limit.
+
+No separate checkpoint format was added. The vocabulary already records its
+merges, corpus fingerprint and settings, and a resumed run is refused when
+the fingerprint or a setting that affects merging differs.
+
+What this does not give: a run does not write intermediate files by itself,
+so to survive an interruption it has to be run in stages. Each stage reads
+the corpus again; on 90 MB of text that was about 7 of the 17 seconds a
+whole run takes. `sequence-bpe` and the baseline algorithms cannot resume.
+
 ## Deferred
 
-Registry service and signing, import from other tokenizer formats, training
-checkpoints, event values, units and relationships, timestamps in token
-containers, entropy-coded containers, comparison with Zstandard and with binary record formats, and
+Registry service and signing, import from other tokenizer formats,
+checkpoints written during a run, event values, units and relationships,
+timestamps in token containers, entropy-coded containers, and
 adapters for DNA, telemetry, mathematics and quantum circuits.
