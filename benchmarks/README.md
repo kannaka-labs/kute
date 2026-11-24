@@ -35,6 +35,36 @@ kute benchmark --vocab my.kvf --dataset path/to/held-out-data
 * Cases marked `synthetic` come from seeded template generators. They show the
   machinery works. They do not predict results on real data.
 
+## Recorded run: v0.3.0
+
+File: `results/suite-v0.3.0-windows-x86_64.json`, same machine, command and
+enwik8 file as the v0.2.0 run below, run with `kute-ref`.
+
+* **Sizes are unchanged on the large case and the synthetic cases.** Every
+  ratio for B01-large, B03, B04 and B05 equals the v0.2.0 figure to the
+  digits shown: v0.3.0 did not touch the encoders or the containers. The
+  two cases built from this repository's own files moved slightly because
+  the files changed (B01 compressed 2.12 against gzip 2.15; B02 3.24
+  against 3.30).
+* All 14 evaluations reconstructed their inputs exactly, retraining
+  reproduced the same digest, and on B01 and B02 the native backend and
+  rustbpe again learned identical merges and produced identical encodings.
+* **The timings in this file are slow and should not be compared with the
+  v0.2.0 file.** The machine was busy with other work during the run: the
+  large case encoded at 14 MB/s and trained in 50 s, against 51 MB/s and
+  22 s recorded for v0.2.0. To check that this is the machine and not the
+  release, the v0.2.0 and v0.3.0 binaries were run alternately on the same
+  10 MB evaluation file right afterwards: 10.8 and 8.6 MB/s for v0.2.0, 9.4
+  and 9.5 MB/s for v0.3.0, with identical token counts. The two builds
+  encode at the same speed; a clean timing run has not been made.
+* 1 KB encode latency: P95 0.28 ms, median 0.24 ms. 32K vocabulary to a
+  ready tokenizer: 170 ms.
+* The suite itself still reports peak memory as not measured. Training
+  memory is measured separately; see "Training memory with streaming".
+
+The table and discussion below are the v0.2.0 run and still describe the
+sizes correctly.
+
 ## Recorded run: v0.2.0
 
 File: `results/suite-v0.2.0-windows-x86_64.json`. Windows 11, 8 logical CPUs
