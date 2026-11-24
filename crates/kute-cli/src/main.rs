@@ -20,7 +20,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Learn a vocabulary from files and write it as KVF.
-    Train(TrainArgs),
+    Train(Box<TrainArgs>),
     /// Encode a file to a .kute token sequence.
     Encode {
         #[arg(long)]
@@ -205,7 +205,7 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
 fn run(cli: Cli) -> kute::Result<()> {
     let engine = Engine::new();
     match cli.command {
-        Command::Train(args) => train(&engine, args),
+        Command::Train(args) => train(&engine, *args),
         Command::Encode { vocab: vocab_path, input, output } => {
             let tokenizer = engine.tokenizer(vocab::load(&vocab_path)?)?;
             let raw = std::fs::read(&input)?;

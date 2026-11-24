@@ -61,7 +61,7 @@ What this run shows:
   token per event, on a generator whose episodes are known in advance.
 * B05's 30x reflects template-built messages. Real agent traffic will be far
   less repetitive.
-* Text encoding ran at about 2 MB/s on one thread, decoding at 60 to 420
+* Text encoding ran at about 2 to 3 MB/s on one thread, decoding at 65 to 425
   MB/s. Encoding speed has not been optimized.
 
 Engineering targets from the requirements, on this machine only (no reference
@@ -70,16 +70,16 @@ hardware is defined yet):
 | target | required | measured |
 |--------|----------|----------|
 | lossless reconstruction | 100% | 12 of 12 evaluations exact |
-| 1 KB encode latency | P95 under 5 ms | P95 0.52 ms, median 0.40 ms |
-| 32K vocabulary load | under 500 ms | 196 ms to a ready tokenizer (3.3 MiB file) |
-| vocabulary lookup | P95 under 1 ms | mean 3.7 ns (a mean, not a P95) |
+| 1 KB encode latency | P95 under 5 ms | P95 0.36 ms, median 0.27 ms |
+| 32K vocabulary load | under 500 ms | 133 ms to a ready tokenizer (3.3 MiB file) |
+| vocabulary lookup | P95 under 1 ms | mean 5.5 ns (a mean, not a P95) |
 | determinism | identical output | retraining gave the same digest |
 | memory, service availability | reported | not measured |
 
 rustbpe comparison (built with the feature, Python 3.14): on B01 and B02 the
 native backend and rustbpe learned identical merge tables and produced
 identical encodings of the evaluation sets. Training time was about equal
-(0.059 s against 0.059 s on B01; 0.142 s against 0.128 s on B02, median of
+(0.057 s against 0.057 s on B01; 0.105 s against 0.080 s on B02, median of
 3); these corpora are too small to say which is faster.
 
 Not run: B06 DNA, B07 telemetry, B08 mathematics, B09 quantum circuits and
