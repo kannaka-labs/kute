@@ -9,19 +9,22 @@ Status: v0.5, experimental. Formats and APIs may change before 1.0.
 ## Measured against Hugging Face `tokenizers`
 
 Byte-level BPE, 32,768 tokens, trained on 90 MB of enwik8 and applied to
-10 MB neither tool saw. Ten runs each, called from Python, on one 8-thread
-laptop:
+10 MB neither tool saw. Ten runs each, called from Python, on two machines
+(medians; KUTE 0.5.0 against tokenizers 0.23.2):
 
-| | KUTE 0.5.0 | tokenizers 0.23.2 |
+| | 8-thread laptop | 24-thread desktop |
 |---|---:|---:|
-| train (median) | 14.6 s | 27.0 s |
-| tokens for the held-out text | 2,551,171 | 2,703,872 |
-| encode the held-out text (median) | 0.31 s | 2.99 s as a batch of lines, 9.48 s as one document |
+| train | 14.6 s against 27.0 s | 9.7 s against 10.8 s |
+| encode the held-out text (tokenizers as a batch of lines) | 0.31 s against 2.99 s | 0.23 s against 0.89 s |
+| tokens for the held-out text | 2,551,171 against 2,703,872 | the same |
 
-Both decode back to the input exactly. The two tools split text differently
-before merging, so this compares them as used, on one dataset. On a second,
-24-thread machine the token counts were identical and the time gaps smaller:
-1.1 times faster to train, about 4 times faster to encode. Method, ranges, limits and the command to rerun it:
+So: 5.6% fewer tokens on both machines, training 1.1 to 1.8 times faster,
+encoding 4 to 10 times faster. With more threads `tokenizers` closes most
+of the training gap. Both decode back to the input exactly. The two tools
+split text differently before merging, so this compares them as used, on
+one dataset. The desktop run was made by the project's reviewer session
+with the same script and wheels. Method, ranges, limits and the command to
+rerun it:
 [`benchmarks/README.md`](benchmarks/README.md#against-hugging-face-tokenizers-on-text-v050).
 
 ```
