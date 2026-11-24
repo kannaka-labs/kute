@@ -1,0 +1,254 @@
+{
+  "train": {
+    "path": "hdfs-train.jsonl",
+    "lines": 9869242,
+    "sha256": "2367127764facff5fbd9a30539ba20626f1bfd567fd7fae0684d1738d852d299"
+  },
+  "eval": {
+    "path": "hdfs-eval.jsonl",
+    "bytes": 29412004,
+    "lines": 1881448,
+    "sha256": "33822e0f3a70cde3e831bd97c92c642c5360321970e64146f26a92cfcaefc842"
+  },
+  "settings": {
+    "frozen_size": 192,
+    "patterns_added": 24
+  },
+  "added_patterns": [
+    [
+      "E9",
+      "E11"
+    ],
+    [
+      "E9",
+      "E11",
+      "E9"
+    ],
+    [
+      "E21",
+      "E21",
+      "EOB"
+    ],
+    [
+      "E9",
+      "E11",
+      "E9",
+      "E26",
+      "E26"
+    ],
+    [
+      "EOB",
+      "E5"
+    ],
+    [
+      "E5",
+      "E22"
+    ],
+    [
+      "E9",
+      "E11",
+      "E9",
+      "E11",
+      "E9",
+      "E26",
+      "E26",
+      "E26"
+    ],
+    [
+      "E26",
+      "E23",
+      "E23",
+      "E23"
+    ],
+    [
+      "E26",
+      "E23",
+      "E23",
+      "E23",
+      "E21"
+    ],
+    [
+      "E26",
+      "E23",
+      "E23",
+      "E23",
+      "E21",
+      "E21"
+    ],
+    [
+      "E26",
+      "E23",
+      "E23",
+      "E23",
+      "E21",
+      "E21",
+      "E21"
+    ],
+    [
+      "E21",
+      "EOB",
+      "E5"
+    ],
+    [
+      "E26",
+      "E23",
+      "E23",
+      "E23",
+      "E21",
+      "E21",
+      "E21",
+      "EOB"
+    ],
+    [
+      "E21",
+      "E21",
+      "EOB",
+      "E5"
+    ],
+    [
+      "E21",
+      "E21",
+      "E21",
+      "EOB",
+      "E5"
+    ],
+    [
+      "E9",
+      "E11",
+      "E9",
+      "E26",
+      "E26",
+      "E26"
+    ],
+    [
+      "E11",
+      "E9",
+      "E11",
+      "E9",
+      "E26",
+      "E26",
+      "E26"
+    ],
+    [
+      "E9",
+      "E11",
+      "E9",
+      "E11",
+      "E9",
+      "E26",
+      "E26"
+    ],
+    [
+      "E9",
+      "E26",
+      "E26",
+      "E26"
+    ],
+    [
+      "E9",
+      "E11",
+      "E9",
+      "E11",
+      "E9",
+      "E26"
+    ],
+    [
+      "E26",
+      "E26",
+      "E23",
+      "E23",
+      "E23"
+    ],
+    [
+      "E26",
+      "E26",
+      "E23",
+      "E23",
+      "E23",
+      "E21"
+    ],
+    [
+      "E26",
+      "E26",
+      "E23",
+      "E23",
+      "E23",
+      "E21",
+      "E21"
+    ],
+    [
+      "E9",
+      "E11",
+      "E9",
+      "E26"
+    ]
+  ],
+  "results": [
+    {
+      "vocabulary": "dictionary",
+      "what": "one token per event name, all of TRAIN",
+      "vocabulary_tokens": 30,
+      "vocabulary_file_bytes": 705,
+      "tokens": 1881448,
+      "escaped_symbols": 0,
+      "plain_bytes": 1881681,
+      "compressed_bytes": 118824,
+      "round_trip_exact": true
+    },
+    {
+      "vocabulary": "frozen",
+      "what": "sequence-bpe on the early half",
+      "vocabulary_tokens": 192,
+      "vocabulary_file_bytes": 1517,
+      "tokens": 255332,
+      "escaped_symbols": 0,
+      "plain_bytes": 296514,
+      "compressed_bytes": 85311,
+      "round_trip_exact": true
+    },
+    {
+      "vocabulary": "evolved",
+      "what": "frozen plus 24 patterns discovered in the late half",
+      "vocabulary_tokens": 229,
+      "vocabulary_file_bytes": 1838,
+      "tokens": 254215,
+      "escaped_symbols": 0,
+      "plain_bytes": 296512,
+      "compressed_bytes": 85322,
+      "round_trip_exact": true
+    },
+    {
+      "vocabulary": "retrained",
+      "what": "sequence-bpe on all of TRAIN, size of frozen",
+      "vocabulary_tokens": 192,
+      "vocabulary_file_bytes": 1534,
+      "tokens": 153733,
+      "escaped_symbols": 0,
+      "plain_bytes": 183063,
+      "compressed_bytes": 81547,
+      "round_trip_exact": true
+    },
+    {
+      "vocabulary": "retrained-larger",
+      "what": "sequence-bpe on all of TRAIN, size of evolved",
+      "vocabulary_tokens": 229,
+      "vocabulary_file_bytes": 1706,
+      "tokens": 142441,
+      "escaped_symbols": 0,
+      "plain_bytes": 182410,
+      "compressed_bytes": 81405,
+      "round_trip_exact": true
+    },
+    {
+      "vocabulary": "mined",
+      "what": "bare alphabet plus 162 discovered patterns, no pair merging",
+      "vocabulary_tokens": 232,
+      "vocabulary_file_bytes": 1871,
+      "tokens": 831731,
+      "escaped_symbols": 0,
+      "plain_bytes": 859551,
+      "compressed_bytes": 104368,
+      "round_trip_exact": true
+    }
+  ]
+}

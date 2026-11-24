@@ -386,6 +386,47 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
+## Frozen, evolved and retrained event vocabularies (after v0.5.0)
+
+`benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by
+time, and encodes the same held-out events (1,766,436 events, none seen by
+any vocabulary) with each of the vocabularies below. Sizes are the compressed
+container. Every row decoded back to the input exactly. Reports:
+`results/evolution-hdfs-v1-192.json` and `results/evolution-hdfs-v1-256.json`.
+
+| vocabulary | tokens in vocabulary | tokens out | compressed bytes |
+|---|---:|---:|---:|
+| dictionary, one token per event name | 30 | 1,881,448 | 118,824 |
+| frozen: sequence-bpe on the early half | 192 | 255,332 | 85,311 |
+| evolved: frozen plus 24 patterns discovered in the late half | 229 | 254,215 | 85,322 |
+| retrained on all training events | 192 | 153,733 | 81,547 |
+| retrained, at the size of evolved | 229 | 142,441 | 81,405 |
+| mined: bare alphabet plus discovered patterns, no pair merging | 232 | 831,731 | 104,368 |
+
+With a frozen size of 256 and 32 patterns: frozen 81,511 bytes, evolved
+(310 tokens) 95,119, retrained 80,793, retrained at 310 tokens 94,439,
+mined (320 tokens) 119,171.
+
+What this shows, on this one dataset:
+
+- Adding discovered patterns to a frozen vocabulary with `kute evolve` did
+  not help. It removed 0.4% of the tokens and left the compressed size
+  unchanged. The added tokens are seldom chosen by the encoder; why is not
+  yet examined.
+- A vocabulary trained on the early half and never updated cost 4.6% more
+  bytes than retraining on everything at 192 tokens, and 0.9% more at 256,
+  while emitting 45% to 66% more tokens.
+- Discovered patterns alone, without pair merging, did little better than
+  one token per event (104,368 against 118,824 bytes).
+- Every vocabulary above 256 tokens compressed about 17% worse than its
+  256-token counterpart, retrained ones included. Past that size a token id
+  no longer fits one byte.
+
+Limits: one dataset, one split, one run per row; HDFS_v1 has 30 event names
+and its late half looks much like its early half, so this says nothing about
+data that drifts. Delta encoding, which the directive lists for this row, has
+nothing to work on here: the events are names without values.
+
 ## Resumed training (v0.5.0)
 
 90 MB of enwik8, byte BPE, single runs on one machine that was not idle.
