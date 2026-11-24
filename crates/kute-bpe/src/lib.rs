@@ -14,7 +14,7 @@ pub use byte::BpeTokenizer;
 pub use sequence::SequenceBpeTokenizer;
 
 /// Register this crate's algorithms.
-pub fn register(registry: &mut kute_core::Registry) {
-    registry.register_algorithm(byte::ALGORITHM, BpeTokenizer::boxed);
-    registry.register_algorithm(sequence::ALGORITHM, SequenceBpeTokenizer::boxed);
+pub fn register(registry: &mut kute_core::Registry) -> kute_types::Result<()> {
+    registry.register_algorithm(byte::ALGORITHM, BpeTokenizer::boxed)?;
+    registry.register_algorithm(sequence::ALGORITHM, SequenceBpeTokenizer::boxed)
 }

@@ -1,0 +1,19 @@
+[package]
+name = "kute-discover"
+description = "Structural discovery for KUTE: recurring patterns in symbol streams, with evidence, support and held-out evaluation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[dependencies]
+kute-types.workspace = true
+kute-core.workspace = true
+serde.workspace = true
+rustc-hash.workspace = true

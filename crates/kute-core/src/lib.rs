@@ -6,8 +6,8 @@
 //! changing this crate (FR-002, ADR-0003).
 
 use kute_types::{
-    AdapterConfig, AdapterSpec, CanonicalInput, KuteError, Modality, Payload, Result, TokenSequence,
-    TokenizerCapabilities, TrainingConfig, Vocabulary,
+    AdapterConfig, AdapterSpec, CanonicalInput, KuteError, Modality, Payload, Result, TokenPayload, TokenSequence,
+    TokenizerCapabilities, TrainingConfig, UnknownPolicy, Vocabulary,
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -60,6 +60,23 @@ pub trait Tokenizer: Send + Sync {
     fn load(&mut self, vocabulary: Vocabulary) -> Result<()>;
 
     fn encode(&self, input: &CanonicalInput) -> Result<TokenSequence>;
+
+    /// Encode under an explicit policy for symbols the vocabulary lacks.
+    ///
+    /// `Strict` is plain [`Tokenizer::encode`]. `Escape` must return a
+    /// sequence that decodes to the input exactly, without changing the
+    /// vocabulary. Algorithms that can meet no unknown symbol (byte-level
+    /// ones) need not override this; algorithms that can, and have no
+    /// escape support, report that instead of guessing.
+    fn encode_open(&self, input: &CanonicalInput, policy: UnknownPolicy) -> Result<TokenSequence> {
+        match (policy, self.encode(input)) {
+            (UnknownPolicy::Escape, Err(KuteError::UnknownSymbol(symbol))) => Err(KuteError::Unsupported(format!(
+                "symbol {symbol:?} is not in the vocabulary and the {} algorithm has no escape encoding",
+                self.capabilities().algorithm
+            ))),
+            (_, result) => result,
+        }
+    }
 
     fn decode(&self, tokens: &TokenSequence) -> Result<CanonicalInput>;
 
@@ -129,16 +146,44 @@ impl Registry {
         Self::default()
     }
 
-    /// Register a tokenization algorithm under `name`. Replaces an earlier
-    /// registration of the same name.
-    pub fn register_algorithm<F>(&mut self, name: &str, factory: F)
+    /// Register a tokenization algorithm under `name`. A name can be taken
+    /// once: a second registration is an error, so one plugin cannot quietly
+    /// change what another's vocabularies mean. Use
+    /// [`Registry::replace_algorithm`] to override on purpose.
+    pub fn register_algorithm<F>(&mut self, name: &str, factory: F) -> Result<()>
+    where
+        F: Fn() -> Box<dyn Tokenizer> + Send + Sync + 'static,
+    {
+        if self.algorithms.contains_key(name) {
+            return Err(KuteError::InvalidConfig(format!("algorithm {name:?} is already registered")));
+        }
+        self.algorithms.insert(name.to_string(), Arc::new(factory));
+        Ok(())
+    }
+
+    /// Register or replace the algorithm under `name`.
+    pub fn replace_algorithm<F>(&mut self, name: &str, factory: F)
     where
         F: Fn() -> Box<dyn Tokenizer> + Send + Sync + 'static,
     {
         self.algorithms.insert(name.to_string(), Arc::new(factory));
     }
 
-    pub fn register_adapter<F>(&mut self, name: &str, factory: F)
+    /// Register an adapter under `name`. Like algorithms, a name can be
+    /// taken once.
+    pub fn register_adapter<F>(&mut self, name: &str, factory: F) -> Result<()>
+    where
+        F: Fn() -> Box<dyn ModalityAdapter> + Send + Sync + 'static,
+    {
+        if self.adapters.contains_key(name) {
+            return Err(KuteError::InvalidConfig(format!("adapter {name:?} is already registered")));
+        }
+        self.adapters.insert(name.to_string(), Arc::new(factory));
+        Ok(())
+    }
+
+    /// Register or replace the adapter under `name`.
+    pub fn replace_adapter<F>(&mut self, name: &str, factory: F)
     where
         F: Fn() -> Box<dyn ModalityAdapter> + Send + Sync + 'static,
     {
@@ -263,5 +308,30 @@ pub fn sequence_for(vocabulary: &Vocabulary, modality: Modality, ids: Vec<u32>) 
         modality,
         adapter: vocabulary.adapter.as_ref().map(|a| a.name.clone()),
         ids,
+        escapes: Vec::new(),
     })
+}
+
+/// How many units (bytes or symbols) `tokens` decodes to, computed from the
+/// token table without decoding. A five-byte id can stand for a 64 KiB
+/// token, so callers that decode untrusted sequences check this against a
+/// budget first.
+pub fn decoded_units(vocabulary: &Vocabulary, tokens: &TokenSequence) -> Result<u64> {
+    let table = vocabulary.tokens.len();
+    let mut total: u64 = 0;
+    for &id in &tokens.ids {
+        let id = id as usize;
+        let units = if id < table {
+            vocabulary.tokens[id].payload.len() as u64
+        } else if id - table < tokens.escapes.len() {
+            match vocabulary.tokens[0].payload {
+                TokenPayload::Bytes(_) => tokens.escapes[id - table].len() as u64,
+                TokenPayload::Symbols(_) => 1,
+            }
+        } else {
+            return Err(KuteError::UnknownToken(id as u32));
+        };
+        total = total.saturating_add(units);
+    }
+    Ok(total)
 }

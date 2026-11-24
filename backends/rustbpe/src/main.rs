@@ -4,6 +4,6 @@
 
 fn main() -> std::process::ExitCode {
     let mut engine = kute::Engine::new();
-    kute_rustbpe::register(engine.registry_mut());
+    kute_rustbpe::register(engine.registry_mut()).expect("rustbpe is registered once");
     kute_cli::main_with(engine)
 }

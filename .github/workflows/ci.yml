@@ -72,6 +72,29 @@ jobs:
           maturin develop --release
           pytest tests -q
 
+  conformance:
+    name: independent digest implementation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Recorded vectors
+        run: python conformance/kvf_digest.py specifications/kvf/vectors/*.kvf specifications/kvf/vectors/v0.2.0/*.kvf
+      - name: Freshly trained and evolved vocabularies
+        run: |
+          cargo build --release -p kute-cli --locked
+          K=target/release/kute
+          $K sample-data --output data > /dev/null
+          $K train --input data/words-train.txt --id ci:text --vocab-size 2000 --description 'quote " backslash \ tab	 é 日本' --output text.kvf > /dev/null
+          $K train --input data/frames-train.bin --id ci:binary --adapter binary --vocab-size 600 --output binary.kvf > /dev/null
+          $K train --input data/messages-train.jsonl --id ci:json --adapter jsonl --vocab-size 800 --output json.kvf > /dev/null
+          $K train --input data/alarms-train.jsonl --id ci:events --algorithm sequence-bpe --adapter jsonl-events --adapter-option field=tag --vocab-size 64 --output events.kvf > /dev/null
+          $K evolve --vocab events.kvf --add "NEW_EVENT" --add "NEW_EVENT OPERATOR_ACK" --new-version 0.2.0 --output evolved.kvf > /dev/null
+          python conformance/kvf_digest.py text.kvf binary.kvf json.kvf events.kvf evolved.kvf
+
   benchmark-smoke:
     name: benchmark suite runs
     runs-on: ubuntu-latest

@@ -189,6 +189,6 @@ impl Tokenizer for RustBpeTokenizer {
 }
 
 /// Add the `rustbpe` algorithm to a registry.
-pub fn register(registry: &mut kute_core::Registry) {
-    registry.register_algorithm(ALGORITHM, RustBpeTokenizer::boxed);
+pub fn register(registry: &mut kute_core::Registry) -> kute_types::Result<()> {
+    registry.register_algorithm(ALGORITHM, RustBpeTokenizer::boxed)
 }

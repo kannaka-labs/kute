@@ -25,12 +25,12 @@ pub const JSONL: &str = "jsonl";
 pub const JSONL_EVENTS: &str = "jsonl-events";
 
 /// Register this crate's adapters.
-pub fn register(registry: &mut kute_core::Registry) {
-    registry.register_adapter(BINARY, || Box::new(BinaryAdapter));
-    registry.register_adapter(TEXT, || Box::new(TextAdapter));
-    registry.register_adapter(JSON, || Box::new(JsonAdapter));
-    registry.register_adapter(JSONL, || Box::new(JsonlAdapter));
-    registry.register_adapter(JSONL_EVENTS, || Box::new(JsonlEventsAdapter));
+pub fn register(registry: &mut kute_core::Registry) -> kute_types::Result<()> {
+    registry.register_adapter(BINARY, || Box::new(BinaryAdapter))?;
+    registry.register_adapter(TEXT, || Box::new(TextAdapter))?;
+    registry.register_adapter(JSON, || Box::new(JsonAdapter))?;
+    registry.register_adapter(JSONL, || Box::new(JsonlAdapter))?;
+    registry.register_adapter(JSONL_EVENTS, || Box::new(JsonlEventsAdapter))
 }
 
 fn bytes_of(input: &CanonicalInput, adapter: &str) -> Result<Vec<u8>> {
