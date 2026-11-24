@@ -334,7 +334,7 @@ line (`E5 E22 E5 ...`, 6,374,580 bytes), and ratios are against that.
   the best general compressor on the text form.**
 * The text form flatters KUTE, so the compressors were also given a form
   that costs them nothing to parse: one byte per event and a zero byte per
-  block end (1,881,448 bytes; not in the script). Then `zstd -19` reaches
+  block end (1,881,448 bytes; `--event-bytes`). Then `zstd -19` reaches
   95,401 bytes, `xz -9` 106,896 and `gzip -9` 114,295. KUTE's 80,789 is
   still 15 percent smaller than the best of them, and 29 percent smaller
   than gzip, which uses the same entropy coder as the container: that gap

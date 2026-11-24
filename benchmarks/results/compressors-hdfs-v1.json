@@ -9,6 +9,10 @@
     "bytes_used": 33982649,
     "samples": 519
   },
+  "event_bytes": {
+    "bytes": 1881448,
+    "event_names": 22
+  },
   "versions": {
     "python": "3.14.3",
     "zstandard": "0.25.0",
@@ -24,6 +28,38 @@
       "shared_bytes": 1827,
       "ratio_with_shared": 77.159,
       "note": "sizes supplied on the command line from a kute run on the same file"
+    },
+    {
+      "method": "zstd -19 on event bytes",
+      "bytes": 95401,
+      "ratio": 66.819,
+      "shared_bytes": 0,
+      "ratio_with_shared": 66.819,
+      "note": "one byte per event, zero byte per record end; ratio is against the text file"
+    },
+    {
+      "method": "zstd -22 --long=27 on event bytes",
+      "bytes": 95626,
+      "ratio": 66.662,
+      "shared_bytes": 0,
+      "ratio_with_shared": 66.662,
+      "note": "one byte per event, zero byte per record end; ratio is against the text file"
+    },
+    {
+      "method": "xz -9 on event bytes",
+      "bytes": 106896,
+      "ratio": 59.633,
+      "shared_bytes": 0,
+      "ratio_with_shared": 59.633,
+      "note": "one byte per event, zero byte per record end; ratio is against the text file"
+    },
+    {
+      "method": "gzip -9 on event bytes",
+      "bytes": 114295,
+      "ratio": 55.773,
+      "shared_bytes": 0,
+      "ratio_with_shared": 55.773,
+      "note": "one byte per event, zero byte per record end; ratio is against the text file"
     },
     {
       "method": "zstd -22 --long=27",

@@ -3,12 +3,19 @@ comparison with a KUTE container of the same data.
 
     python benchmarks/compressor_compare.py EVAL_FILE [--train TRAIN_FILE]
         [--kute-container BYTES] [--kute-vocabulary BYTES] [--output report.json]
+        [--event-bytes]
 
 Every compressor sees the evaluation file whole. With --train, Zstandard is
 also run with a dictionary trained on the training file: that is the closest
 rival to a shared vocabulary, since both sides hold something learned from
 other data in advance. The dictionary's size is reported and counted the same
 way the vocabulary's is.
+
+With --event-bytes the evaluation file is taken as event traces, one record
+per line with event names separated by spaces, and the compressors are also
+run on a form that costs them nothing to parse: one byte per event and a zero
+byte at the end of each record. Ratios for those rows are still against the
+text file. It needs at most 255 distinct event names.
 
 Needs the `zstandard` and `lz4` packages. Sizes only; nothing is timed.
 """
@@ -49,6 +56,7 @@ def main() -> int:
     ap.add_argument("--kute-container", type=int)
     ap.add_argument("--kute-vocabulary", type=int)
     ap.add_argument("--output", type=pathlib.Path)
+    ap.add_argument("--event-bytes", action="store_true")
     args = ap.parse_args()
 
     data = args.eval_file.read_bytes()
@@ -73,6 +81,20 @@ def main() -> int:
     params = zstandard.ZstdCompressionParameters.from_level(22, enable_ldm=True, window_log=27)
     row("zstd -22 --long=27", len(zstandard.ZstdCompressor(compression_params=params).compress(data)))
     row("xz -9", len(lzma.compress(data, preset=9)))
+    packed_info = None
+    if args.event_bytes:
+        names, packed = {}, bytearray()
+        for line in data.splitlines():
+            for name in line.split():
+                packed.append(names.setdefault(name, len(names) + 1))
+            packed.append(0)
+        packed = bytes(packed)
+        packed_info = {"bytes": len(packed), "event_names": len(names)}
+        note = "one byte per event, zero byte per record end; ratio is against the text file"
+        row("gzip -9 on event bytes", len(gzip.compress(packed, compresslevel=9)), note=note)
+        row("zstd -19 on event bytes", len(zstandard.ZstdCompressor(level=19).compress(packed)), note=note)
+        row("zstd -22 --long=27 on event bytes", len(zstandard.ZstdCompressor(compression_params=params).compress(packed)), note=note)
+        row("xz -9 on event bytes", len(lzma.compress(packed, preset=9)), note=note)
     train_info = None
     if args.train:
         samples = samples_of(args.train)
@@ -93,6 +115,7 @@ def main() -> int:
     report = {
         "eval_file": {"path": str(args.eval_file), "bytes": raw, "sha256": hashlib.sha256(data).hexdigest()},
         "train_file": train_info,
+        **({"event_bytes": packed_info} if packed_info else {}),
         "versions": {"python": sys.version.split()[0], "zstandard": zstandard.__version__,
                      "libzstd": ".".join(map(str, zstandard.ZSTD_VERSION)), "lz4": lz4.__version__},
         "what": "bytes: compressed size of the evaluation file. shared_bytes: what both sides must already hold "
