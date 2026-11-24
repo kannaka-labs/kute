@@ -318,3 +318,126 @@ impl Tokenizer for SequenceBpeTokenizer {
         }
     }
 }
+
+/// Most additions one evolution step accepts.
+pub const MAX_ADDITIONS: usize = 65_536;
+
+/// Derive the next version of a sequence vocabulary by adding symbols and
+/// symbol sequences (development directive v0.2, vocabulary evolution).
+///
+/// The parent is not modified. Every token of the parent keeps its id and
+/// payload, so the child's table extends the parent's. New single symbols
+/// are appended as symbol tokens; a sequence is appended as a chain of merge
+/// tokens, reusing any merge the parent already has. The result is a pure
+/// function of the parent, `additions` and `version`: two parties that
+/// apply the same step hold the same digest.
+///
+/// Encoding can differ between parent and child, since the child knows more
+/// merges. A sequence encoded under the parent still names the parent's
+/// digest; re-encode it to move it to the child.
+pub fn evolve(parent: &Vocabulary, additions: &[Vec<String>], version: kute_types::Version) -> Result<Vocabulary> {
+    parent.validate()?;
+    if parent.manifest.algorithm != ALGORITHM {
+        return Err(KuteError::Unsupported(format!("evolution is defined for {ALGORITHM} vocabularies, not {:?}", parent.manifest.algorithm)));
+    }
+    if version <= parent.manifest.version {
+        return Err(KuteError::InvalidConfig(format!("the new version {version} must be greater than {}", parent.manifest.version)));
+    }
+    if additions.is_empty() || additions.len() > MAX_ADDITIONS {
+        return Err(KuteError::InvalidConfig(format!("an evolution step takes 1 to {MAX_ADDITIONS} additions")));
+    }
+    let mut child = parent.clone();
+    child.integrity = None;
+    child.manifest.version = version;
+    child.manifest.generator = format!("kute {KUTE_VERSION}");
+    let mut by_symbol: FxHashMap<String, u32> = FxHashMap::default();
+    let mut by_pair: FxHashMap<Pair, u32> = FxHashMap::default();
+    for t in &child.tokens {
+        if let (TokenKind::Symbol, TokenPayload::Symbols(s)) = (t.kind, &t.payload) {
+            by_symbol.insert(s[0].clone(), t.id);
+        }
+    }
+    for m in &child.merges {
+        by_pair.insert((m.left, m.right), m.id);
+    }
+    // Reserved tokens are not symbols of the alphabet; a symbol of the same
+    // name would be ambiguous to a reader.
+    let reserved: BTreeSet<&str> = parent
+        .tokens
+        .iter()
+        .filter(|t| t.kind == TokenKind::Special)
+        .filter_map(|t| match &t.payload {
+            TokenPayload::Symbols(s) => Some(s[0].as_str()),
+            TokenPayload::Bytes(_) => None,
+        })
+        .collect();
+    let before = child.tokens.len();
+    for addition in additions {
+        if addition.is_empty() || addition.len() > kute_types::vocab::MAX_TOKEN_SYMBOLS {
+            return Err(KuteError::InvalidInput(format!("an addition must hold 1 to {} symbols", kute_types::vocab::MAX_TOKEN_SYMBOLS)));
+        }
+        let mut ids = Vec::with_capacity(addition.len());
+        for symbol in addition {
+            if symbol.is_empty() || symbol.len() > kute_types::vocab::MAX_SYMBOL_BYTES {
+                return Err(KuteError::InvalidInput("symbols must be 1 to 1024 bytes".into()));
+            }
+            if reserved.contains(symbol.as_str()) {
+                return Err(KuteError::InvalidInput(format!("{symbol:?} is a reserved token of this vocabulary")));
+            }
+            let id = match by_symbol.get(symbol) {
+                Some(&id) => id,
+                None => {
+                    let id = child.tokens.len() as u32;
+                    child.tokens.push(TokenEntry { id, kind: TokenKind::Symbol, payload: TokenPayload::Symbols(vec![symbol.clone()]), frequency: None });
+                    by_symbol.insert(symbol.clone(), id);
+                    id
+                }
+            };
+            ids.push(id);
+        }
+        let mut left = ids[0];
+        let mut payload = vec![addition[0].clone()];
+        for (i, &right) in ids.iter().enumerate().skip(1) {
+            payload.push(addition[i].clone());
+            left = match by_pair.get(&(left, right)) {
+                Some(&id) => id,
+                None => {
+                    let id = child.tokens.len() as u32;
+                    child.tokens.push(TokenEntry { id, kind: TokenKind::Merge, payload: TokenPayload::Symbols(payload.clone()), frequency: None });
+                    child.merges.push(MergeRule { left, right, id });
+                    by_pair.insert((left, right), id);
+                    id
+                }
+            };
+        }
+    }
+    let added = child.tokens.len() - before;
+    if added == 0 {
+        return Err(KuteError::InvalidInput("every addition is already in the vocabulary".into()));
+    }
+    if child.tokens.len() > kute_types::vocab::MAX_TOKENS {
+        return Err(KuteError::LimitExceeded("the evolved vocabulary would exceed the token limit".into()));
+    }
+    child.statistics.insert("evolved_tokens".to_string(), added as u64);
+    child.provenance.training = Some(serde_json::json!({
+        "evolved_from": { "version": parent.manifest.version.to_string(), "digest": parent.digest()? },
+        "additions": additions,
+        "parent_training": parent.provenance.training,
+    }));
+    // Expected ids of the parent's test vectors may change under the new
+    // merges; recompute them against the child.
+    let inputs: Vec<TokenPayload> = std::mem::take(&mut child.test_vectors).into_iter().map(|v| v.input).collect();
+    let mut tokenizer = SequenceBpeTokenizer::new();
+    tokenizer.load(child)?;
+    let loaded = tokenizer.loaded.as_mut().ok_or_else(|| KuteError::NotTrained("load failed".into()))?;
+    let mut vectors = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        if let TokenPayload::Symbols(symbols) = &input {
+            let ids = encode_symbols(loaded, symbols)?;
+            vectors.push(TestVector { input, ids });
+        }
+    }
+    loaded.vocabulary.test_vectors = vectors;
+    loaded.vocabulary.seal()?;
+    Ok(loaded.vocabulary.clone())
+}

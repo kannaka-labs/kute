@@ -103,6 +103,28 @@ enum Command {
     },
     /// Find recurring patterns in symbol streams, without training a tokenizer.
     Discover(Box<DiscoverArgs>),
+    /// Derive the next version of an event vocabulary by adding symbols or
+    /// symbol sequences. Existing token ids do not change.
+    Evolve {
+        #[arg(long)]
+        vocab: PathBuf,
+        /// A symbol, or several separated by spaces for a sequence. Repeatable.
+        #[arg(long = "add", required = true, value_name = "SYMBOLS")]
+        additions: Vec<String>,
+        /// Version of the new vocabulary; must be greater than the current one.
+        #[arg(long)]
+        new_version: String,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Exchange vocabularies and encoded messages with another kute process.
+    /// No encryption or authentication: use a trusted network.
+    Peer {
+        #[command(subcommand)]
+        action: PeerAction,
+    },
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
     /// Write the seeded example datasets used by the documentation.
@@ -116,6 +138,125 @@ enum Command {
 #[derive(Clone, Copy, ValueEnum)]
 enum ExportFormat {
     Tiktoken,
+}
+
+#[derive(Subcommand)]
+enum PeerAction {
+    /// Wait for one connection and answer it until it closes.
+    Serve {
+        /// Address to listen on, e.g. 127.0.0.1:7411.
+        #[arg(long)]
+        listen: String,
+        /// Vocabularies this side already holds. Repeatable.
+        #[arg(long)]
+        vocab: Vec<PathBuf>,
+        /// Refuse vocabularies this side does not already hold.
+        #[arg(long)]
+        no_new_vocabularies: bool,
+        /// Let the other side extend vocabularies held here.
+        #[arg(long)]
+        accept_proposals: bool,
+        /// Refuse a message that decodes to more than this many units.
+        #[arg(long, default_value_t = 268_435_456)]
+        max_units: u64,
+        /// Write each decoded message and each vocabulary received here.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+    },
+    /// Connect, make sure the other side holds the vocabulary, and send files.
+    Send {
+        /// Address to connect to.
+        #[arg(long)]
+        connect: String,
+        #[arg(long)]
+        vocab: PathBuf,
+        /// Files to encode and send. Repeatable.
+        #[arg(long, num_args = 0..)]
+        input: Vec<PathBuf>,
+        /// strict or escape; see `kute encode --unknown`.
+        #[arg(long, default_value = "strict")]
+        unknown: String,
+        /// Before sending, propose these additions (as in `kute evolve --add`).
+        #[arg(long = "propose", value_name = "SYMBOLS", requires = "new_version")]
+        additions: Vec<String>,
+        #[arg(long)]
+        new_version: Option<String>,
+    },
+}
+
+fn split_additions(additions: &[String]) -> Vec<Vec<String>> {
+    additions.iter().map(|a| a.split_whitespace().map(str::to_string).collect()).collect()
+}
+
+fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
+    use kute_protocol::{Framed, Peer, Policy, Session, DEFAULT_MAX_FRAME};
+    match action {
+        PeerAction::Serve { listen, vocab: held, no_new_vocabularies, accept_proposals, max_units, output_dir } => {
+            let policy = Policy { accept_vocabularies: !no_new_vocabularies, accept_proposals, max_decoded_units: max_units, ..Policy::default() };
+            let mut peer = Peer::new("kute", engine, policy);
+            for path in &held {
+                peer.add_vocabulary(vocab::load(path)?)?;
+            }
+            let before = peer.digests();
+            let listener = std::net::TcpListener::bind(&listen)?;
+            eprintln!("listening on {}", listener.local_addr()?);
+            let (stream, from) = listener.accept()?;
+            let mut session = Session::new(peer, Framed::new(stream, DEFAULT_MAX_FRAME));
+            let handled = session.serve()?;
+            let inbox = session.peer.take_inbox();
+            let new: Vec<String> = session.peer.digests().into_iter().filter(|d| !before.contains(d)).collect();
+            if let Some(dir) = &output_dir {
+                std::fs::create_dir_all(dir)?;
+                for message in &inbox {
+                    std::fs::write(dir.join(format!("message-{}.bin", message.id)), &message.bytes)?;
+                }
+                for digest in &new {
+                    if let Some(v) = session.peer.vocabulary(digest) {
+                        let name = format!("{}-{}.kvf", v.id().as_str().replace(':', "_"), v.version());
+                        vocab::save(v, dir.join(name), true)?;
+                    }
+                }
+            }
+            print(&json!({
+                "from": from.to_string(),
+                "messages_handled": handled,
+                "vocabularies_received": new,
+                "received": inbox.iter().map(|m| json!({
+                    "id": m.id,
+                    "bytes": m.bytes.len(),
+                    "tokens": m.sequence.ids.len(),
+                    "escaped_symbols": m.sequence.escapes.len(),
+                    "vocabulary": format!("{} {}", m.sequence.vocabulary_id, m.sequence.vocabulary_version),
+                })).collect::<Vec<_>>(),
+            }))
+        }
+        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version } => {
+            let policy = kute::UnknownPolicy::parse(&unknown)?;
+            let mut peer = Peer::new("kute", engine, Policy::default());
+            let mut digest = peer.add_vocabulary(vocab::load(&vocab_path)?)?;
+            let mut session = Session::new(peer, Framed::new(std::net::TcpStream::connect(&connect)?, DEFAULT_MAX_FRAME));
+            let remote = session.connect()?;
+            let transferred = session.share(&digest)?;
+            let mut proposed = None;
+            if let Some(version) = &new_version {
+                digest = session.propose(&digest, &split_additions(&additions), version)?;
+                proposed = Some(digest.clone());
+            }
+            let mut sent = Vec::new();
+            for path in &input {
+                let raw = std::fs::read(path)?;
+                let units = session.send(&digest, &raw, policy)?;
+                sent.push(json!({ "input": path, "bytes": raw.len(), "units_decoded_by_peer": units, "receipt_matches": true }));
+            }
+            print(&json!({
+                "peer": remote.peer,
+                "peer_software": remote.software,
+                "vocabulary_transferred": transferred,
+                "vocabulary_after_proposal": proposed,
+                "sent": sent,
+            }))
+        }
+    }
 }
 
 #[derive(clap::Args)]
@@ -481,6 +622,22 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             print(&json!({ "output": output, "synthetic": true, "files": written }))
         }
         Command::Discover(args) => discover(&engine, *args),
+        Command::Evolve { vocab: vocab_path, additions, new_version, output, force } => {
+            let version = Version::parse(&new_version).map_err(|e| KuteError::InvalidIdentifier(format!("version {new_version:?}: {e}")))?;
+            let parent = vocab::load(&vocab_path)?;
+            let child = kute::bpe::sequence::evolve(&parent, &split_additions(&additions), version)?;
+            let report = engine.verify(&child)?;
+            if !report.ok() {
+                return Err(KuteError::Backend(format!("the evolved vocabulary fails its test vectors: {}", report.failures.join("; "))));
+            }
+            vocab::save(&child, &output, force)?;
+            print(&json!({
+                "output": output,
+                "parent": { "version": parent.version().to_string(), "digest": parent.digest()?, "tokens": parent.len() },
+                "summary": vocab::summarize(&child)?,
+            }))
+        }
+        Command::Peer { action } => peer(engine, action),
         Command::Capabilities => {
             let registry = engine.registry();
             let algorithms: Vec<kute::TokenizerCapabilities> =

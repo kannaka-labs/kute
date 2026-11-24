@@ -320,6 +320,7 @@ dependencies = [
  "kute-bench",
  "kute-discover",
  "kute-engine",
+ "kute-protocol",
  "serde",
  "serde_json",
 ]
@@ -364,6 +365,16 @@ version = "0.2.0"
 dependencies = [
  "kute-core",
  "kute-types",
+ "sha2",
+]
+
+[[package]]
+name = "kute-protocol"
+version = "0.2.0"
+dependencies = [
+ "kute-engine",
+ "serde",
+ "serde_json",
  "sha2",
 ]
 

@@ -35,6 +35,12 @@ On the development branch, after v0.2.0 (not yet released):
   log dataset in `benchmarks/README.md`.
 * `kute encode --unknown escape`: a frozen event vocabulary carries symbols
   it has never seen and still decodes exactly; `strict` refuses them.
+* `kute evolve`: the next version of an event vocabulary, with new symbols
+  or sequences appended and every existing token id unchanged.
+* `kute peer serve` / `kute peer send`: two processes agree on a vocabulary
+  by digest, transfer it if needed, extend it together and exchange encoded
+  messages with a receipt. No encryption or authentication. See
+  `specifications/protocol`.
 * `kute train --no-test-vectors` for private corpora, `kute decode
   --max-units` for untrusted sequences, and a registry that refuses a second
   registration of a name.
@@ -84,13 +90,14 @@ crates/kute-algorithms  bytes, char, dictionary
 crates/kute-adapters    binary, text, json, jsonl, jsonl-events
 crates/kute-vocab       KVF read/write/validate, compare, tiktoken export
 crates/kute-discover    pattern discovery over symbol streams, held-out evaluation
+crates/kute-protocol    vocabulary exchange between two peers
 crates/kute             the engine (crate kute-engine): one entry point over all of the above
 crates/kute-bench       evaluation harness and the benchmark suite
 crates/kute-cli         the kute command
 plugins/hrm             experimental HRM representation plugin
 backends/rustbpe        rustbpe reference backend and the kute-ref command (not published)
 bindings/python         Python package (PyO3, built with maturin)
-specifications/         KVF 0.1, token envelope and .kute container
+specifications/         KVF 0.1, token envelope and .kute container, exchange protocol
 docs/                   use cases, HRM contract, decision records
 benchmarks/             how to run the suite, and recorded results
 ```

@@ -210,6 +210,35 @@ a control with the same symbol counts and no order. Candidate counts are
 capped so hostile input cannot exhaust memory. Timestamps and typed fields
 are not used yet; a pattern is defined on order alone.
 
+## ADR-0021: Vocabularies evolve by appending; versions are immutable
+
+A new version of an event vocabulary is derived from its parent by a
+deterministic step that appends tokens and never renumbers or changes an
+existing one. The parent stays valid and keeps its digest. Because the step
+is a pure function of parent, additions and version, two parties can each
+apply it and compare digests instead of shipping the result.
+
+Rejected: mutating a vocabulary in place when an unknown symbol appears
+(nothing could then be decoded reliably later), and automatic adoption of
+escaped or discovered symbols (a vocabulary would drift without anyone
+deciding). Discovery and escaping produce candidates; a person or a policy
+proposes them. Evolution is defined for `sequence-bpe` only for now.
+
+## ADR-0022: A small request-reply protocol, with the peer logic free of I/O
+
+`kute-protocol` implements the message set of the directive for two peers
+over length-prefixed JSON. `Peer::handle` maps one message to replies and
+touches no socket, so it is tested directly with hostile input; `Session`
+and `Framed` add the transport. `VOCAB_DATA` was added to the list as the
+answer to `VOCAB_REQUEST`, and `SYMBOL_INFO` as the answer to
+`SYMBOL_QUERY`.
+
+A receiver recomputes the digest of a vocabulary from its content, runs its
+test vectors, and refuses a vocabulary that collides with one it holds. An
+`ACK` carries a hash of the decoded bytes so that the sender learns whether
+both sides read the vocabulary the same way. Security of the channel is out
+of scope and stated as such. See `specifications/protocol`.
+
 ## Deferred
 
 Registry service and signing, streaming, import from other tokenizer formats,
