@@ -236,7 +236,7 @@ vocabulary on this machine; one process per run.
 * Peak memory of encoding, of discovery and of the benchmark suite's cases
   is not measured yet.
 
-## Pattern timing on real event data (development branch, after v0.3.0)
+## Pattern timing on real event data (v0.4.0)
 
 File: `results/discovery-hdfs-v1-timed.json`. The same HDFS_v1 dataset as
 above, this time as one event per line with its block and its time in whole
@@ -284,7 +284,7 @@ file. What the times add, in seconds, searched part then held-out part:
 * Reading the 644 MB event file and holding it with its timestamps peaked
   at 1.1 GiB. The whole file is held in memory; this path is not streamed.
 
-## Against general-purpose compressors (development branch, after v0.3.0)
+## Against general-purpose compressors (v0.4.0)
 
 Files: `results/compressors-enwik8.json`, `results/compressors-hdfs-v1.json`,
 script `compressor_compare.py` (Zstandard 1.5.7, LZ4, xz, gzip; sizes only,
@@ -346,7 +346,7 @@ line (`E5 E22 E5 ...`, 6,374,580 bytes), and ratios are against that.
   repetition, and the binary record formats in the directive's matrix
   (CBOR, MessagePack, Protobuf) were not compared.
 
-## Compact vocabulary file (development branch, after v0.3.0)
+## Compact vocabulary file (v0.4.0)
 
 `kute convert --input enwik8-32k.kvf --output enwik8-32k.kvfb` on the
 32,768-token vocabulary from the large text case. The command reads the

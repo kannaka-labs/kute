@@ -4,9 +4,9 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.3, experimental. Formats and APIs may change before 1.0.
+Status: v0.4, experimental. Formats and APIs may change before 1.0.
 
-## What works in v0.3
+## What works in v0.4
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -28,7 +28,7 @@ Status: v0.3, experimental. Formats and APIs may change before 1.0.
 * An experimental adapter contract for Holographic Resonance Medium (HRM)
   research. It is an interface only. See "What KUTE does not claim".
 
-New in v0.3:
+Added in v0.3:
 
 * `kute discover`: recurring patterns in event streams, with support,
   evidence and a held-out check, no tokenizer needed. Measured on a public
@@ -52,7 +52,7 @@ New in v0.3:
   --max-units` for untrusted sequences, and a registry that refuses a second
   registration of a name.
 
-On the development branch, after v0.3.0 (not yet released):
+Added in v0.4:
 
 * A compact vocabulary file: name the output `.kvfb`, or run `kute convert`.
   Same digest, about a twentieth of the size on a 32K text vocabulary
@@ -64,6 +64,13 @@ On the development branch, after v0.3.0 (not yet released):
   held-out log events the KUTE container is the smallest, 15 to 30 percent
   under the best of them; on English text it is 11 to 13 percent larger
   than `zstd -19` and `xz -9`. See `benchmarks/README.md`.
+
+Version numbers here are the repository's own. Measured against the
+development directive of November 2026, v0.4 covers its items D02 to D05
+and D07 to D12 and part of D06; training checkpoints, comparison with
+binary record formats, Studio, representation research and integrations
+(D13 to D15) are not built. The requirements document's "v0.2" (REST
+service, registry, MCP) is not built either.
 
 ## Quick start
 
