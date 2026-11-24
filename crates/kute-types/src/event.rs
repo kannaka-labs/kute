@@ -66,6 +66,8 @@ pub struct EventSchema {
     pub time_unit: Option<TimeUnit>,
     /// Field naming the entity an event belongs to. Events with the same
     /// value form one record. Without it, the whole source is one record.
+    /// A numeric value is read as its text: `1` and `"1"` name the same
+    /// record, and `1.0` names another.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_field: Option<String>,
 }
@@ -167,6 +169,7 @@ impl EventStream {
                 h.update((s.len() as u64).to_le_bytes());
                 h.update(s);
             }
+            h.update((r.times.len() as u64).to_le_bytes());
             for t in &r.times {
                 h.update(t.to_le_bytes());
             }
@@ -207,9 +210,22 @@ impl EventStream {
         }
         let mut total = self.events();
         let mut touched = vec![false; self.records.len()];
-        for (n, line) in reader.split(b'\n').enumerate() {
-            let line = line?;
-            let at = |why: String| KuteError::InvalidInput(format!("{source}, line {}: {why}", n + 1));
+        let mut reader = reader;
+        let mut line: Vec<u8> = Vec::new();
+        let mut n = 0usize;
+        loop {
+            // At most one byte past the limit is ever read for one line, so
+            // a source with no line breaks cannot be pulled into memory.
+            line.clear();
+            let read = std::io::Read::take(&mut reader, MAX_EVENT_LINE as u64 + 1).read_until(b'\n', &mut line)?;
+            if read == 0 {
+                break;
+            }
+            n += 1;
+            let at = |why: String| KuteError::InvalidInput(format!("{source}, line {n}: {why}"));
+            if line.last() == Some(&b'\n') {
+                line.pop();
+            }
             if line.len() > MAX_EVENT_LINE {
                 return Err(at("longer than 1 MiB".into()));
             }

@@ -154,3 +154,29 @@ fn split_last_keeps_a_record_on_each_side() {
         assert_eq!((head.records.len(), tail.records.len()), (1, 1));
     }
 }
+
+#[test]
+fn a_source_without_line_breaks_is_refused_without_being_read_whole() {
+    /// Endless input that counts how much of it was consumed.
+    struct Endless<'a>(&'a std::cell::Cell<usize>);
+    impl std::io::Read for Endless<'_> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            buf.fill(b'x');
+            self.0.set(self.0.get() + buf.len());
+            Ok(buf.len())
+        }
+    }
+    let consumed = std::cell::Cell::new(0);
+    let mut s = EventStream::new(schema()).unwrap();
+    let err = s.read_jsonl(std::io::BufReader::new(Endless(&consumed)), "endless").unwrap_err();
+    assert!(err.to_string().contains("longer than 1 MiB"));
+    assert!(consumed.get() < 4 << 20, "read {} bytes of an endless line", consumed.get());
+}
+
+#[test]
+fn numeric_and_text_group_keys_with_the_same_spelling_are_one_record() {
+    let s = stream("{\"machine\":1,\"event\":\"A\",\"t\":1}\n{\"machine\":\"1\",\"event\":\"B\",\"t\":2}\n{\"machine\":1.0,\"event\":\"C\",\"t\":3}");
+    assert_eq!(s.records.len(), 2);
+    assert_eq!(s.records[0].symbols, ["A", "B"]);
+    assert_eq!(s.records[1].key.as_deref(), Some("1.0"));
+}

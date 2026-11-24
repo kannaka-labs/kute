@@ -67,8 +67,11 @@ pub struct TrainingConfig {
     /// Store short samples of the training corpus in the vocabulary as
     /// self-test vectors. Off unless asked for: the vectors are verbatim
     /// excerpts of the corpus, and a vocabulary file is what gets published.
-    /// A configuration recorded before v0.4.0 without this field had them on.
-    #[serde(default = "yes")]
+    /// Absent means off, for a configuration someone writes by hand as much
+    /// as for one built in code. Vocabularies trained before v0.4.0 recorded
+    /// nothing here when vectors were on; whether a vocabulary has vectors
+    /// is read from the vocabulary, not from this field.
+    #[serde(default)]
     pub embed_test_vectors: bool,
     /// When training from files, read them in pieces of about this many
     /// bytes, cut at a line break, instead of whole. Each piece is one
@@ -76,10 +79,6 @@ pub struct TrainingConfig {
     /// of the configuration because it decides where records end.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_bytes: Option<usize>,
-}
-
-fn yes() -> bool {
-    true
 }
 
 fn one() -> u64 {

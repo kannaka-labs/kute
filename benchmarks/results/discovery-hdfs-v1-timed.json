@@ -1,6 +1,6 @@
 {
   "control": null,
-  "discover_seconds": 5.6760256,
+  "discover_seconds": 5.8095053,
   "discovery": {
     "coverage": 0.9270130817807648,
     "observation": {
@@ -1410,7 +1410,7 @@
   "events": {
     "held_out": {
       "events": 1766436,
-      "fingerprint": "sha256:b90d6cab64b02234f06357847609b8d55d70ee65a201148a3ad58f3fda7418b1",
+      "fingerprint": "sha256:4fee5f90bba8cfaa7bfd744cd25e5e578e74ba16602b93fb8f560d6fa9b8d9cd",
       "records": 115012
     },
     "held_out_timing": [
@@ -1985,7 +1985,7 @@
     },
     "searched": {
       "events": 9409193,
-      "fingerprint": "sha256:9d8a43d52f359dd78d45689a81806b441f21606362f262fa82babec2ebe3306f",
+      "fingerprint": "sha256:c3021a1d0e648a6d96d6b586db3f9b3af6e86eea0d2258b692eaf1303c2f9392",
       "records": 460049
     },
     "timing": [
@@ -2949,6 +2949,6 @@
       }
     ]
   },
-  "kute_version": "0.3.0",
-  "peak_memory_bytes": 1173012480
+  "kute_version": "0.4.0",
+  "peak_memory_bytes": 1172836352
 }
