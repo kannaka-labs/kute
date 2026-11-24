@@ -39,7 +39,7 @@ fn read(dir: &Path, name: &str) -> Vec<u8> {
 #[test]
 fn use_case_1_text() {
     let dir = workdir("text");
-    let trained = ok(&dir, &["train", "--input", "data/words-train.txt", "--id", "example:words", "--vocab-size", "2000", "--output", "words.kvf"]);
+    let trained = ok(&dir, &["train", "--input", "data/words-train.txt", "--id", "example:words", "--vocab-size", "2000", "--embed-test-vectors", "--output", "words.kvf"]);
     assert_eq!(trained["summary"]["algorithm"], "bpe");
     assert_eq!(trained["summary"]["tokens"], 2000);
     let encoded = ok(&dir, &["encode", "--vocab", "words.kvf", "--input", "data/words-eval.txt", "--output", "words-eval.kute"]);
@@ -134,7 +134,7 @@ fn use_case_4_industrial_events() {
     // A private corpus: no excerpts in the published file.
     ok(&dir, &[
         "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:private", "--algorithm", "sequence-bpe",
-        "--adapter", "jsonl-events", "--adapter-option", "field=tag", "--vocab-size", "64", "--no-test-vectors", "--output", "private.kvf",
+        "--adapter", "jsonl-events", "--adapter-option", "field=tag", "--vocab-size", "64", "--output", "private.kvf",
     ]);
     let private: serde_json::Value = serde_json::from_slice(&read(&dir, "private.kvf")).unwrap();
     assert_eq!(private["test_vectors"].as_array().unwrap().len(), 0);

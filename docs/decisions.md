@@ -179,10 +179,13 @@ signature of the `register` functions, which now return `Result`.
 ## ADR-0018: Test vectors are optional, because they are excerpts
 
 ADR-0010 stores samples of the training input in the vocabulary. For a
-private corpus that publishes the data. `embed_test_vectors` (CLI:
-`--no-test-vectors`) turns it off. The default stays on, since a vocabulary
-that can check itself is worth more, and the choice is recorded in the
-training provenance. Learned tokens are frequent fragments of the corpus and
+private corpus that publishes the data. `embed_test_vectors` controls it and the choice is recorded in the
+training provenance. In v0.3 the default was on (CLI `--no-test-vectors`
+turned it off). From v0.4.0 the default is off and `--embed-test-vectors`
+turns it on (issue #2): a vocabulary file is what gets published and
+exchanged, and the person a default harms is the one who did not read
+about it. A vocabulary without vectors still carries its digest; what it
+loses is the encode check that `kute validate` runs. Learned tokens are frequent fragments of the corpus and
 remain visible in any vocabulary; that is inherent and is not hidden by this
 switch.
 

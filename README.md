@@ -16,7 +16,7 @@ Status: v0.3, experimental. Formats and APIs may change before 1.0.
   separately from `backends/rustbpe`.
 * Adapters: `binary`, `text` (both byte-exact), `json`, `jsonl` (canonicalizing)
   and `jsonl-events` (keeps one field per record).
-* KVF 0.1, the vocabulary file format, with content digests, embedded test
+* KVF 0.1, the vocabulary file format, with content digests, optional test
   vectors and strict validation. See `specifications/kvf/KVF-0.1.md`.
 * A CLI (`kute`), Python bindings, export to tiktoken's format, and a
   reproducible benchmark suite.
@@ -47,7 +47,8 @@ New in v0.3:
 * Vocabulary identity specified rule by rule and checked by a second
   implementation in Python (`conformance/`), with recorded vectors that
   include files written by v0.2.0.
-* `kute train --no-test-vectors` for private corpora, `kute decode
+* `kute train --no-test-vectors` for private corpora (the default from
+  v0.4.0, where `--embed-test-vectors` opts in), `kute decode
   --max-units` for untrusted sequences, and a registry that refuses a second
   registration of a name.
 

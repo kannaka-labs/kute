@@ -28,7 +28,10 @@ impl Rng {
 }
 
 fn config(id: &str, size: u32) -> TrainingConfig {
-    TrainingConfig::new(VocabularyId::parse(id).unwrap(), size)
+    // These tests exercise the embedded test vectors, which are opt-in.
+    let mut config = TrainingConfig::new(VocabularyId::parse(id).unwrap(), size);
+    config.embed_test_vectors = true;
+    config
 }
 
 fn text_vocab(engine: &Engine) -> Vocabulary {

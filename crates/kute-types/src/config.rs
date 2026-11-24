@@ -65,9 +65,10 @@ pub struct TrainingConfig {
     #[serde(default)]
     pub license: Option<String>,
     /// Store short samples of the training corpus in the vocabulary as
-    /// self-test vectors. Turn off when the corpus must not be disclosed:
-    /// the vectors are verbatim excerpts.
-    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    /// self-test vectors. Off unless asked for: the vectors are verbatim
+    /// excerpts of the corpus, and a vocabulary file is what gets published.
+    /// A configuration recorded before v0.4.0 without this field had them on.
+    #[serde(default = "yes")]
     pub embed_test_vectors: bool,
     /// When training from files, read them in pieces of about this many
     /// bytes, cut at a line break, instead of whole. Each piece is one
@@ -79,10 +80,6 @@ pub struct TrainingConfig {
 
 fn yes() -> bool {
     true
-}
-
-fn is_true(b: &bool) -> bool {
-    *b
 }
 
 fn one() -> u64 {
@@ -109,7 +106,7 @@ impl TrainingConfig {
             seed: 0,
             description: None,
             license: None,
-            embed_test_vectors: true,
+            embed_test_vectors: false,
             stream_bytes: None,
         }
     }

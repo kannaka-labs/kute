@@ -545,9 +545,13 @@ struct TrainArgs {
     /// vocabulary, because it decides where records end.
     #[arg(long, value_name = "BYTES")]
     stream_bytes: Option<usize>,
-    /// Do not store excerpts of the training data in the vocabulary as
-    /// self-test vectors. Use it when the corpus is private.
-    #[arg(long)]
+    /// Store the start of the first training records in the vocabulary as
+    /// self-test vectors, so anyone holding the file can check it. They are
+    /// verbatim excerpts: leave this off when the corpus is private.
+    #[arg(long, conflicts_with = "no_test_vectors")]
+    embed_test_vectors: bool,
+    /// Accepted for compatibility; this is the default since v0.4.0.
+    #[arg(long, hide = true)]
     no_test_vectors: bool,
     #[arg(long)]
     output: PathBuf,
@@ -590,7 +594,7 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     config.reserved_tokens = args.reserved;
     config.description = args.description;
     config.license = args.license;
-    config.embed_test_vectors = !args.no_test_vectors;
+    config.embed_test_vectors = args.embed_test_vectors;
     config.stream_bytes = args.stream_bytes;
     if let Some(path) = &args.dictionary_file {
         let text = std::fs::read_to_string(path)?;
