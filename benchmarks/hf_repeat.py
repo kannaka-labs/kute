@@ -6,7 +6,9 @@
 Both libraries are called from Python, in alternation, `--runs` times each:
 train a byte-level BPE vocabulary of `--vocab-size` tokens on TRAIN, then
 encode EVAL (which neither saw) as one document. `tokenizers` also encodes
-EVAL as a batch of lines, the form in which it uses its threads. Every
+EVAL as a batch of lines, the form in which it uses its threads, with
+`encode_batch` and, where the installed version has it, `encode_batch_fast`
+(which skips token offsets and so returns what KUTE returns: ids). Every
 encode is decoded and compared with EVAL. Medians and ranges are reported;
 both libraries use their default thread settings.
 
@@ -43,7 +45,7 @@ def main() -> int:
     text = eval_bytes.decode("utf-8")
     lines = text.splitlines(keepends=True)
     k = {"train": [], "encode": [], "tokens": set(), "exact": True, "digests": set()}
-    h = {"train": [], "encode": [], "encode_lines": [], "tokens": set(), "tokens_lines": set(), "exact": True}
+    h = {"train": [], "encode": [], "encode_lines": [], "encode_lines_fast": [], "tokens": set(), "tokens_lines": set(), "exact": True}
     engine = kute.Engine()
 
     for run in range(args.runs):
@@ -73,8 +75,15 @@ def main() -> int:
         batch = tok.encode_batch(lines)
         h["encode_lines"].append(time.perf_counter() - t)
         h["tokens_lines"].add(sum(len(e.ids) for e in batch))
+        fast = ""
+        if hasattr(tok, "encode_batch_fast"):
+            t = time.perf_counter()
+            batch = tok.encode_batch_fast(lines)
+            h["encode_lines_fast"].append(time.perf_counter() - t)
+            h["tokens_lines"].add(sum(len(e.ids) for e in batch))
+            fast = f" fast {h['encode_lines_fast'][-1]:.2f}s"
         print(f"run {run + 1}: kute train {k['train'][-1]:.1f}s encode {k['encode'][-1]:.3f}s | "
-              f"tokenizers train {h['train'][-1]:.1f}s encode {h['encode'][-1]:.2f}s lines {h['encode_lines'][-1]:.2f}s", file=sys.stderr, flush=True)
+              f"tokenizers train {h['train'][-1]:.1f}s encode {h['encode'][-1]:.2f}s lines {h['encode_lines'][-1]:.2f}s{fast}", file=sys.stderr, flush=True)
 
     report = {
         "machine": {"platform": platform.platform(), "processor": platform.processor(), "logical_cpus": os.cpu_count(), "python": platform.python_version()},
@@ -84,7 +93,8 @@ def main() -> int:
         "kute": {"version": kute.__version__, "train_seconds": summary(k["train"]), "encode_seconds": summary(k["encode"]),
                  "eval_tokens": sorted(k["tokens"]), "distinct_vocabulary_digests": len(k["digests"]), "round_trip_exact": k["exact"]},
         "tokenizers": {"version": tokenizers.__version__, "train_seconds": summary(h["train"]), "encode_seconds_one_document": summary(h["encode"]),
-                       "encode_seconds_batch_of_lines": summary(h["encode_lines"]), "eval_tokens": sorted(h["tokens"]),
+                       "encode_seconds_batch_of_lines": summary(h["encode_lines"]),
+                       "encode_seconds_batch_of_lines_fast": summary(h["encode_lines_fast"]) if h["encode_lines_fast"] else None, "eval_tokens": sorted(h["tokens"]),
                        "eval_tokens_batch_of_lines": sorted(h["tokens_lines"]), "round_trip_exact": h["exact"]},
     }
     out = json.dumps(report, indent=2)
