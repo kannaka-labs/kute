@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "kute-engine"
-version = "0.3.0"
+version = "0.3.1"
 description = "Kannaka Universal Tokenization Engine: train, exchange and apply vocabularies for text, bytes, structured records and event sequences"
 readme = "README.md"
 requires-python = ">=3.9"
