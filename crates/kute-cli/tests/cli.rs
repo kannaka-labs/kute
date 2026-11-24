@@ -138,6 +138,20 @@ fn use_case_4_industrial_events() {
     ]);
     let private: serde_json::Value = serde_json::from_slice(&read(&dir, "private.kvf")).unwrap();
     assert_eq!(private["test_vectors"].as_array().unwrap().len(), 0);
+    // Discovery needs no vocabulary: patterns with evidence, checked on the
+    // evaluation file and against a shuffled control.
+    let found = ok(&dir, &[
+        "discover", "--input", "data/alarms-train.jsonl", "--adapter-option", "field=tag",
+        "--holdout", "data/alarms-eval.jsonl", "--control", "--top", "10", "--output", "patterns.json",
+    ]);
+    let patterns = found["discovery"]["patterns"].as_array().unwrap();
+    assert!(!patterns.is_empty());
+    assert!(patterns[0]["support"].as_u64().unwrap() >= 5);
+    assert!(patterns[0]["examples"].as_array().is_some_and(|e| !e.is_empty()));
+    assert!(found["discovery"]["observation"]["fingerprint"].as_str().unwrap().starts_with("sha256:"));
+    assert!(found["held_out"]["confirmed"].as_u64().unwrap() >= 1);
+    assert!(found["control"]["coverage"].as_f64().unwrap() < found["discovery"]["coverage"].as_f64().unwrap());
+    assert!(dir.join("patterns.json").exists());
     // Dictionary baseline over the same events, then compare the two.
     ok(&dir, &[
         "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:event-names", "--algorithm", "dictionary",

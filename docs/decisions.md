@@ -194,6 +194,22 @@ parsing was already bounded; this closes the remaining amplification, from
 ids to output. The HRM plugin's `inner_product` now returns an error for
 vectors of different dimensions instead of truncating to the shorter one.
 
+## ADR-0020: Discovery is its own subsystem, not a tokenizer
+
+`kute-discover` finds contiguous sequences and gapped pairs in symbol
+records and depends on no algorithm crate. A tokenizer answers "how do I
+encode this"; discovery answers "what recurs here", and its output is
+evidence: support, the records a pattern occurs in, its first occurrences,
+and cohesion, the factor by which it beats the frequency of its parts, in
+bits. Patterns carry the same content hash a vocabulary token with that
+payload has, so a discovered pattern can later be proposed as a token.
+
+Two checks ship with it because a pattern miner always returns something:
+`evaluate` re-measures every pattern on held-out data, and `shuffled` builds
+a control with the same symbol counts and no order. Candidate counts are
+capped so hostile input cannot exhaust memory. Timestamps and typed fields
+are not used yet; a pattern is defined on order alone.
+
 ## Deferred
 
 Registry service and signing, streaming, import from other tokenizer formats,

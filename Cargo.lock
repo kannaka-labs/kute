@@ -318,6 +318,7 @@ version = "0.2.0"
 dependencies = [
  "clap",
  "kute-bench",
+ "kute-discover",
  "kute-engine",
  "serde",
  "serde_json",
@@ -329,6 +330,16 @@ version = "0.2.0"
 dependencies = [
  "kute-types",
  "sha2",
+]
+
+[[package]]
+name = "kute-discover"
+version = "0.2.0"
+dependencies = [
+ "kute-core",
+ "kute-types",
+ "rustc-hash",
+ "serde",
 ]
 
 [[package]]

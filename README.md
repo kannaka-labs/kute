@@ -28,6 +28,17 @@ Status: v0.2, experimental. Formats and APIs may change before 1.0.
 * An experimental adapter contract for Holographic Resonance Medium (HRM)
   research. It is an interface only. See "What KUTE does not claim".
 
+On the development branch, after v0.2.0 (not yet released):
+
+* `kute discover`: recurring patterns in event streams, with support,
+  evidence and a held-out check, no tokenizer needed. Measured on a public
+  log dataset in `benchmarks/README.md`.
+* `kute encode --unknown escape`: a frozen event vocabulary carries symbols
+  it has never seen and still decodes exactly; `strict` refuses them.
+* `kute train --no-test-vectors` for private corpora, `kute decode
+  --max-units` for untrusted sequences, and a registry that refuses a second
+  registration of a name.
+
 ## Quick start
 
 Install from crates.io with `cargo install kute-cli`, or from PyPI with
@@ -72,6 +83,7 @@ crates/kute-bpe         byte BPE, sequence BPE
 crates/kute-algorithms  bytes, char, dictionary
 crates/kute-adapters    binary, text, json, jsonl, jsonl-events
 crates/kute-vocab       KVF read/write/validate, compare, tiktoken export
+crates/kute-discover    pattern discovery over symbol streams, held-out evaluation
 crates/kute             the engine (crate kute-engine): one entry point over all of the above
 crates/kute-bench       evaluation harness and the benchmark suite
 crates/kute-cli         the kute command

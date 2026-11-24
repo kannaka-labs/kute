@@ -25,6 +25,7 @@ kute-algorithms = { path = "crates/kute-algorithms", version = "0.2.0" }
 kute-adapters = { path = "crates/kute-adapters", version = "0.2.0" }
 kute-bench = { path = "crates/kute-bench", version = "0.2.0" }
 kute-hrm = { path = "plugins/hrm", version = "0.2.0" }
+kute-discover = { path = "crates/kute-discover", version = "0.2.0" }
 kute = { package = "kute-engine", path = "crates/kute", version = "0.2.0" }
 
 serde = { version = "1", features = ["derive"] }

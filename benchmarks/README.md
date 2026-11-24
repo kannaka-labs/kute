@@ -127,3 +127,53 @@ real dataset, no compressed container, and encoded text at 2 to 3 MB/s.
 * The compressed container (format 2) was added.
 * The large text case was added, so there is now one measurement where the
   dataset is big enough for a 32K vocabulary to make sense.
+
+## Discovery on real event data (development branch, after v0.2.0)
+
+`kute discover` looks for recurring patterns in symbol streams without
+training a tokenizer. This run uses a public, non-text dataset: HDFS_v1 from
+Loghub (https://zenodo.org/records/8196385, `HDFS_v1.zip`, SHA-256
+`04f919f2…e289b01`), 11,175,629 log events from a Hadoop cluster grouped
+into 575,061 per-block sequences over 29 event types.
+
+```
+python benchmarks/hdfs_traces.py HDFS_v1.zip data
+kute discover --lines --input data/hdfs-traces.txt --holdout-fraction 0.2 --control --top 25
+```
+
+The first 80% of the blocks (460,049 records, 9.4 million events) were
+searched; the last 20% (115,012 records, 1.8 million events) were held out.
+Report: `results/discovery-hdfs-v1.json`. Discovery took 5.6 s on this
+machine; the whole command, with reading, evaluation and the control, 28 s.
+
+| | searched part | held-out part |
+|---|---|---|
+| share of events inside a discovered contiguous pattern | 92.7% | 97.6% |
+| same, patterns found in the shuffled control | 4.5% | 0.07% |
+| contiguous patterns that recur with positive cohesion | | 23 of 25 |
+| gapped pairs that recur with positive cohesion | | 20 of 25 |
+
+The strongest pattern, `E11 E9`, occurs 1,345,545 times in 454,871 of the
+460,049 searched blocks, 6.8 times as often as the two events' frequencies
+predict, and 338,100 times in the held-out blocks. Every pattern in the
+report lists the first three places it was seen (record and offset).
+
+What this does and does not show:
+
+* It shows that the method recovers order that is really in the data: the
+  same patterns hold on blocks it never saw, and almost none of it survives
+  when order is removed.
+* The control shuffles events within each block. Blocks differ in which
+  events they contain, so some co-occurrence survives the shuffle: the
+  control still reports 50 weak patterns, 25 of which recur in the held-out
+  part. Read the coverage row, not the pattern count.
+* The held-out blocks are the end of the file, and they differ from the
+  rest: 22 event types instead of 29, shorter sequences. Three of the top
+  gapped pairs involve events that never occur there.
+* Long runs of one event produce a family of nested patterns (`E23 E23`,
+  `E23 E23 E23`, ...) that each count separately in the ranking.
+* Nothing here says what the patterns mean. `E11 E9` is a regularity in a
+  log, not a diagnosis.
+* A unit test plants a known four-event motif and a delayed pair in random
+  noise and checks that both are found with exact counts and that the
+  shuffled control comes back nearly empty. That data is synthetic.

@@ -101,6 +101,8 @@ enum Command {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Find recurring patterns in symbol streams, without training a tokenizer.
+    Discover(Box<DiscoverArgs>),
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
     /// Write the seeded example datasets used by the documentation.
@@ -114,6 +116,134 @@ enum Command {
 #[derive(Clone, Copy, ValueEnum)]
 enum ExportFormat {
     Tiktoken,
+}
+
+#[derive(clap::Args)]
+struct DiscoverArgs {
+    /// Files or directories to look for patterns in.
+    #[arg(long, required = true, num_args = 1..)]
+    input: Vec<PathBuf>,
+    /// Adapter that turns each file into one record of symbols.
+    #[arg(long, default_value = "jsonl-events")]
+    adapter: String,
+    /// Adapter option as key=value. Repeatable.
+    #[arg(long = "adapter-option", value_name = "KEY=VALUE")]
+    adapter_options: Vec<String>,
+    /// Read plain text instead of using an adapter: every line is one
+    /// record, symbols separated by whitespace.
+    #[arg(long, conflicts_with_all = ["adapter", "adapter_options"])]
+    lines: bool,
+    /// Files with held-out data to check the patterns against.
+    #[arg(long, num_args = 1.., conflicts_with = "holdout_fraction")]
+    holdout: Vec<PathBuf>,
+    /// Hold out this share of the input instead. With --lines the last
+    /// records are held out; otherwise the end of each record.
+    #[arg(long)]
+    holdout_fraction: Option<f64>,
+    #[arg(long, default_value_t = 5)]
+    min_support: u64,
+    /// Longest contiguous pattern, in symbols.
+    #[arg(long, default_value_t = 8)]
+    max_length: usize,
+    /// Minimum cohesion in bits: how much more often than chance.
+    #[arg(long, default_value_t = 1.0)]
+    min_cohesion: f64,
+    /// Gapped pairs look this many symbols ahead; 0 turns them off.
+    #[arg(long, default_value_t = 8)]
+    window: usize,
+    /// Report at most this many patterns of each kind.
+    #[arg(long, default_value_t = 50)]
+    top: usize,
+    /// Also run on a shuffled copy of the input (same symbol counts, no
+    /// order) and report how much the method finds there.
+    #[arg(long)]
+    control: bool,
+    /// Also write the JSON report to this file.
+    #[arg(long)]
+    output: Option<PathBuf>,
+}
+
+fn read_records(engine: &Engine, args: &DiscoverArgs, paths: &[PathBuf]) -> kute::Result<Vec<Vec<String>>> {
+    let mut adapter_config = AdapterConfig::default();
+    for option in &args.adapter_options {
+        let (key, value) = option
+            .split_once('=')
+            .ok_or_else(|| KuteError::InvalidConfig(format!("adapter option {option:?}: expected key=value")))?;
+        adapter_config = adapter_config.with(key, value);
+    }
+    let mut records = Vec::new();
+    for path in paths {
+        for file in kute::collect_files(path)? {
+            let raw = std::fs::read(&file)?;
+            if args.lines {
+                let text = String::from_utf8(raw).map_err(|_| KuteError::InvalidInput(format!("{}: not UTF-8", file.display())))?;
+                records.extend(text.lines().map(|l| l.split_whitespace().map(str::to_string).collect::<Vec<_>>()).filter(|r| !r.is_empty()));
+            } else {
+                let input = engine.registry().adapter(&args.adapter)?.ingest(&raw, &adapter_config)?;
+                records.extend(kute_discover::records_of(&[input])?);
+            }
+        }
+    }
+    if records.is_empty() {
+        return Err(KuteError::InvalidInput("no records found in the input".into()));
+    }
+    Ok(records)
+}
+
+fn discover(engine: &Engine, args: DiscoverArgs) -> kute::Result<()> {
+    use kute_discover as kd;
+    let params = kd::Params {
+        min_support: args.min_support,
+        max_length: args.max_length,
+        min_cohesion_bits: args.min_cohesion,
+        window: args.window,
+        max_patterns: args.top,
+        ..kd::Params::default()
+    };
+    let mut records = read_records(engine, &args, &args.input)?;
+    let mut held_out = if args.holdout.is_empty() { None } else { Some(read_records(engine, &args, &args.holdout)?) };
+    if let Some(fraction) = args.holdout_fraction {
+        if args.lines {
+            if !(fraction > 0.0 && fraction < 1.0) {
+                return Err(KuteError::InvalidConfig("the held-out fraction must be between 0 and 1".into()));
+            }
+            let cut = ((records.len() as f64) * (1.0 - fraction)).round() as usize;
+            held_out = Some(records.split_off(cut.clamp(1, records.len())));
+        } else {
+            let (head, tail) = kd::split_holdout(&records, fraction)?;
+            records = head;
+            held_out = Some(tail);
+        }
+    }
+    let start = std::time::Instant::now();
+    let found = kd::discover(&records, &params)?;
+    let seconds = start.elapsed().as_secs_f64();
+    let evaluation = held_out.as_ref().map(|h| kd::evaluate(&found, h)).transpose()?;
+    let control = if args.control {
+        let found = kd::discover(&kd::shuffled(&records, 0), &params)?;
+        let evaluation = held_out.as_ref().map(|h| kd::evaluate(&found, h)).transpose()?;
+        Some(json!({
+            "what": "the same run on a shuffled copy of the input: same symbol counts, no order",
+            "patterns": found.patterns.len(),
+            "strongest_evidence_bits": found.patterns.iter().map(|p| p.evidence_bits).fold(0.0, f64::max),
+            "coverage": found.coverage,
+            "held_out_confirmed": evaluation.as_ref().map(|e| e.confirmed),
+            "held_out_coverage": evaluation.as_ref().map(|e| e.coverage),
+        }))
+    } else {
+        None
+    };
+    let report = json!({
+        "kute_version": kute::KUTE_VERSION,
+        "discover_seconds": seconds,
+        "discovery": found,
+        "held_out": evaluation,
+        "control": control,
+    });
+    if let Some(path) = &args.output {
+        std::fs::write(path, serde_json::to_vec_pretty(&report)?)?;
+    }
+    print(&report)
 }
 
 #[derive(clap::Args)]
@@ -350,6 +480,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
             print(&json!({ "output": output, "synthetic": true, "files": written }))
         }
+        Command::Discover(args) => discover(&engine, *args),
         Command::Capabilities => {
             let registry = engine.registry();
             let algorithms: Vec<kute::TokenizerCapabilities> =
