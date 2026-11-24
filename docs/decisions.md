@@ -278,10 +278,33 @@ pre-tokenizer on text, chunks do not cross line feeds and the learned tokens
 come out the same. Checkpointing a training run and resuming it is not
 implemented.
 
+## ADR-0025: A compact vocabulary file that stores rules, not payloads
+
+A 32,768-token text vocabulary is 3.3 MB as JSON. Most of that is the
+payload of learned tokens, written out in base64, although each one is
+determined by its merge rule. The compact form (`.kvfb`, KVF section 7)
+stores the rule alone and rebuilds the payload on load; the same vocabulary
+is 155 KB.
+
+It is a second encoding of the same model, not a second format: the digest
+is unchanged, it is computed over the rebuilt model, and a reader validates
+that model in full, so a compact file is trusted no more than a JSON one.
+JSON stays the interchange and inspection form.
+
+Two costs were accepted. A small file can now describe a large table, so the
+reader takes a budget for rebuilt payloads as well as for the inflated body.
+And the form stores rules in id order only, so a vocabulary listing them in
+another order is refused by the writer instead of being reordered, which
+would change its digest.
+
+Loading is not meaningfully faster: validation and the digest dominate, not
+parsing. Measured figures are in `benchmarks/README.md`. A form that can be
+used without rebuilding, for example memory-mapped, was not attempted. The
+exchange protocol still sends JSON.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats, training
-checkpoints, typed fields and timestamps in events, a compact binary
-vocabulary file, entropy-coded containers, comparison with Zstandard and
-with binary record formats, and adapters for DNA, telemetry, mathematics and
-quantum circuits.
+checkpoints, typed fields and timestamps in events, entropy-coded
+containers, comparison with Zstandard and with binary record formats, and
+adapters for DNA, telemetry, mathematics and quantum circuits.

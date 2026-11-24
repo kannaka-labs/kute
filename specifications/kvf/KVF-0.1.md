@@ -19,8 +19,9 @@ that files diff well; readers MUST NOT depend on that layout.
 Readers MUST reject files over 512 MiB, and MUST validate a file (section 5)
 before using any part of it.
 
-A binary encoding of the same model is planned for a later version. KVF 0.1
-defines JSON only.
+Section 7 defines a compact binary encoding of the same model, with the
+extension `.kvfb`, added in KUTE v0.4.0. JSON remains the interchange form:
+it is the one a person can read and the one the digest is defined over.
 
 ## 2. Top-level object
 
@@ -267,7 +268,52 @@ refused rather than exported approximately.
 Import from tiktoken, Hugging Face Tokenizers and SentencePiece is not part of
 KVF 0.1.
 
-## 7. Example
+## 7. Compact binary form
+
+A `.kvfb` file carries the same model as a `.kvf` file and has the same
+digest. It is smaller because a learned token is stored as its merge rule
+only: the payload of a merge token is the concatenation of two earlier
+tokens (2.3) and a reader rebuilds it.
+
+```text
+bytes 0-3   "KVFB"
+byte 4      format, 1
+byte 5      flags; bit 0 set: the body is one zlib stream (RFC 1950)
+body:
+  varint    header length in bytes
+  header    JSON: the top-level object of section 2 without `tokens` and `merges`
+  varint    token count
+  per token, in id order (the id is the position):
+    tag     low 3 bits: kind (0 byte, 1 char, 2 symbol, 3 entry, 4 merge, 5 special)
+            bit 7: a frequency follows; bits 3-6 are zero
+    [varint frequency]
+    merge:  varint left id, varint right id; both less than this token's id
+    other:  one byte, 0 for bytes or 1 for symbols, then
+            bytes:   varint length, the bytes
+            symbols: varint count, then per symbol varint length and UTF-8 text
+```
+
+Numbers are unsigned LEB128 in their shortest form. Nothing may follow the
+last token, or the end of the zlib stream.
+
+Reading. A reader rebuilds the model: tokens with ids from their position,
+merge payloads by concatenation, and `merges` as one rule per merge token in
+id order. It then validates the model exactly as section 5 requires for
+JSON, including the digest of section 4, which is computed over the rebuilt
+model and never over the bytes of this file. A reader MUST refuse unknown
+format or flag values, padded numbers, a token count the data cannot hold,
+and a file whose rebuilt payloads or inflated body exceed its size limit
+(the reference reader uses the 512 MiB of section 1 for both).
+
+Writing. A writer MUST refuse a vocabulary whose `merges` are not in
+ascending id order: the digest covers their order and this form cannot
+record another one. Every vocabulary the reference trainers produce is in
+that order.
+
+Converting a file to this form and back yields the same model and, with the
+reference writer, the same JSON bytes.
+
+## 8. Example
 
 ```json
 {

@@ -51,6 +51,12 @@ New in v0.3:
   --max-units` for untrusted sequences, and a registry that refuses a second
   registration of a name.
 
+On the development branch, after v0.3.0 (not yet released):
+
+* A compact vocabulary file: name the output `.kvfb`, or run `kute convert`.
+  Same digest, about a twentieth of the size on a 32K text vocabulary
+  (155 KB against 3.3 MB). Every command reads either form.
+
 ## Quick start
 
 Install from crates.io with `cargo install kute-cli`, or from PyPI with

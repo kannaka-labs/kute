@@ -1,8 +1,12 @@
 //! KUTE Vocabulary Format (KVF) 0.1: files, validation, comparison, export.
 //!
 //! The format is specified in `specifications/kvf/KVF-0.1.md`. A `.kvf` file is
-//! one UTF-8 JSON document. Loading always validates structure and, when the
-//! file carries a digest, integrity; nothing in a file is trusted before that.
+//! one UTF-8 JSON document; a `.kvfb` file is the compact binary form of the
+//! same model (see [`compact`]). Loading accepts either, always validates
+//! structure and, when the file carries a digest, integrity; nothing in a
+//! file is trusted before that.
+
+pub mod compact;
 
 use kute_types::{b64, KuteError, PayloadKind, Result, TokenKind, TokenPayload, Vocabulary};
 use serde::Serialize;
@@ -12,10 +16,13 @@ use std::path::Path;
 /// Largest `.kvf` file this build will read.
 pub const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
 
-/// Parse and validate a KVF document.
+/// Parse and validate a KVF document, JSON or compact.
 pub fn from_slice(bytes: &[u8]) -> Result<Vocabulary> {
     if bytes.len() as u64 > MAX_FILE_BYTES {
         return Err(KuteError::LimitExceeded("vocabulary file is larger than 512 MiB".into()));
+    }
+    if compact::is_compact(bytes) {
+        return compact::from_slice(bytes, MAX_FILE_BYTES);
     }
     let vocabulary: Vocabulary =
         serde_json::from_slice(bytes).map_err(|e| KuteError::InvalidVocabulary(format!("not a KVF document: {e}")))?;
@@ -84,11 +91,18 @@ pub fn to_vec(vocabulary: &Vocabulary) -> Result<Vec<u8>> {
     Ok(out.into_bytes())
 }
 
-/// Write a `.kvf` file. Refuses to overwrite a published file with different
+/// Serialize to the compact binary form, compressed. See [`compact`].
+pub fn to_vec_compact(vocabulary: &Vocabulary) -> Result<Vec<u8>> {
+    compact::to_vec(vocabulary, true)
+}
+
+/// Write a vocabulary file: the compact form when the path ends in `.kvfb`,
+/// JSON otherwise. Refuses to overwrite a published file with different
 /// content: published versions are immutable (FR-007, ADR-0008).
 pub fn save(vocabulary: &Vocabulary, path: impl AsRef<Path>, overwrite: bool) -> Result<()> {
     let path = path.as_ref();
-    let bytes = to_vec(vocabulary)?;
+    let binary = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("kvfb"));
+    let bytes = if binary { to_vec_compact(vocabulary)? } else { to_vec(vocabulary)? };
     if path.exists() && !overwrite {
         let same = load(path).ok().and_then(|old| old.digest().ok()) == vocabulary.compute_digest().ok();
         if !same {

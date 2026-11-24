@@ -236,3 +236,35 @@ vocabulary on this machine; one process per run.
 * Peak memory of encoding, of discovery and of the benchmark suite's cases
   is not measured yet.
 
+## Compact vocabulary file (development branch, after v0.3.0)
+
+`kute convert --input enwik8-32k.kvf --output enwik8-32k.kvfb` on the
+32,768-token vocabulary from the large text case. The command reads the
+output back, checks it is the same vocabulary, and times five loads of each
+file from memory.
+
+| form | bytes | against JSON |
+|------|------:|-------------:|
+| JSON (`.kvf`) | 3,335,566 | 1 |
+| JSON through `gzip -9` | 530,969 | 6.3x smaller |
+| JSON through `xz -9` | 347,684 | 9.6x smaller |
+| compact (`.kvfb`) | 155,266 | 21.5x smaller |
+
+* Same digest in both forms, and converting back gives the same JSON bytes.
+* The saving comes from not storing what the merge rules already determine,
+  which is why it beats general compressors on the JSON. It applies to
+  learned vocabularies. A 40-token event vocabulary went from 5,433 to 978
+  bytes, mostly because the JSON layout is roomy.
+* **Loading is not clearly faster.** Median load of the 32K vocabulary was
+  121 ms for JSON and 65 ms and 100 ms for the compact file in two runs on a
+  busy machine; on the 40-token vocabulary the compact file was slightly
+  slower (0.44 ms against 0.32 ms). Both forms are validated in full and
+  their digest recomputed on load, and that is where the time goes.
+* What it changes in the large text case: the compressed container plus the
+  JSON vocabulary is 1.56 times smaller than the 10 MB evaluation text, as
+  the table for the recorded run says. With the compact vocabulary in its
+  place the same sum works out to 3.09, against 2.78 for gzip, which needs
+  no vocabulary. That figure is arithmetic on the recorded sizes
+  (9,999,811 / (3,084,101 + 155,266)); the suite still reports the JSON
+  figure.
+

@@ -159,6 +159,20 @@ fn use_case_4_industrial_events() {
     ]);
     assert_eq!(evolved["summary"]["tokens"].as_u64().unwrap(), evolved["parent"]["tokens"].as_u64().unwrap() + 1);
     ok(&dir, &["validate", "industrial-0.2.kvf"]);
+    // The compact form of the same vocabulary: same digest, smaller, and
+    // every command reads it in place of the JSON file.
+    let converted = ok(&dir, &["convert", "--input", "industrial-0.2.kvf", "--output", "industrial-0.2.kvfb"]);
+    assert_eq!(converted["digest"], evolved["summary"]["digest"]);
+    assert!(converted["output"]["bytes"].as_u64().unwrap() < converted["input"]["bytes"].as_u64().unwrap());
+    ok(&dir, &["validate", "industrial-0.2.kvfb"]);
+    ok(&dir, &["encode", "--vocab", "industrial-0.2.kvfb", "--input", "novel.jsonl", "--output", "novel-0.2b.kute"]);
+    assert_eq!(read(&dir, "novel-0.2b.kute"), {
+        ok(&dir, &["encode", "--vocab", "industrial-0.2.kvf", "--input", "novel.jsonl", "--output", "novel-0.2a.kute"]);
+        read(&dir, "novel-0.2a.kute")
+    });
+    let back = ok(&dir, &["convert", "--input", "industrial-0.2.kvfb", "--output", "industrial-0.2-back.kvf"]);
+    assert_eq!(back["digest"], evolved["summary"]["digest"]);
+    assert_eq!(read(&dir, "industrial-0.2-back.kvf"), read(&dir, "industrial-0.2.kvf"));
     ok(&dir, &["encode", "--vocab", "industrial-0.2.kvf", "--input", "novel.jsonl", "--output", "novel-0.2.kute"]);
     assert!(fails(&dir, &["evolve", "--vocab", "industrial.kvf", "--add", "X", "--new-version", "0.0.1", "--output", "bad.kvf"]).contains("greater"));
     // Two processes: one serves with no vocabulary, the other shares its

@@ -395,6 +395,7 @@ dependencies = [
 name = "kute-vocab"
 version = "0.3.0"
 dependencies = [
+ "flate2",
  "kute-types",
  "serde",
  "serde_json",

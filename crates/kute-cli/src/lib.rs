@@ -67,6 +67,17 @@ enum Command {
     Validate { vocab: PathBuf },
     /// Compare two vocabularies by token content.
     Compare { a: PathBuf, b: PathBuf },
+    /// Rewrite a vocabulary in the other file form: compact binary when the
+    /// output ends in .kvfb, JSON otherwise. The digest does not change.
+    Convert {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        /// Replace an existing output file.
+        #[arg(long)]
+        force: bool,
+    },
     /// Convert a vocabulary to another tool's format.
     Export {
         #[arg(long)]
@@ -568,6 +579,33 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
         }
         Command::Compare { a, b } => print(&vocab::compare(&vocab::load(&a)?, &vocab::load(&b)?)?),
+        Command::Convert { input, output, force } => {
+            let vocabulary = vocab::load(&input)?;
+            vocab::save(&vocabulary, &output, force)?;
+            // Read the new file back: the report describes what is on disk.
+            let written = vocab::load(&output)?;
+            if written != vocabulary {
+                return Err(KuteError::Integrity("the converted file does not read back as the same vocabulary".into()));
+            }
+            let median_ms = |path: &PathBuf| -> kute::Result<f64> {
+                let bytes = std::fs::read(path)?;
+                let mut times = Vec::new();
+                for _ in 0..5 {
+                    let start = std::time::Instant::now();
+                    vocab::from_slice(&bytes)?;
+                    times.push(start.elapsed().as_secs_f64() * 1000.0);
+                }
+                times.sort_by(|a, b| a.total_cmp(b));
+                Ok((times[2] * 1000.0).round() / 1000.0)
+            };
+            print(&json!({
+                "input": { "path": input, "bytes": std::fs::metadata(&input)?.len(), "load_ms_median": median_ms(&input)? },
+                "output": { "path": output, "bytes": std::fs::metadata(&output)?.len(), "load_ms_median": median_ms(&output)? },
+                "digest": written.digest()?,
+                "tokens": written.len(),
+                "identical": true,
+            }))
+        }
         Command::Export { vocab: vocab_path, format: ExportFormat::Tiktoken, output } => {
             let vocabulary = vocab::load(&vocab_path)?;
             let export = vocab::export_tiktoken(&vocabulary)?;
