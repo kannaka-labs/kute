@@ -174,13 +174,18 @@ impl EventStream {
         Ok(format!("sha256:{}", crate::hex(&h.finalize())))
     }
 
-    /// Split into the first records and the last `fraction` of them.
+    /// Split into the first records and the last `fraction` of them. Each
+    /// side gets at least one record; a stream with fewer than two is an error.
     pub fn split_last(mut self, fraction: f64) -> Result<(EventStream, EventStream)> {
         if !(fraction > 0.0 && fraction < 1.0) {
             return Err(KuteError::InvalidConfig("the held-out fraction must be between 0 and 1".into()));
         }
+        if self.records.len() < 2 {
+            return Err(KuteError::InvalidInput("splitting needs at least two records, one for each side".into()));
+        }
         let cut = ((self.records.len() as f64) * (1.0 - fraction)).round() as usize;
-        let tail = self.records.split_off(cut.clamp(1, self.records.len()));
+        // Both sides keep at least one record, whatever the fraction rounds to.
+        let tail = self.records.split_off(cut.clamp(1, self.records.len() - 1));
         let schema = self.schema.clone();
         Ok((self, EventStream { schema, records: tail }))
     }
