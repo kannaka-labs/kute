@@ -143,3 +143,27 @@ def test_tiktoken_export_matches_tiktoken(engine, tmp_path):
     # Every token has the same bytes on both sides.
     for token_id in range(len(v) - 1):
         assert enc.decode_single_token_bytes(token_id) == v.token_bytes(token_id)
+
+
+def test_test_vectors_are_opt_in(engine):
+    plain = engine.train(texts=[TEXT] * 4, vocabulary_id="test:vectors", vocab_size=300)
+    assert plain.summary()["test_vectors"] == 0
+    kept = engine.train(texts=[TEXT] * 4, vocabulary_id="test:vectors", vocab_size=300, embed_test_vectors=True)
+    assert kept.summary()["test_vectors"] >= 1
+    assert engine.verify(kept)["failures"] == []
+
+
+def test_resumed_training_matches_one_run(engine):
+    texts = [f"{TEXT} record {i}" for i in range(60)]
+    whole = engine.train(texts=texts, vocabulary_id="test:resume", vocab_size=600)
+    first = engine.train(texts=texts, vocabulary_id="test:resume", vocab_size=400)
+    resumed = engine.train(texts=texts, vocabulary_id="test:resume", vocab_size=600, resume_from=first)
+    assert resumed.digest == whole.digest
+    with pytest.raises(Exception, match="different corpus"):
+        engine.train(texts=texts[1:], vocabulary_id="test:resume", vocab_size=600, resume_from=first)
+
+
+def test_discover_finds_a_planted_pattern():
+    records = [["START", "HEAT", "HOLD", "DONE"] + [f"noise{i % 7}"] for i in range(40)]
+    found = kute.discover(records, min_support=10)
+    assert any(p["symbols"] == ["START", "HEAT", "HOLD", "DONE"] for p in found["patterns"]), found["patterns"][:3]

@@ -234,6 +234,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kute-discover"
+version = "0.4.0"
+dependencies = [
+ "kute-core",
+ "kute-types",
+ "rustc-hash",
+ "serde",
+]
+
+[[package]]
 name = "kute-engine"
 version = "0.4.0"
 dependencies = [
@@ -252,6 +262,7 @@ name = "kute-python"
 version = "0.4.0"
 dependencies = [
  "kute-bench",
+ "kute-discover",
  "kute-engine",
  "pyo3",
  "serde",

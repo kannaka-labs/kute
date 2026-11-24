@@ -18,6 +18,7 @@ crate-type = ["cdylib"]
 [dependencies]
 kute = { package = "kute-engine", path = "../../crates/kute" }
 kute-bench = { path = "../../crates/kute-bench" }
+kute-discover = { path = "../../crates/kute-discover" }
 pyo3 = { version = "0.27", features = ["extension-module", "abi3-py39"] }
 serde = "1"
 serde_json = "1"

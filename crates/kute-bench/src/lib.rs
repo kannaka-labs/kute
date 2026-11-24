@@ -132,10 +132,40 @@ pub struct Evaluation {
     pub decode_seconds_median: f64,
     pub encode_mb_per_second: f64,
     pub decode_mb_per_second: f64,
+    /// Time to encode one document, over every document in every timing pass.
+    pub encode_latency: Latency,
+    /// Time to decode one document, over the same.
+    pub decode_latency: Latency,
     /// Threads available to the encoder. Text inputs of 1 MiB or more are
     /// encoded on all of them; smaller inputs use one.
     pub threads: usize,
     pub peak_memory: &'static str,
+}
+
+/// Spread of per-document times, in microseconds. With few samples the high
+/// percentiles are the slowest sample or close to it; `samples` says how many.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Latency {
+    pub samples: usize,
+    pub p50_micros: f64,
+    pub p90_micros: f64,
+    pub p99_micros: f64,
+    pub max_micros: f64,
+}
+
+impl Latency {
+    /// Nearest-rank percentiles of `seconds`.
+    pub fn of(mut seconds: Vec<f64>) -> Self {
+        seconds.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let at = |p: f64| -> f64 {
+            if seconds.is_empty() {
+                return 0.0;
+            }
+            let rank = (p * seconds.len() as f64).ceil() as usize;
+            (seconds[rank.clamp(1, seconds.len()) - 1] * 1e7).round() / 10.0
+        };
+        Latency { samples: seconds.len(), p50_micros: at(0.50), p90_micros: at(0.90), p99_micros: at(0.99), max_micros: at(1.0) }
+    }
 }
 
 fn median(mut v: Vec<f64>) -> f64 {
@@ -193,15 +223,24 @@ pub fn evaluate(engine: &Engine, vocabulary: &Vocabulary, documents: &[Document]
 
     let iterations = iterations.max(1);
     let (mut encode_times, mut decode_times) = (Vec::new(), Vec::new());
+    let (mut encode_each, mut decode_each) = (Vec::new(), Vec::new());
     for _ in 0..iterations {
         let start = Instant::now();
+        let mut last = 0.0;
         for d in documents {
             std::hint::black_box(engine.encode_raw(tokenizer, &d.bytes)?);
+            let now = start.elapsed().as_secs_f64();
+            encode_each.push(now - last);
+            last = now;
         }
         encode_times.push(start.elapsed().as_secs_f64());
         let start = Instant::now();
+        let mut last = 0.0;
         for s in &sequences {
             std::hint::black_box(engine.decode_raw(tokenizer, s)?);
+            let now = start.elapsed().as_secs_f64();
+            decode_each.push(now - last);
+            last = now;
         }
         decode_times.push(start.elapsed().as_secs_f64());
     }
@@ -239,6 +278,8 @@ pub fn evaluate(engine: &Engine, vocabulary: &Vocabulary, documents: &[Document]
         decode_seconds_median: decode_s,
         encode_mb_per_second: if encode_s > 0.0 { round(mb / encode_s) } else { 0.0 },
         decode_mb_per_second: if decode_s > 0.0 { round(mb / decode_s) } else { 0.0 },
+        encode_latency: Latency::of(encode_each),
+        decode_latency: Latency::of(decode_each),
         threads: rayon::current_num_threads(),
         peak_memory: "not measured",
     })
@@ -303,4 +344,18 @@ pub fn peak_memory_bytes() -> Option<u64> {
 #[cfg(not(any(target_os = "linux", windows)))]
 pub fn peak_memory_bytes() -> Option<u64> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Latency;
+
+    #[test]
+    fn latency_percentiles_are_nearest_rank() {
+        let l = Latency::of((1..=100).rev().map(|n| n as f64 * 1e-6).collect());
+        assert_eq!((l.samples, l.p50_micros, l.p90_micros, l.p99_micros, l.max_micros), (100, 50.0, 90.0, 99.0, 100.0));
+        let one = Latency::of(vec![2e-6]);
+        assert_eq!((one.p50_micros, one.p99_micros, one.max_micros), (2.0, 2.0, 2.0));
+        assert_eq!(Latency::of(Vec::new()).max_micros, 0.0);
+    }
 }

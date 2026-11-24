@@ -35,6 +35,25 @@ kute benchmark --vocab my.kvf --dataset path/to/held-out-data
 * Cases marked `synthetic` come from seeded template generators. They show the
   machinery works. They do not predict results on real data.
 
+## Latency per document (after v0.4.0)
+
+File: `results/suite-after-v0.4.0-windows-x86_64.json`. Each evaluation now
+records how long one document takes to encode and to decode, as p50, p90,
+p99 and maximum over every document in every timing pass. Five passes; the
+machine was not idle (about a quarter of its CPU was in use when the run
+started), so read these as an upper bound on this machine, not a clean
+measurement.
+
+| case | documents | samples | encode p50 | encode max | decode p50 | decode max |
+|------|----------:|--------:|-----------:|-----------:|-----------:|-----------:|
+| B01-large, 10 MB of enwik8 | 1 | 5 | 150 ms | 173 ms | 47 ms | 92 ms |
+| B02, this repository's source files | 13 | 65 | 341 µs | 1.49 ms | 33 µs | 208 µs |
+| B01, two small text files | 2 | 10 | 276 µs | 895 µs | 36 µs | 79 µs |
+
+With 5 to 65 samples a p99 is the slowest sample; the file says how many
+samples each figure rests on. The large case encoded at 67 MB/s and decoded
+at 214 MB/s in this run, and its sizes equal the earlier records.
+
 ## Recorded run: v0.3.0
 
 File: `results/suite-v0.3.0-windows-x86_64.json`, same machine, command and

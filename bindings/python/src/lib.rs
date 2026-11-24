@@ -155,9 +155,15 @@ impl Engine {
     ///
     /// Give `source` (a path or list of paths; directories are read
     /// recursively) or `texts` (a list of str or bytes held in memory).
+    ///
+    /// `embed_test_vectors` stores short excerpts of the training data in
+    /// the vocabulary so that `verify` has something to check; off unless
+    /// asked. `resume_from` continues an earlier bpe run on the same data
+    /// and settings to a larger `vocab_size`, with the result of one run.
     #[pyo3(signature = (source=None, *, texts=None, vocabulary_id, algorithm="bpe", adapter="text", vocab_size=4096,
                         version="0.1.0", pretokenizer=None, adapter_options=None, reserved_tokens=None,
-                        min_frequency=1, max_token_length=None, dictionary=None, description=None, license=None))]
+                        min_frequency=1, max_token_length=None, dictionary=None, description=None, license=None,
+                        embed_test_vectors=false, resume_from=None))]
     #[allow(clippy::too_many_arguments)]
     fn train(
         &self,
@@ -177,6 +183,8 @@ impl Engine {
         dictionary: Option<Vec<String>>,
         description: Option<String>,
         license: Option<String>,
+        embed_test_vectors: bool,
+        resume_from: Option<&Vocabulary>,
     ) -> PyResult<Vocabulary> {
         let mut config = TrainingConfig::new(VocabularyId::parse(vocabulary_id).map_err(err)?, vocab_size);
         config.vocabulary_version = Version::parse(version).map_err(|e| PyValueError::new_err(format!("version {version:?}: {e}")))?;
@@ -194,6 +202,8 @@ impl Engine {
         config.dictionary = dictionary.unwrap_or_default();
         config.description = description;
         config.license = license;
+        config.embed_test_vectors = embed_test_vectors;
+        config.resume_from = resume_from.map(|v| Box::new(v.inner.clone()));
         let adapter_config = AdapterConfig { options: adapter_options.unwrap_or_default() };
 
         let trained = match (source, texts) {
@@ -296,10 +306,44 @@ impl Engine {
     }
 }
 
+/// Find recurring patterns in records of symbols, with no tokenizer.
+///
+/// `records` is a list of lists of str. Returns a dict: `patterns` (runs of
+/// adjacent symbols and gapped pairs, strongest first, each with its
+/// support and evidence), `observation` and the `params` used. Patterns are
+/// statistical regularities in order; nothing is said about what they mean.
+#[pyfunction]
+#[pyo3(signature = (records, *, min_support=None, max_length=None, window=None, max_patterns=None))]
+fn discover(
+    py: Python<'_>,
+    records: Vec<Vec<String>>,
+    min_support: Option<u64>,
+    max_length: Option<usize>,
+    window: Option<usize>,
+    max_patterns: Option<usize>,
+) -> PyResult<Py<PyAny>> {
+    let mut params = kute_discover::Params::default();
+    if let Some(v) = min_support {
+        params.min_support = v;
+    }
+    if let Some(v) = max_length {
+        params.max_length = v;
+    }
+    if let Some(v) = window {
+        params.window = v;
+    }
+    if let Some(v) = max_patterns {
+        params.max_patterns = v;
+    }
+    let found = py.detach(|| kute_discover::discover(&records, &params)).map_err(err)?;
+    to_python(py, &found)
+}
+
 #[pymodule(name = "kute")]
 fn kute_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Engine>()?;
     m.add_class::<Vocabulary>()?;
+    m.add_function(wrap_pyfunction!(discover, m)?)?;
     m.add("__version__", kute::KUTE_VERSION)?;
     m.add("KVF_VERSION", kute::KVF_VERSION)?;
     Ok(())
