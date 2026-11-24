@@ -622,3 +622,145 @@ pub fn split_holdout(records: &[Vec<String>], fraction: f64) -> Result<(Records,
     }
     Ok((head, tail))
 }
+
+/// How long a pattern takes, measured on a typed event stream.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TimingSummary {
+    /// Occurrences measured. Minimum and maximum are over all of them.
+    pub occurrences: u64,
+    /// Occurrences the quantiles are computed from: all of them up to
+    /// [`TIMING_SAMPLE`], a uniform sample beyond that.
+    pub sampled: u64,
+    pub min: i64,
+    pub p10: i64,
+    pub median: i64,
+    pub p90: i64,
+    pub max: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PatternTiming {
+    /// Index into [`Discovery::patterns`].
+    pub pattern: usize,
+    /// `None` when the pattern does not occur in the stream.
+    pub duration: Option<TimingSummary>,
+}
+
+/// Largest number of durations kept per pattern for the quantiles.
+pub const TIMING_SAMPLE: usize = 100_000;
+
+struct Reservoir {
+    seen: u64,
+    min: i64,
+    max: i64,
+    kept: Vec<i64>,
+    state: u64,
+}
+
+impl Reservoir {
+    fn new(seed: u64) -> Self {
+        Reservoir { seen: 0, min: i64::MAX, max: i64::MIN, kept: Vec::new(), state: seed.wrapping_mul(0x9e3779b97f4a7c15) | 1 }
+    }
+
+    fn push(&mut self, value: i64) {
+        self.seen += 1;
+        self.min = self.min.min(value);
+        self.max = self.max.max(value);
+        if self.kept.len() < TIMING_SAMPLE {
+            self.kept.push(value);
+            return;
+        }
+        self.state ^= self.state << 13;
+        self.state ^= self.state >> 7;
+        self.state ^= self.state << 17;
+        let slot = self.state % self.seen;
+        if (slot as usize) < TIMING_SAMPLE {
+            self.kept[slot as usize] = value;
+        }
+    }
+
+    fn summary(mut self) -> Option<TimingSummary> {
+        if self.seen == 0 {
+            return None;
+        }
+        self.kept.sort_unstable();
+        let at = |q: f64| self.kept[((self.kept.len() - 1) as f64 * q).round() as usize];
+        Some(TimingSummary {
+            occurrences: self.seen,
+            sampled: self.kept.len() as u64,
+            min: self.min,
+            p10: at(0.1),
+            median: at(0.5),
+            p90: at(0.9),
+            max: self.max,
+        })
+    }
+}
+
+/// Time from `first` to `last`. Timestamps are any 64-bit integers, so the
+/// difference of two of them need not fit in one.
+fn span(first: i64, last: i64) -> Result<i64> {
+    last.checked_sub(first).ok_or_else(|| KuteError::InvalidInput(format!("the time from {first} to {last} does not fit in 64 bits")))
+}
+
+/// Measure every discovered pattern on a timed stream, in the stream's own
+/// time unit.
+///
+/// For a contiguous pattern the duration of an occurrence is the time of its
+/// last event minus the time of its first; every occurrence counts, including
+/// overlapping ones. For a gapped pair it is the time from each occurrence
+/// of the first symbol to the nearest occurrence of the second within
+/// `params.window` positions after it.
+pub fn timing(discovery: &Discovery, stream: &kute_types::event::EventStream) -> Result<Vec<PatternTiming>> {
+    if !stream.timed() {
+        return Err(KuteError::InvalidInput("the event stream has no timestamps".into()));
+    }
+    stream.validate()?;
+    let mut ids: FxHashMap<&str, u32> = FxHashMap::default();
+    let patterns: Vec<Vec<u32>> = discovery
+        .patterns
+        .iter()
+        .map(|p| {
+            p.symbols
+                .iter()
+                .map(|s| {
+                    let next = ids.len() as u32;
+                    *ids.entry(s.as_str()).or_insert(next)
+                })
+                .collect()
+        })
+        .collect();
+    let mut by_first: Vec<Vec<usize>> = vec![Vec::new(); ids.len()];
+    for (i, p) in patterns.iter().enumerate() {
+        by_first[p[0] as usize].push(i);
+    }
+    let window = discovery.params.window;
+    let mut reservoirs: Vec<Reservoir> = (0..patterns.len()).map(|i| Reservoir::new(i as u64 + 1)).collect();
+    let mut encoded: Vec<u32> = Vec::new();
+    for record in &stream.records {
+        encoded.clear();
+        encoded.extend(record.symbols.iter().map(|s| ids.get(s.as_str()).copied().unwrap_or(u32::MAX)));
+        for (start, &first) in encoded.iter().enumerate() {
+            if first == u32::MAX {
+                continue;
+            }
+            for &i in &by_first[first as usize] {
+                let p = &patterns[i];
+                match discovery.patterns[i].kind {
+                    PatternKind::Contiguous => {
+                        if encoded.len() - start >= p.len() && encoded[start..start + p.len()] == p[..] {
+                            reservoirs[i].push(span(record.times[start], record.times[start + p.len() - 1])?);
+                        }
+                    }
+                    PatternKind::Gapped => {
+                        let end = (start + 1 + window).min(encoded.len());
+                        if let Some(offset) = encoded[start + 1..end].iter().position(|&s| s == p[1]) {
+                            reservoirs[i].push(span(record.times[start], record.times[start + 1 + offset])?);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(reservoirs.into_iter().enumerate().map(|(pattern, r)| PatternTiming { pattern, duration: r.summary() }).collect())
+}

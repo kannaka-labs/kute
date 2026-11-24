@@ -309,6 +309,11 @@ impl TokenSequence {
                 }
                 value |= low << shift;
                 if byte & 0x80 == 0 {
+                    // One id, one encoding: a padded form such as 0x85 0x00
+                    // for 5 is refused, so equal sequences have equal bytes.
+                    if byte == 0 && shift > 0 {
+                        return Err(bad("token id has a padded encoding"));
+                    }
                     break;
                 }
                 shift += 7;
@@ -463,5 +468,26 @@ mod tests {
         overflow.extend_from_slice(&[0xff, 0xff, 0xff, 0xff, 0x7f]);
         assert!(TokenSequence::from_bytes(&overflow).is_err());
         assert!(TokenSequence::from_bytes(b"not a kute file").is_err());
+    }
+
+    #[test]
+    fn padded_token_ids_are_refused() {
+        let seq = TokenSequence {
+            vocabulary_id: "kute:test:pad".parse().unwrap(),
+            vocabulary_version: "1.0.0".parse().unwrap(),
+            vocabulary_digest: "sha256:00".into(),
+            modality: Modality::Text,
+            adapter: None,
+            ids: vec![5],
+            escapes: Vec::new(),
+        };
+        let mut bytes = seq.to_bytes().unwrap();
+        assert_eq!(bytes.pop(), Some(5));
+        let mut exact = bytes.clone();
+        exact.push(5);
+        assert_eq!(TokenSequence::from_bytes(&exact).unwrap().ids, vec![5]);
+        // The same id with a continuation bit and a zero byte after it.
+        bytes.extend_from_slice(&[0x85, 0x00]);
+        assert!(TokenSequence::from_bytes(&bytes).is_err());
     }
 }

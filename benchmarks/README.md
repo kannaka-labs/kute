@@ -236,3 +236,145 @@ vocabulary on this machine; one process per run.
 * Peak memory of encoding, of discovery and of the benchmark suite's cases
   is not measured yet.
 
+## Pattern timing on real event data (v0.4.0)
+
+File: `results/discovery-hdfs-v1-timed.json`. The same HDFS_v1 dataset as
+above, this time as one event per line with its block and its time in whole
+seconds since the block's first event (`hdfs_traces.py ... --events`,
+11,175,629 lines, sha256
+`9fdfebf6a58a5881a349463b426338f4323e1182d2c60ae2be7c120523c4b527`):
+
+```sh
+kute discover --input hdfs-events.jsonl --symbol-field event --group-field block \
+  --time-field t --time-unit s --schema-id kute:loghub:hdfs-v1-traces \
+  --holdout-fraction 0.2 --top 25
+```
+
+Grouping by block rebuilt the 575,061 sequences, and the 50 patterns found
+are the same 50, with the same coverage, as in the run on the pre-grouped
+file. What the times add, in seconds, searched part then held-out part:
+
+| pattern | occurrences | p10 | median | p90 | held-out median |
+|---------|------------:|----:|-------:|----:|----------------:|
+| `E11 E9` | 1,345,545 | 0 | 0 | 0 | 0 |
+| `E9 E11 E9 E26 E26` | 330,354 | 0 | 0 | 0 | 0 |
+| `E21 E21` | 835,228 | 3 | 19 | 81 | 13 |
+| `E23 E23 E23 E21` | 418,809 | 56 | 159 | 290 | 56 |
+| `E23 ... E28` (gapped) | 3,733 | 887 | 924 | 956 | 2 occurrences |
+| `E6 ... E18` (gapped) | 1,744 | 3,792 | 3,879 | 11,372 | 9 occurrences |
+| `E25 ... E25` (gapped) | 1,467 | 3,885 | 3,903 | 11,399 | 1 occurrence |
+
+* **Patterns that look alike as sequences differ by orders of magnitude in
+  time.** Some complete within the same second more than nine times in ten;
+  `E23 E23 E23 E21` takes minutes. Sequence statistics alone do not show
+  this.
+* **Some pairs recur at a steady interval.** Eight of the gapped pairs among
+  `E6`, `E16`, `E18` and `E25` have a tenth percentile and a median both
+  between 3,790 and 3,920 seconds, about 65 minutes; `E23 ... E28` sits
+  between 887 and 956 seconds for the middle 80 percent. These are
+  regularities in the data. What produces them was not investigated.
+* **The held-out part does not confirm the long intervals.** It is the end
+  of the file, where blocks are shorter: the 65-minute pairs occur between
+  1 and 24 times there, too few to say anything. Where a pattern is common
+  in both parts the timing has the same order of magnitude but is not equal
+  (`E23 E23 E23 E21`: median 159 s against 56 s).
+* Time resolution is one second, so zero means under a second.
+* Quantiles come from all occurrences up to 100,000 and from a uniform
+  sample of that size beyond; minimum, maximum and the count are exact.
+* Reading the 644 MB event file and holding it with its timestamps peaked
+  at 1.1 GiB. The whole file is held in memory; this path is not streamed.
+
+## Against general-purpose compressors (v0.4.0)
+
+Files: `results/compressors-enwik8.json`, `results/compressors-hdfs-v1.json`,
+script `compressor_compare.py` (Zstandard 1.5.7, LZ4, xz, gzip; sizes only,
+nothing timed). "With shared" adds what both sides must already hold: the
+vocabulary for KUTE, the dictionary for Zstandard.
+
+**Text: 10 MB of held-out enwik8.** KUTE is the compressed container from
+the recorded run with the compact vocabulary file.
+
+| method | bytes | ratio | with shared |
+|--------|------:|------:|------------:|
+| xz -9 | 2,680,608 | 3.73 | 3.73 |
+| zstd -22 --long=27 | 2,745,331 | 3.64 | 3.64 |
+| zstd -19 | 2,746,612 | 3.64 | 3.64 |
+| zstd -19, 1 MiB dictionary trained on the 90 MB | 2,756,297 | 3.63 | 2.63 |
+| zstd -19, 110 KiB trained dictionary | 3,068,943 | 3.26 | 3.14 |
+| **KUTE**, 32,768-token vocabulary (155 KB) | 3,084,101 | 3.24 | 3.09 |
+| zstd -3 | 3,489,545 | 2.87 | 2.87 |
+| gzip -9 | 3,590,266 | 2.79 | 2.79 |
+| lz4, level 12 | 4,124,097 | 2.43 | 2.43 |
+
+**On text KUTE is not competitive with a strong compressor.** It is ahead of
+gzip and of Zstandard at its default level, level with Zstandard using a
+small trained dictionary, and 11 to 13 percent larger than `zstd -19` and
+`xz -9`, which need nothing shared. Its container entropy-codes ids with
+zlib; that is the weaker half.
+
+**Events: HDFS_v1, the last 20 percent of blocks (115,012 blocks, 1,766,436
+events).** The vocabulary is `sequence-bpe` with 256 tokens trained on the
+first 80 percent, with a marker event at the end of each block so that block
+boundaries are kept. Decoding the container gives back the evaluation file
+exactly. The compressors were given the same events as text, one block per
+line (`E5 E22 E5 ...`, 6,374,580 bytes), and ratios are against that.
+
+| method | bytes | ratio | with shared |
+|--------|------:|------:|------------:|
+| **KUTE**, 256-token vocabulary (1,827 bytes) | 80,789 | 78.9 | 77.2 |
+| zstd -22 --long=27 | 116,007 | 55.0 | 55.0 |
+| zstd -19 | 127,914 | 49.8 | 49.8 |
+| gzip -9 | 145,348 | 43.9 | 43.9 |
+| zstd -19, 6.5 KB trained dictionary | 153,423 | 41.5 | 39.9 |
+| xz -9 | 159,296 | 40.0 | 40.0 |
+| lz4, level 12 | 177,820 | 35.8 | 35.8 |
+| zstd -3 | 362,173 | 17.6 | 17.6 |
+
+* **On this event data the KUTE container is the smallest, 30 percent under
+  the best general compressor on the text form.**
+* The text form flatters KUTE, so the compressors were also given a form
+  that costs them nothing to parse: one byte per event and a zero byte per
+  block end (1,881,448 bytes; not in the script). Then `zstd -19` reaches
+  95,401 bytes, `xz -9` 106,896 and `gzip -9` 114,295. KUTE's 80,789 is
+  still 15 percent smaller than the best of them, and 29 percent smaller
+  than gzip, which uses the same entropy coder as the container: that gap
+  is what the learned sequences contribute.
+* A larger vocabulary was worse: 4,096 tokens gave 92,597 bytes. Fewer,
+  longer tokens left the entropy coder less to work with.
+* This is one dataset with 22 to 29 event types and long runs of one event.
+  Nothing here says how it goes on events with many types or little
+  repetition, and the binary record formats in the directive's matrix
+  (CBOR, MessagePack, Protobuf) were not compared.
+
+## Compact vocabulary file (v0.4.0)
+
+`kute convert --input enwik8-32k.kvf --output enwik8-32k.kvfb` on the
+32,768-token vocabulary from the large text case. The command reads the
+output back, checks it is the same vocabulary, and times five loads of each
+file from memory.
+
+| form | bytes | against JSON |
+|------|------:|-------------:|
+| JSON (`.kvf`) | 3,335,566 | 1 |
+| JSON through `gzip -9` | 530,969 | 6.3x smaller |
+| JSON through `xz -9` | 347,684 | 9.6x smaller |
+| compact (`.kvfb`) | 155,266 | 21.5x smaller |
+
+* Same digest in both forms, and converting back gives the same JSON bytes.
+* The saving comes from not storing what the merge rules already determine,
+  which is why it beats general compressors on the JSON. It applies to
+  learned vocabularies. A 40-token event vocabulary went from 5,433 to 978
+  bytes, mostly because the JSON layout is roomy.
+* **Loading is not clearly faster.** Median load of the 32K vocabulary was
+  121 ms for JSON and 65 ms and 100 ms for the compact file in two runs on a
+  busy machine; on the 40-token vocabulary the compact file was slightly
+  slower (0.44 ms against 0.32 ms). Both forms are validated in full and
+  their digest recomputed on load, and that is where the time goes.
+* What it changes in the large text case: the compressed container plus the
+  JSON vocabulary is 1.56 times smaller than the 10 MB evaluation text, as
+  the table for the recorded run says. With the compact vocabulary in its
+  place the same sum works out to 3.09, against 2.78 for gzip, which needs
+  no vocabulary. That figure is arithmetic on the recorded sizes
+  (9,999,811 / (3,084,101 + 155,266)); the suite still reports the JSON
+  figure.
+

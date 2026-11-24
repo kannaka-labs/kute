@@ -179,10 +179,13 @@ signature of the `register` functions, which now return `Result`.
 ## ADR-0018: Test vectors are optional, because they are excerpts
 
 ADR-0010 stores samples of the training input in the vocabulary. For a
-private corpus that publishes the data. `embed_test_vectors` (CLI:
-`--no-test-vectors`) turns it off. The default stays on, since a vocabulary
-that can check itself is worth more, and the choice is recorded in the
-training provenance. Learned tokens are frequent fragments of the corpus and
+private corpus that publishes the data. `embed_test_vectors` controls it and the choice is recorded in the
+training provenance. In v0.3 the default was on (CLI `--no-test-vectors`
+turned it off). From v0.4.0 the default is off and `--embed-test-vectors`
+turns it on (issue #2): a vocabulary file is what gets published and
+exchanged, and the person a default harms is the one who did not read
+about it. A vocabulary without vectors still carries its digest; what it
+loses is the encode check that `kute validate` runs. Learned tokens are frequent fragments of the corpus and
 remain visible in any vocabulary; that is inherent and is not hidden by this
 switch.
 
@@ -278,10 +281,77 @@ pre-tokenizer on text, chunks do not cross line feeds and the learned tokens
 come out the same. Checkpointing a training run and resuming it is not
 implemented.
 
+## ADR-0025: A compact vocabulary file that stores rules, not payloads
+
+A 32,768-token text vocabulary is 3.3 MB as JSON. Most of that is the
+payload of learned tokens, written out in base64, although each one is
+determined by its merge rule. The compact form (`.kvfb`, KVF section 7)
+stores the rule alone and rebuilds the payload on load; the same vocabulary
+is 155 KB.
+
+It is a second encoding of the same model, not a second format: the digest
+is unchanged, it is computed over the rebuilt model, and a reader validates
+that model in full, so a compact file is trusted no more than a JSON one.
+JSON stays the interchange and inspection form.
+
+Two costs were accepted. A small file can now describe a large table, so the
+reader takes a budget for rebuilt payloads as well as for the inflated body.
+And the form stores rules in id order only, so a vocabulary listing them in
+another order is refused by the writer instead of being reordered, which
+would change its digest.
+
+Loading is not meaningfully faster: validation and the digest dominate, not
+parsing. Measured figures are in `benchmarks/README.md`. A form that can be
+used without rebuilding, for example memory-mapped, was not attempted. The
+exchange protocol still sends JSON.
+
+## ADR-0026: Typed events keep time and grouping beside the symbols
+
+Until now an event was a name. The `jsonl-events` adapter kept one field
+per line and dropped the rest, so a file in which two machines' events are
+interleaved was read as one sequence, and nothing downstream could ask how
+long anything took.
+
+`EventStream` (in `kute-types`) holds, per entity, the event names and a
+timestamp for each, with the `EventSchema` that says which fields they came
+from, what a tick means, and under what name and version that reading is
+known. The schema is hashed into the stream's fingerprint: the same file
+read two ways is two streams.
+
+The model is deliberately small. It adds two things, grouping and time,
+because there is a consumer for each: discovery runs per entity, and
+`kute_discover::timing` reports how long each discovered pattern takes.
+Tokenizers and discovery still take plain symbols; the times stay aligned
+with them by position. Numeric values, units of measurement and
+relationships between entities are not modelled, and timestamps are not
+carried in token containers or vocabularies. Timestamps are whole numbers
+of a declared unit; a fractional or textual time is an error, not a
+conversion.
+
+Measured on real data in `benchmarks/README.md`.
+
+## ADR-0027: Adapters reconstruct with the configuration they ingested with
+
+`jsonl-events` read the field named in its configuration and wrote the
+default name, `event`, on the way back, so its own output could not be fed
+to the same vocabulary (issue #3). `reconstruct` now receives the adapter
+configuration, which the vocabulary already stores. This changes the bytes
+that decoding produces for event vocabularies trained with a `field`
+option: `{"tag":"A"}` where earlier releases wrote `{"event":"A"}`. Token
+ids, files and digests are unaffected, and the two recorded `.expected`
+files for event sequences were updated to the new output.
+
+The JSON adapters' descriptions said values survive. They now say what
+happens: numbers beyond a 64-bit integer or a double are rounded to a
+double, and of repeated keys the last is kept. Refusing such input instead
+is not implemented.
+
+Token ids in the plain container must be in their shortest varint form;
+padded forms are refused (issue #4).
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats, training
-checkpoints, typed fields and timestamps in events, a compact binary
-vocabulary file, entropy-coded containers, comparison with Zstandard and
-with binary record formats, and adapters for DNA, telemetry, mathematics and
-quantum circuits.
+checkpoints, event values, units and relationships, timestamps in token
+containers, entropy-coded containers, comparison with Zstandard and with binary record formats, and
+adapters for DNA, telemetry, mathematics and quantum circuits.

@@ -1,0 +1,2954 @@
+{
+  "control": null,
+  "discover_seconds": 5.8095053,
+  "discovery": {
+    "coverage": 0.9270130817807648,
+    "observation": {
+      "alphabet": 29,
+      "conditional_entropy_bits": 1.1385910601519487,
+      "entropy_bits": 3.1140128070319317,
+      "fingerprint": "sha256:4a3f4f036ce5f13d4d4285d4449beb1bb56145abea3ae03754e51c46b48d73e2",
+      "most_frequent": [
+        {
+          "count": 1379024,
+          "symbol": "E5"
+        },
+        {
+          "count": 1376699,
+          "symbol": "E26"
+        },
+        {
+          "count": 1364743,
+          "symbol": "E11"
+        },
+        {
+          "count": 1364580,
+          "symbol": "E9"
+        },
+        {
+          "count": 1265576,
+          "symbol": "E21"
+        },
+        {
+          "count": 1260227,
+          "symbol": "E23"
+        },
+        {
+          "count": 460049,
+          "symbol": "E22"
+        },
+        {
+          "count": 427505,
+          "symbol": "E3"
+        },
+        {
+          "count": 356207,
+          "symbol": "E4"
+        },
+        {
+          "count": 117477,
+          "symbol": "E2"
+        }
+      ],
+      "records": 460049,
+      "symbols": 9409193
+    },
+    "params": {
+      "examples": 3,
+      "max_candidates": 4000000,
+      "max_length": 8,
+      "max_patterns": 25,
+      "min_cohesion_bits": 1.0,
+      "min_support": 5,
+      "window": 8
+    },
+    "patterns": [
+      {
+        "cohesion_bits": 2.7651753592631167,
+        "content_hash": "sha256:5d70cdb14a71a5447b82ee282089d137a3784b94c6d080d7b36bdc5b43d023b5",
+        "evidence_bits": 3720667.8787796902,
+        "examples": [
+          {
+            "offset": 5,
+            "record": 0
+          },
+          {
+            "offset": 8,
+            "record": 0
+          },
+          {
+            "offset": 4,
+            "record": 1
+          }
+        ],
+        "kind": "contiguous",
+        "records": 454871,
+        "support": 1345545,
+        "symbols": [
+          "E11",
+          "E9"
+        ]
+      },
+      {
+        "cohesion_bits": 2.3160269010381884,
+        "content_hash": "sha256:9ba6ae42731bab06d115375c3ffa34b2df05ebce895ae51e9b8f680b4f1f1ba7",
+        "evidence_bits": 1946625.2423763995,
+        "examples": [
+          {
+            "offset": 249,
+            "record": 0
+          },
+          {
+            "offset": 250,
+            "record": 0
+          },
+          {
+            "offset": 251,
+            "record": 0
+          }
+        ],
+        "kind": "contiguous",
+        "records": 419724,
+        "support": 840502,
+        "symbols": [
+          "E23",
+          "E23"
+        ]
+      },
+      {
+        "cohesion_bits": 2.294724682087754,
+        "content_hash": "sha256:8308751687a1d3ea20ed6829eac60935ef4a48d1165a7bc7cbdd3cd45f8fbba7",
+        "evidence_bits": 1916618.3067707904,
+        "examples": [
+          {
+            "offset": 259,
+            "record": 0
+          },
+          {
+            "offset": 260,
+            "record": 0
+          },
+          {
+            "offset": 261,
+            "record": 0
+          }
+        ],
+        "kind": "contiguous",
+        "records": 419721,
+        "support": 835228,
+        "symbols": [
+          "E21",
+          "E21"
+        ]
+      },
+      {
+        "cohesion_bits": 2.023296385455785,
+        "content_hash": "sha256:79170a6bd6fff8f684fec07a5584209236d2d9ce8d92a56674890028180a519b",
+        "evidence_bits": 1656753.9889702294,
+        "examples": [
+          {
+            "offset": 10,
+            "record": 0
+          },
+          {
+            "offset": 11,
+            "record": 0
+          },
+          {
+            "offset": 20,
+            "record": 0
+          }
+        ],
+        "kind": "contiguous",
+        "records": 453387,
+        "support": 818839,
+        "symbols": [
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 2.0292297826209875,
+        "content_hash": "sha256:400a97253e41c4d34be8757ab01a6757d54cb4e052babc6aa6c49eef82ea13aa",
+        "evidence_bits": 1639410.6829199307,
+        "examples": [
+          {
+            "offset": 7,
+            "record": 0
+          },
+          {
+            "offset": 5,
+            "record": 1
+          },
+          {
+            "offset": 7,
+            "record": 1
+          }
+        ],
+        "kind": "contiguous",
+        "records": 451722,
+        "support": 807898,
+        "symbols": [
+          "E9",
+          "E11"
+        ]
+      },
+      {
+        "cohesion_bits": 2.0340103434976973,
+        "content_hash": "sha256:7cb173edcfed44704d29727bc12a4a38d59dbe390b95530299b958b6d88f874a",
+        "evidence_bits": 1625534.2842854592,
+        "examples": [
+          {
+            "offset": 7,
+            "record": 0
+          },
+          {
+            "offset": 5,
+            "record": 1
+          },
+          {
+            "offset": 7,
+            "record": 1
+          }
+        ],
+        "kind": "contiguous",
+        "records": 447487,
+        "support": 799177,
+        "symbols": [
+          "E9",
+          "E11",
+          "E9"
+        ]
+      },
+      {
+        "cohesion_bits": 2.031973825833627,
+        "content_hash": "sha256:0d0621662b503e11f08c36971c87c41eba1a19eaaefc102f995603c32e5fe4dd",
+        "evidence_bits": 1621809.7492199803,
+        "examples": [
+          {
+            "offset": 4,
+            "record": 1
+          },
+          {
+            "offset": 6,
+            "record": 1
+          },
+          {
+            "offset": 4,
+            "record": 2
+          }
+        ],
+        "kind": "contiguous",
+        "records": 446920,
+        "support": 798145,
+        "symbols": [
+          "E11",
+          "E9",
+          "E11"
+        ]
+      },
+      {
+        "cohesion_bits": 2.038589128444779,
+        "content_hash": "sha256:21dd8b7a491928a3c6039749e73b54be3058e1065eb0b2dbc87d2a5b16de34c6",
+        "evidence_bits": 1611574.0180659648,
+        "examples": [
+          {
+            "offset": 4,
+            "record": 1
+          },
+          {
+            "offset": 6,
+            "record": 1
+          },
+          {
+            "offset": 4,
+            "record": 2
+          }
+        ],
+        "kind": "contiguous",
+        "records": 441040,
+        "support": 790534,
+        "symbols": [
+          "E11",
+          "E9",
+          "E11",
+          "E9"
+        ]
+      },
+      {
+        "cohesion_bits": 1.865707619748265,
+        "content_hash": "sha256:bb381afd666ef7a62bf6aa4114c267582512d16287384ae46af9ff7e6cd2592f",
+        "evidence_bits": 1374259.7099227547,
+        "examples": [
+          {
+            "offset": 2,
+            "record": 0
+          },
+          {
+            "offset": 26,
+            "record": 0
+          },
+          {
+            "offset": 0,
+            "record": 1
+          }
+        ],
+        "kind": "contiguous",
+        "records": 456554,
+        "support": 736589,
+        "symbols": [
+          "E5",
+          "E5"
+        ]
+      },
+      {
+        "cohesion_bits": 2.887510014839635,
+        "content_hash": "sha256:39e89e7e0370247660c728e1c3ee6826da8df4202d1e9139a5ca202f2251b769",
+        "evidence_bits": 1209315.1818049727,
+        "examples": [
+          {
+            "offset": 256,
+            "record": 0
+          },
+          {
+            "offset": 16,
+            "record": 1
+          },
+          {
+            "offset": 216,
+            "record": 2
+          }
+        ],
+        "kind": "contiguous",
+        "records": 418809,
+        "support": 418809,
+        "symbols": [
+          "E23",
+          "E23",
+          "E23",
+          "E21"
+        ]
+      },
+      {
+        "cohesion_bits": 2.8888826196170942,
+        "content_hash": "sha256:e49de755cadbdbb6a2e94f424f14f4054f03b9b7cd6b34f8391542dc047d46b5",
+        "evidence_bits": 1205374.7175047542,
+        "examples": [
+          {
+            "offset": 256,
+            "record": 0
+          },
+          {
+            "offset": 16,
+            "record": 1
+          },
+          {
+            "offset": 216,
+            "record": 2
+          }
+        ],
+        "kind": "contiguous",
+        "records": 417246,
+        "support": 417246,
+        "symbols": [
+          "E23",
+          "E23",
+          "E23",
+          "E21",
+          "E21"
+        ]
+      },
+      {
+        "cohesion_bits": 2.8830128794949994,
+        "content_hash": "sha256:c8f5c25bac1e07099b566dfffeff8089cdd95aaab90f7ba1128834498c316262",
+        "evidence_bits": 1193570.2151238092,
+        "examples": [
+          {
+            "offset": 256,
+            "record": 0
+          },
+          {
+            "offset": 16,
+            "record": 1
+          },
+          {
+            "offset": 216,
+            "record": 2
+          }
+        ],
+        "kind": "contiguous",
+        "records": 414001,
+        "support": 414001,
+        "symbols": [
+          "E23",
+          "E23",
+          "E23",
+          "E21",
+          "E21",
+          "E21"
+        ]
+      },
+      {
+        "cohesion_bits": 1.9021953921298949,
+        "content_hash": "sha256:0127a3db374cdf0aa728f19fa0c6fb91bcd5ba8cef4bc893590f7aea28b15247",
+        "evidence_bits": 800401.972709633,
+        "examples": [
+          {
+            "offset": 249,
+            "record": 0
+          },
+          {
+            "offset": 250,
+            "record": 0
+          },
+          {
+            "offset": 251,
+            "record": 0
+          }
+        ],
+        "kind": "contiguous",
+        "records": 419724,
+        "support": 420778,
+        "symbols": [
+          "E23",
+          "E23",
+          "E23"
+        ]
+      },
+      {
+        "cohesion_bits": 1.8868684383340333,
+        "content_hash": "sha256:58673de7dac10e33b765a443ab5df40eb0f91f5df65d3702f66bce6389d4a28b",
+        "evidence_bits": 783946.6644168325,
+        "examples": [
+          {
+            "offset": 259,
+            "record": 0
+          },
+          {
+            "offset": 260,
+            "record": 0
+          },
+          {
+            "offset": 261,
+            "record": 0
+          }
+        ],
+        "kind": "contiguous",
+        "records": 414894,
+        "support": 415475,
+        "symbols": [
+          "E21",
+          "E21",
+          "E21"
+        ]
+      },
+      {
+        "cohesion_bits": 2.247917019748016,
+        "content_hash": "sha256:a0bd2587ef7b86a2762f7f3dd07307213ac05530fcb42a028bcae9cd914c854c",
+        "evidence_bits": 742608.3791418361,
+        "examples": [
+          {
+            "offset": 7,
+            "record": 0
+          },
+          {
+            "offset": 7,
+            "record": 1
+          },
+          {
+            "offset": 7,
+            "record": 3
+          }
+        ],
+        "kind": "contiguous",
+        "records": 330354,
+        "support": 330354,
+        "symbols": [
+          "E9",
+          "E11",
+          "E9",
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 2.2487632665323103,
+        "content_hash": "sha256:b8ac95e63e10b976df3349d1d7bdfb30bdd2a54554dd54792b5ccdce5b4dd437",
+        "evidence_bits": 735284.871547869,
+        "examples": [
+          {
+            "offset": 6,
+            "record": 1
+          },
+          {
+            "offset": 6,
+            "record": 3
+          },
+          {
+            "offset": 6,
+            "record": 4
+          }
+        ],
+        "kind": "contiguous",
+        "records": 326973,
+        "support": 326973,
+        "symbols": [
+          "E11",
+          "E9",
+          "E11",
+          "E9",
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 2.2565879122195565,
+        "content_hash": "sha256:c7551e34ad299d9a0b740836ae7fe2280415b43c54740be02d963b33c9e8f188",
+        "evidence_bits": 727070.3687292289,
+        "examples": [
+          {
+            "offset": 0,
+            "record": 0
+          },
+          {
+            "offset": 1,
+            "record": 1
+          },
+          {
+            "offset": 0,
+            "record": 2
+          }
+        ],
+        "kind": "contiguous",
+        "records": 322199,
+        "support": 322199,
+        "symbols": [
+          "E5",
+          "E22"
+        ]
+      },
+      {
+        "cohesion_bits": 2.733312385982796,
+        "content_hash": "sha256:ccfece3f6722b4e2e0f2cde386750820d64664d654dbf00ae97e6c3175e27190",
+        "evidence_bits": 722089.1994413211,
+        "examples": [
+          {
+            "offset": 5,
+            "record": 1
+          },
+          {
+            "offset": 5,
+            "record": 3
+          },
+          {
+            "offset": 5,
+            "record": 4
+          }
+        ],
+        "kind": "contiguous",
+        "records": 264181,
+        "support": 264181,
+        "symbols": [
+          "E9",
+          "E11",
+          "E9",
+          "E11",
+          "E9",
+          "E26",
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 3.620226347583115,
+        "content_hash": "sha256:8f068ebbe46a7e9fe95d72bd8333c9ca0e2084601118ef6e58e021f343ab2a57",
+        "evidence_bits": 720482.9667906011,
+        "examples": [
+          {
+            "offset": 27,
+            "record": 4
+          },
+          {
+            "offset": 25,
+            "record": 5
+          },
+          {
+            "offset": 21,
+            "record": 6
+          }
+        ],
+        "kind": "contiguous",
+        "records": 124852,
+        "support": 199016,
+        "symbols": [
+          "E4",
+          "E3"
+        ]
+      },
+      {
+        "cohesion_bits": 3.5896466231341035,
+        "content_hash": "sha256:377b344b91abc39c2b5af57b37b1895a34b70368ad8ec1997f9cc60acb6ddbbf",
+        "evidence_bits": 699413.927344695,
+        "examples": [
+          {
+            "offset": 28,
+            "record": 4
+          },
+          {
+            "offset": 26,
+            "record": 5
+          },
+          {
+            "offset": 22,
+            "record": 6
+          }
+        ],
+        "kind": "contiguous",
+        "records": 99273,
+        "support": 194842,
+        "symbols": [
+          "E3",
+          "E4"
+        ]
+      },
+      {
+        "cohesion_bits": 2.4395287763981512,
+        "content_hash": "sha256:dceb3d0c27caee3d54f2a7cfd41dfbe51d26ca09c6c47bed90265d00bb6926d8",
+        "evidence_bits": 694482.6125362493,
+        "examples": [
+          {
+            "offset": 9,
+            "record": 0
+          },
+          {
+            "offset": 9,
+            "record": 1
+          },
+          {
+            "offset": 9,
+            "record": 3
+          }
+        ],
+        "kind": "contiguous",
+        "records": 284679,
+        "support": 284679,
+        "symbols": [
+          "E9",
+          "E26",
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 2.512028004845485,
+        "content_hash": "sha256:19bebddf791613c33408bd91b5b31623e96fbb09e946cd8b79c5d6433f920a56",
+        "evidence_bits": 692606.3133839777,
+        "examples": [
+          {
+            "offset": 7,
+            "record": 0
+          },
+          {
+            "offset": 7,
+            "record": 1
+          },
+          {
+            "offset": 7,
+            "record": 3
+          }
+        ],
+        "kind": "contiguous",
+        "records": 275716,
+        "support": 275716,
+        "symbols": [
+          "E9",
+          "E11",
+          "E9",
+          "E26",
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 2.4472909909720264,
+        "content_hash": "sha256:aeadf97746d3624345f10a60dc83c19803daf46d8b7634635df9f15aa2c7384b",
+        "evidence_bits": 690762.5659478003,
+        "examples": [
+          {
+            "offset": 8,
+            "record": 0
+          },
+          {
+            "offset": 8,
+            "record": 1
+          },
+          {
+            "offset": 8,
+            "record": 3
+          }
+        ],
+        "kind": "contiguous",
+        "records": 282256,
+        "support": 282256,
+        "symbols": [
+          "E11",
+          "E9",
+          "E26",
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 2.210260531149928,
+        "content_hash": "sha256:dc622628b9a75bbe8a6b61e3624ab6c81003cc364ebbd94aec5b0960464645f0",
+        "evidence_bits": 689638.860147807,
+        "examples": [
+          {
+            "offset": 1,
+            "record": 0
+          },
+          {
+            "offset": 2,
+            "record": 1
+          },
+          {
+            "offset": 1,
+            "record": 2
+          }
+        ],
+        "kind": "contiguous",
+        "records": 312017,
+        "support": 312017,
+        "symbols": [
+          "E22",
+          "E5"
+        ]
+      },
+      {
+        "cohesion_bits": 2.5175146593652875,
+        "content_hash": "sha256:476aeaf777ad3cb7f936a3a368bd3a116eb09a27c8452543d38390afed5a66a4",
+        "evidence_bits": 689632.8606985706,
+        "examples": [
+          {
+            "offset": 6,
+            "record": 1
+          },
+          {
+            "offset": 6,
+            "record": 3
+          },
+          {
+            "offset": 6,
+            "record": 4
+          }
+        ],
+        "kind": "contiguous",
+        "records": 273934,
+        "support": 273934,
+        "symbols": [
+          "E11",
+          "E9",
+          "E11",
+          "E9",
+          "E26",
+          "E26",
+          "E26"
+        ]
+      },
+      {
+        "cohesion_bits": 1.177025442726974,
+        "content_hash": "sha256:377b344b91abc39c2b5af57b37b1895a34b70368ad8ec1997f9cc60acb6ddbbf",
+        "evidence_bits": 269343.44016098435,
+        "examples": [
+          {
+            "offset": 28,
+            "record": 4
+          },
+          {
+            "offset": 26,
+            "record": 5
+          },
+          {
+            "offset": 22,
+            "record": 6
+          }
+        ],
+        "kind": "gapped",
+        "records": 63087,
+        "support": 228834,
+        "symbols": [
+          "E3",
+          "E4"
+        ]
+      },
+      {
+        "cohesion_bits": 1.0571743265358948,
+        "content_hash": "sha256:c8f6b28680d22137c11dd6bd9d38bf20dfc9ddacb061bacd66e0601658c89562",
+        "evidence_bits": 261281.69197767295,
+        "examples": [
+          {
+            "offset": 36,
+            "record": 0
+          },
+          {
+            "offset": 37,
+            "record": 0
+          },
+          {
+            "offset": 38,
+            "record": 0
+          }
+        ],
+        "kind": "gapped",
+        "records": 62663,
+        "support": 247151,
+        "symbols": [
+          "E3",
+          "E3"
+        ]
+      },
+      {
+        "cohesion_bits": 1.1937203180039648,
+        "content_hash": "sha256:08c2eb98b7b81f78e84a82912b15c7e81e8afaa27fb5d8cbc3eb3c2b50f03acc",
+        "evidence_bits": 230255.51841946677,
+        "examples": [
+          {
+            "offset": 16,
+            "record": 4
+          },
+          {
+            "offset": 17,
+            "record": 4
+          },
+          {
+            "offset": 18,
+            "record": 4
+          }
+        ],
+        "kind": "gapped",
+        "records": 94830,
+        "support": 192889,
+        "symbols": [
+          "E4",
+          "E4"
+        ]
+      },
+      {
+        "cohesion_bits": 1.3351703507647292,
+        "content_hash": "sha256:1809997034145c996510ccc218ab3b4805006aa895be4eb2dcd13cff18426b23",
+        "evidence_bits": 101025.66459061323,
+        "examples": [
+          {
+            "offset": 23,
+            "record": 22
+          },
+          {
+            "offset": 24,
+            "record": 22
+          },
+          {
+            "offset": 25,
+            "record": 22
+          }
+        ],
+        "kind": "gapped",
+        "records": 40276,
+        "support": 75665,
+        "symbols": [
+          "E4",
+          "E2"
+        ]
+      },
+      {
+        "cohesion_bits": 7.672220016667369,
+        "content_hash": "sha256:c2e1abe74c20af5ea364486312e522955b1a822496dc49da7445eb6ca7907a6a",
+        "evidence_bits": 46370.89778073758,
+        "examples": [
+          {
+            "offset": 23,
+            "record": 0
+          },
+          {
+            "offset": 13,
+            "record": 6112
+          },
+          {
+            "offset": 12,
+            "record": 6122
+          }
+        ],
+        "kind": "gapped",
+        "records": 4396,
+        "support": 6044,
+        "symbols": [
+          "E25",
+          "E16"
+        ]
+      },
+      {
+        "cohesion_bits": 7.642676741398875,
+        "content_hash": "sha256:a6e1de5ea5c1ee40d78aef5d4bb8d04b39312fdf4078ff4cae3ace53289b19ae",
+        "evidence_bits": 46268.76499242879,
+        "examples": [
+          {
+            "offset": 19,
+            "record": 0
+          },
+          {
+            "offset": 23,
+            "record": 0
+          },
+          {
+            "offset": 13,
+            "record": 6112
+          }
+        ],
+        "kind": "gapped",
+        "records": 4400,
+        "support": 6054,
+        "symbols": [
+          "E25",
+          "E6"
+        ]
+      },
+      {
+        "cohesion_bits": 7.552963147266123,
+        "content_hash": "sha256:8fd23e76a9a08c36d70cba873dce3a6205b5149959ca6726be10ef90f8dd87f9",
+        "evidence_bits": 42968.80734479697,
+        "examples": [
+          {
+            "offset": 18,
+            "record": 0
+          },
+          {
+            "offset": 29,
+            "record": 0
+          },
+          {
+            "offset": 46,
+            "record": 0
+          }
+        ],
+        "kind": "gapped",
+        "records": 4334,
+        "support": 5689,
+        "symbols": [
+          "E18",
+          "E6"
+        ]
+      },
+      {
+        "cohesion_bits": 7.572411518788696,
+        "content_hash": "sha256:5471d6884da84492fcb794a03bdb1e26b6c888ad91c136aa9c82242825ddb2c6",
+        "evidence_bits": 42708.40096596825,
+        "examples": [
+          {
+            "offset": 29,
+            "record": 0
+          },
+          {
+            "offset": 149,
+            "record": 0
+          },
+          {
+            "offset": 14,
+            "record": 5743
+          }
+        ],
+        "kind": "gapped",
+        "records": 4359,
+        "support": 5640,
+        "symbols": [
+          "E18",
+          "E16"
+        ]
+      },
+      {
+        "cohesion_bits": 1.6591774157287196,
+        "content_hash": "sha256:2b9d548da9ae0c99d74676200b969054ada8563a57dba3f582e047f13e70c636",
+        "evidence_bits": 25941.23889491853,
+        "examples": [
+          {
+            "offset": 216,
+            "record": 2
+          },
+          {
+            "offset": 217,
+            "record": 2
+          },
+          {
+            "offset": 218,
+            "record": 2
+          }
+        ],
+        "kind": "gapped",
+        "records": 5098,
+        "support": 15635,
+        "symbols": [
+          "E23",
+          "E20"
+        ]
+      },
+      {
+        "cohesion_bits": 1.0419793716863657,
+        "content_hash": "sha256:b860b9e97c252cfc28cf6205b7a0c2e959f2cde8ac0de00c7c7f1d5a8c7b45b4",
+        "evidence_bits": 13918.760446986473,
+        "examples": [
+          {
+            "offset": 10,
+            "record": 0
+          },
+          {
+            "offset": 11,
+            "record": 0
+          },
+          {
+            "offset": 12,
+            "record": 0
+          }
+        ],
+        "kind": "gapped",
+        "records": 4546,
+        "support": 13358,
+        "symbols": [
+          "E26",
+          "E18"
+        ]
+      },
+      {
+        "cohesion_bits": 5.846322925502296,
+        "content_hash": "sha256:0ae81394b177c856bb4dd02f234f44aba4da48d08f377ceadfb338735bd4c285",
+        "evidence_bits": 10190.140859150502,
+        "examples": [
+          {
+            "offset": 13,
+            "record": 0
+          },
+          {
+            "offset": 16,
+            "record": 0
+          },
+          {
+            "offset": 24,
+            "record": 0
+          }
+        ],
+        "kind": "gapped",
+        "records": 1296,
+        "support": 1743,
+        "symbols": [
+          "E6",
+          "E18"
+        ]
+      },
+      {
+        "cohesion_bits": 5.810285102401674,
+        "content_hash": "sha256:42baa9c441e9bcce0706c099422edaf434614edb82d8a58625568f42f07bb119",
+        "evidence_bits": 9877.484674082845,
+        "examples": [
+          {
+            "offset": 13,
+            "record": 0
+          },
+          {
+            "offset": 16,
+            "record": 0
+          },
+          {
+            "offset": 23,
+            "record": 36300
+          }
+        ],
+        "kind": "gapped",
+        "records": 1276,
+        "support": 1700,
+        "symbols": [
+          "E6",
+          "E25"
+        ]
+      },
+      {
+        "cohesion_bits": 5.815727443878306,
+        "content_hash": "sha256:288c11a29d8d138471ec67f5a64539f644dbbf486ed0003df904083467f589df",
+        "evidence_bits": 9706.449103832894,
+        "examples": [
+          {
+            "offset": 15,
+            "record": 0
+          },
+          {
+            "offset": 14,
+            "record": 20111
+          },
+          {
+            "offset": 14,
+            "record": 21967
+          }
+        ],
+        "kind": "gapped",
+        "records": 1283,
+        "support": 1669,
+        "symbols": [
+          "E16",
+          "E18"
+        ]
+      },
+      {
+        "cohesion_bits": 5.802702723686982,
+        "content_hash": "sha256:c00b837eadd721c55e14ce7db73f0b060308d31e24b8d8b11e0d92af6a29cefd",
+        "evidence_bits": 9597.670304978268,
+        "examples": [
+          {
+            "offset": 15,
+            "record": 0
+          },
+          {
+            "offset": 35,
+            "record": 36300
+          },
+          {
+            "offset": 20,
+            "record": 70159
+          }
+        ],
+        "kind": "gapped",
+        "records": 1274,
+        "support": 1654,
+        "symbols": [
+          "E16",
+          "E25"
+        ]
+      },
+      {
+        "cohesion_bits": 5.762821496676711,
+        "content_hash": "sha256:45592c3745af2601f0ae506fbf5c48b219a8122465eeb3dda868e8f9468bb573",
+        "evidence_bits": 9358.82211060298,
+        "examples": [
+          {
+            "offset": 23,
+            "record": 0
+          },
+          {
+            "offset": 12,
+            "record": 6122
+          },
+          {
+            "offset": 11,
+            "record": 6307
+          }
+        ],
+        "kind": "gapped",
+        "records": 1369,
+        "support": 1624,
+        "symbols": [
+          "E25",
+          "E18"
+        ]
+      },
+      {
+        "cohesion_bits": 5.761043683708808,
+        "content_hash": "sha256:5a75318f94ee5ccd75468cc87a632dc39be23cce0430dec19189a2d33bcfd2a9",
+        "evidence_bits": 9344.412854975686,
+        "examples": [
+          {
+            "offset": 18,
+            "record": 0
+          },
+          {
+            "offset": 14,
+            "record": 36300
+          },
+          {
+            "offset": 34,
+            "record": 36300
+          }
+        ],
+        "kind": "gapped",
+        "records": 1248,
+        "support": 1622,
+        "symbols": [
+          "E18",
+          "E25"
+        ]
+      },
+      {
+        "cohesion_bits": 5.616138735164925,
+        "content_hash": "sha256:d3c9216baeff0d7ba29d87cffa5c5e96b25bd988b50e59553acd0abcdb68aa55",
+        "evidence_bits": 8238.875524486944,
+        "examples": [
+          {
+            "offset": 19,
+            "record": 0
+          },
+          {
+            "offset": 23,
+            "record": 70159
+          },
+          {
+            "offset": 12,
+            "record": 107375
+          }
+        ],
+        "kind": "gapped",
+        "records": 1156,
+        "support": 1467,
+        "symbols": [
+          "E25",
+          "E25"
+        ]
+      },
+      {
+        "cohesion_bits": 5.5671325099140985,
+        "content_hash": "sha256:a2b31feb87734df9d2ae3e6d42d339a0c06f88d8ef34e3a80da43ca9ed921a91",
+        "evidence_bits": 7922.029561607762,
+        "examples": [
+          {
+            "offset": 13,
+            "record": 0
+          },
+          {
+            "offset": 24,
+            "record": 0
+          },
+          {
+            "offset": 25,
+            "record": 0
+          }
+        ],
+        "kind": "gapped",
+        "records": 1104,
+        "support": 1423,
+        "symbols": [
+          "E6",
+          "E16"
+        ]
+      },
+      {
+        "cohesion_bits": 5.486579101396009,
+        "content_hash": "sha256:d88fc934669a38cb3d4a6ff97cd980e2e13a69891a9195b6d90c5b81298b946c",
+        "evidence_bits": 7357.502574972048,
+        "examples": [
+          {
+            "offset": 34,
+            "record": 36300
+          },
+          {
+            "offset": 26,
+            "record": 108037
+          },
+          {
+            "offset": 11,
+            "record": 111079
+          }
+        ],
+        "kind": "gapped",
+        "records": 1053,
+        "support": 1341,
+        "symbols": [
+          "E18",
+          "E18"
+        ]
+      },
+      {
+        "cohesion_bits": 5.3947575587636285,
+        "content_hash": "sha256:ae40f1cb44f1fef2cae0f14de035c16525d2784bc39d48d70fbc0d2783f563eb",
+        "evidence_bits": 6964.632008363845,
+        "examples": [
+          {
+            "offset": 13,
+            "record": 0
+          },
+          {
+            "offset": 16,
+            "record": 0
+          },
+          {
+            "offset": 25,
+            "record": 0
+          }
+        ],
+        "kind": "gapped",
+        "records": 1040,
+        "support": 1291,
+        "symbols": [
+          "E6",
+          "E6"
+        ]
+      },
+      {
+        "cohesion_bits": 5.397399076177208,
+        "content_hash": "sha256:099f0067fe12379b5db8ca7bf3c6adff3111dbc3d44af63e66dfd47f0cd7456a",
+        "evidence_bits": 6827.709831364168,
+        "examples": [
+          {
+            "offset": 28,
+            "record": 0
+          },
+          {
+            "offset": 19,
+            "record": 6600
+          },
+          {
+            "offset": 20,
+            "record": 9818
+          }
+        ],
+        "kind": "gapped",
+        "records": 1042,
+        "support": 1265,
+        "symbols": [
+          "E16",
+          "E6"
+        ]
+      },
+      {
+        "cohesion_bits": 5.408651446356384,
+        "content_hash": "sha256:770ad82057510f2a4da62125942a8253cfed9082d42ebde226036255474756d4",
+        "evidence_bits": 6744.58835360641,
+        "examples": [
+          {
+            "offset": 28,
+            "record": 0
+          },
+          {
+            "offset": 19,
+            "record": 36300
+          },
+          {
+            "offset": 17,
+            "record": 107375
+          }
+        ],
+        "kind": "gapped",
+        "records": 1038,
+        "support": 1247,
+        "symbols": [
+          "E16",
+          "E16"
+        ]
+      },
+      {
+        "cohesion_bits": 1.6445886842551865,
+        "content_hash": "sha256:e4096f5ee9ddd2f8c52a1cf5eacdade3334172384778becaac2fe00bb4fbd862",
+        "evidence_bits": 6139.249558324611,
+        "examples": [
+          {
+            "offset": 32,
+            "record": 15
+          },
+          {
+            "offset": 33,
+            "record": 15
+          },
+          {
+            "offset": 34,
+            "record": 15
+          }
+        ],
+        "kind": "gapped",
+        "records": 1245,
+        "support": 3733,
+        "symbols": [
+          "E23",
+          "E28"
+        ]
+      },
+      {
+        "cohesion_bits": 9.69420729589647,
+        "content_hash": "sha256:a4c017885a10f4e6caa4e68febf73f6d53e5b615eb37e8dc9f1a16b958c6d332",
+        "evidence_bits": 6068.573767231191,
+        "examples": [
+          {
+            "offset": 5,
+            "record": 5871
+          },
+          {
+            "offset": 7,
+            "record": 6117
+          },
+          {
+            "offset": 10,
+            "record": 6117
+          }
+        ],
+        "kind": "gapped",
+        "records": 336,
+        "support": 626,
+        "symbols": [
+          "E13",
+          "E13"
+        ]
+      },
+      {
+        "cohesion_bits": 1.4039721042402904,
+        "content_hash": "sha256:4b285f2df7a34773533437a779a1dce03ae338e28533b92ffad63b541c754d7b",
+        "evidence_bits": 3024.1559125335857,
+        "examples": [
+          {
+            "offset": 7,
+            "record": 7747
+          },
+          {
+            "offset": 9,
+            "record": 7747
+          },
+          {
+            "offset": 11,
+            "record": 7747
+          }
+        ],
+        "kind": "gapped",
+        "records": 771,
+        "support": 2154,
+        "symbols": [
+          "E9",
+          "E27"
+        ]
+      }
+    ]
+  },
+  "events": {
+    "held_out": {
+      "events": 1766436,
+      "fingerprint": "sha256:4fee5f90bba8cfaa7bfd744cd25e5e578e74ba16602b93fb8f560d6fa9b8d9cd",
+      "records": 115012
+    },
+    "held_out_timing": [
+      {
+        "duration": {
+          "max": 0,
+          "median": 0,
+          "min": 0,
+          "occurrences": 338100,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 0
+      },
+      {
+        "duration": {
+          "max": 1,
+          "median": 0,
+          "min": 0,
+          "occurrences": 90657,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 90657
+        },
+        "pattern": 1
+      },
+      {
+        "duration": {
+          "max": 2702,
+          "median": 13,
+          "min": 0,
+          "occurrences": 90407,
+          "p10": 2,
+          "p90": 37,
+          "sampled": 90407
+        },
+        "pattern": 2
+      },
+      {
+        "duration": {
+          "max": 3844,
+          "median": 0,
+          "min": 0,
+          "occurrences": 201972,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 3
+      },
+      {
+        "duration": {
+          "max": 35,
+          "median": 0,
+          "min": 0,
+          "occurrences": 201075,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 4
+      },
+      {
+        "duration": {
+          "max": 4,
+          "median": 0,
+          "min": 0,
+          "occurrences": 199481,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 5
+      },
+      {
+        "duration": {
+          "max": 4,
+          "median": 0,
+          "min": 0,
+          "occurrences": 199078,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 6
+      },
+      {
+        "duration": {
+          "max": 4,
+          "median": 0,
+          "min": 0,
+          "occurrences": 197695,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 7
+      },
+      {
+        "duration": {
+          "max": 36,
+          "median": 0,
+          "min": 0,
+          "occurrences": 171150,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 8
+      },
+      {
+        "duration": {
+          "max": 280,
+          "median": 56,
+          "min": 1,
+          "occurrences": 45265,
+          "p10": 12,
+          "p90": 103,
+          "sampled": 45265
+        },
+        "pattern": 9
+      },
+      {
+        "duration": {
+          "max": 354,
+          "median": 74,
+          "min": 1,
+          "occurrences": 45192,
+          "p10": 35,
+          "p90": 128,
+          "sampled": 45192
+        },
+        "pattern": 10
+      },
+      {
+        "duration": {
+          "max": 1071,
+          "median": 91,
+          "min": 1,
+          "occurrences": 45059,
+          "p10": 55,
+          "p90": 153,
+          "sampled": 45059
+        },
+        "pattern": 11
+      },
+      {
+        "duration": {
+          "max": 1,
+          "median": 0,
+          "min": 0,
+          "occurrences": 45367,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 45367
+        },
+        "pattern": 12
+      },
+      {
+        "duration": {
+          "max": 3275,
+          "median": 31,
+          "min": 0,
+          "occurrences": 45106,
+          "p10": 12,
+          "p90": 67,
+          "sampled": 45106
+        },
+        "pattern": 13
+      },
+      {
+        "duration": {
+          "max": 349,
+          "median": 0,
+          "min": 0,
+          "occurrences": 105743,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 14
+      },
+      {
+        "duration": {
+          "max": 349,
+          "median": 0,
+          "min": 0,
+          "occurrences": 104988,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 15
+      },
+      {
+        "duration": {
+          "max": 1,
+          "median": 0,
+          "min": 0,
+          "occurrences": 105244,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 16
+      },
+      {
+        "duration": {
+          "max": 924,
+          "median": 0,
+          "min": 0,
+          "occurrences": 84634,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 84634
+        },
+        "pattern": 17
+      },
+      {
+        "duration": null,
+        "pattern": 18
+      },
+      {
+        "duration": null,
+        "pattern": 19
+      },
+      {
+        "duration": {
+          "max": 924,
+          "median": 0,
+          "min": 0,
+          "occurrences": 87673,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 87673
+        },
+        "pattern": 20
+      },
+      {
+        "duration": {
+          "max": 924,
+          "median": 0,
+          "min": 0,
+          "occurrences": 86567,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 86567
+        },
+        "pattern": 21
+      },
+      {
+        "duration": {
+          "max": 924,
+          "median": 0,
+          "min": 0,
+          "occurrences": 87227,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 87227
+        },
+        "pattern": 22
+      },
+      {
+        "duration": {
+          "max": 49,
+          "median": 1,
+          "min": 0,
+          "occurrences": 66208,
+          "p10": 1,
+          "p90": 3,
+          "sampled": 66208
+        },
+        "pattern": 23
+      },
+      {
+        "duration": {
+          "max": 924,
+          "median": 0,
+          "min": 0,
+          "occurrences": 86208,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 86208
+        },
+        "pattern": 24
+      },
+      {
+        "duration": null,
+        "pattern": 25
+      },
+      {
+        "duration": {
+          "max": 2,
+          "median": 0,
+          "min": 0,
+          "occurrences": 1209,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 1209
+        },
+        "pattern": 26
+      },
+      {
+        "duration": null,
+        "pattern": 27
+      },
+      {
+        "duration": null,
+        "pattern": 28
+      },
+      {
+        "duration": {
+          "max": 125,
+          "median": 37,
+          "min": 0,
+          "occurrences": 554,
+          "p10": 9,
+          "p90": 73,
+          "sampled": 554
+        },
+        "pattern": 29
+      },
+      {
+        "duration": {
+          "max": 125,
+          "median": 36,
+          "min": 0,
+          "occurrences": 558,
+          "p10": 9,
+          "p90": 72,
+          "sampled": 558
+        },
+        "pattern": 30
+      },
+      {
+        "duration": {
+          "max": 99,
+          "median": 26,
+          "min": 0,
+          "occurrences": 630,
+          "p10": 1,
+          "p90": 48,
+          "sampled": 630
+        },
+        "pattern": 31
+      },
+      {
+        "duration": {
+          "max": 99,
+          "median": 26,
+          "min": 0,
+          "occurrences": 627,
+          "p10": 1,
+          "p90": 48,
+          "sampled": 627
+        },
+        "pattern": 32
+      },
+      {
+        "duration": {
+          "max": 1080,
+          "median": 152,
+          "min": 2,
+          "occurrences": 798,
+          "p10": 33,
+          "p90": 217,
+          "sampled": 798
+        },
+        "pattern": 33
+      },
+      {
+        "duration": {
+          "max": 4539,
+          "median": 1466,
+          "min": 1,
+          "occurrences": 1702,
+          "p10": 2,
+          "p90": 3351,
+          "sampled": 1702
+        },
+        "pattern": 34
+      },
+      {
+        "duration": {
+          "max": 3881,
+          "median": 4,
+          "min": 3,
+          "occurrences": 9,
+          "p10": 3,
+          "p90": 3865,
+          "sampled": 9
+        },
+        "pattern": 35
+      },
+      {
+        "duration": {
+          "max": 3881,
+          "median": 2,
+          "min": 1,
+          "occurrences": 8,
+          "p10": 2,
+          "p90": 3864,
+          "sampled": 8
+        },
+        "pattern": 36
+      },
+      {
+        "duration": {
+          "max": 3881,
+          "median": 4,
+          "min": 1,
+          "occurrences": 8,
+          "p10": 2,
+          "p90": 3866,
+          "sampled": 8
+        },
+        "pattern": 37
+      },
+      {
+        "duration": {
+          "max": 3881,
+          "median": 3850,
+          "min": 2,
+          "occurrences": 6,
+          "p10": 2,
+          "p90": 3881,
+          "sampled": 6
+        },
+        "pattern": 38
+      },
+      {
+        "duration": {
+          "max": 3903,
+          "median": 3,
+          "min": 1,
+          "occurrences": 502,
+          "p10": 1,
+          "p90": 39,
+          "sampled": 502
+        },
+        "pattern": 39
+      },
+      {
+        "duration": {
+          "max": 3901,
+          "median": 0,
+          "min": 0,
+          "occurrences": 92,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 92
+        },
+        "pattern": 40
+      },
+      {
+        "duration": {
+          "max": 3902,
+          "median": 3902,
+          "min": 3902,
+          "occurrences": 1,
+          "p10": 3902,
+          "p90": 3902,
+          "sampled": 1
+        },
+        "pattern": 41
+      },
+      {
+        "duration": {
+          "max": 3928,
+          "median": 0,
+          "min": 0,
+          "occurrences": 318,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 318
+        },
+        "pattern": 42
+      },
+      {
+        "duration": {
+          "max": 3901,
+          "median": 3,
+          "min": 0,
+          "occurrences": 5,
+          "p10": 0,
+          "p90": 3901,
+          "sampled": 5
+        },
+        "pattern": 43
+      },
+      {
+        "duration": {
+          "max": 3928,
+          "median": 0,
+          "min": 0,
+          "occurrences": 24,
+          "p10": 0,
+          "p90": 3877,
+          "sampled": 24
+        },
+        "pattern": 44
+      },
+      {
+        "duration": {
+          "max": 3877,
+          "median": 0,
+          "min": 0,
+          "occurrences": 344,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 344
+        },
+        "pattern": 45
+      },
+      {
+        "duration": {
+          "max": 3928,
+          "median": 3877,
+          "min": 1,
+          "occurrences": 5,
+          "p10": 1,
+          "p90": 3928,
+          "sampled": 5
+        },
+        "pattern": 46
+      },
+      {
+        "duration": {
+          "max": 28,
+          "median": 28,
+          "min": 28,
+          "occurrences": 2,
+          "p10": 28,
+          "p90": 28,
+          "sampled": 2
+        },
+        "pattern": 47
+      },
+      {
+        "duration": {
+          "max": 2,
+          "median": 0,
+          "min": 0,
+          "occurrences": 303,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 303
+        },
+        "pattern": 48
+      },
+      {
+        "duration": {
+          "max": 119,
+          "median": 2,
+          "min": 0,
+          "occurrences": 503,
+          "p10": 1,
+          "p90": 11,
+          "sampled": 503
+        },
+        "pattern": 49
+      }
+    ],
+    "schema": {
+      "group_field": "block",
+      "id": "kute:loghub:hdfs-v1-traces",
+      "symbol_field": "event",
+      "time_field": "t",
+      "time_unit": "seconds",
+      "version": 1
+    },
+    "searched": {
+      "events": 9409193,
+      "fingerprint": "sha256:c3021a1d0e648a6d96d6b586db3f9b3af6e86eea0d2258b692eaf1303c2f9392",
+      "records": 460049
+    },
+    "timing": [
+      {
+        "duration": {
+          "max": 0,
+          "median": 0,
+          "min": 0,
+          "occurrences": 1345545,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 0
+      },
+      {
+        "duration": {
+          "max": 1,
+          "median": 0,
+          "min": 0,
+          "occurrences": 840502,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 1
+      },
+      {
+        "duration": {
+          "max": 2436,
+          "median": 19,
+          "min": 0,
+          "occurrences": 835228,
+          "p10": 3,
+          "p90": 81,
+          "sampled": 100000
+        },
+        "pattern": 2
+      },
+      {
+        "duration": {
+          "max": 3084,
+          "median": 0,
+          "min": 0,
+          "occurrences": 818839,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 3
+      },
+      {
+        "duration": {
+          "max": 60,
+          "median": 0,
+          "min": 0,
+          "occurrences": 807898,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 4
+      },
+      {
+        "duration": {
+          "max": 20,
+          "median": 0,
+          "min": 0,
+          "occurrences": 799177,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 5
+      },
+      {
+        "duration": {
+          "max": 20,
+          "median": 0,
+          "min": 0,
+          "occurrences": 798145,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 6
+      },
+      {
+        "duration": {
+          "max": 20,
+          "median": 0,
+          "min": 0,
+          "occurrences": 790534,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 7
+      },
+      {
+        "duration": {
+          "max": 64,
+          "median": 0,
+          "min": 0,
+          "occurrences": 736589,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 100000
+        },
+        "pattern": 8
+      },
+      {
+        "duration": {
+          "max": 715,
+          "median": 159,
+          "min": 1,
+          "occurrences": 418809,
+          "p10": 56,
+          "p90": 290,
+          "sampled": 100000
+        },
+        "pattern": 9
+      },
+      {
+        "duration": {
+          "max": 1287,
+          "median": 189,
+          "min": 1,
+          "occurrences": 417246,
+          "p10": 100,
+          "p90": 330,
+          "sampled": 100000
+        },
+        "pattern": 10
+      },
+      {
+        "duration": {
+          "max": 1834,
+          "median": 226,
+          "min": 1,
+          "occurrences": 414001,
+          "p10": 124,
+          "p90": 392,
+          "sampled": 100000
+        },
+        "pattern": 11
+      },
+      {
+        "duration": {
+          "max": 1,
+          "median": 0,
+          "min": 0,
+          "occurrences": 420778,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 12
+      },
+      {
+        "duration": {
+          "max": 2525,
+          "median": 45,
+          "min": 0,
+          "occurrences": 415475,
+          "p10": 14,
+          "p90": 163,
+          "sampled": 100000
+        },
+        "pattern": 13
+      },
+      {
+        "duration": {
+          "max": 801,
+          "median": 0,
+          "min": 0,
+          "occurrences": 330354,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 14
+      },
+      {
+        "duration": {
+          "max": 801,
+          "median": 0,
+          "min": 0,
+          "occurrences": 326973,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 15
+      },
+      {
+        "duration": {
+          "max": 1,
+          "median": 0,
+          "min": 0,
+          "occurrences": 322199,
+          "p10": 0,
+          "p90": 0,
+          "sampled": 100000
+        },
+        "pattern": 16
+      },
+      {
+        "duration": {
+          "max": 1291,
+          "median": 0,
+          "min": 0,
+          "occurrences": 264181,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 100000
+        },
+        "pattern": 17
+      },
+      {
+        "duration": {
+          "max": 25062,
+          "median": 38,
+          "min": 0,
+          "occurrences": 199016,
+          "p10": 5,
+          "p90": 10657,
+          "sampled": 100000
+        },
+        "pattern": 18
+      },
+      {
+        "duration": {
+          "max": 25058,
+          "median": 45,
+          "min": 0,
+          "occurrences": 194842,
+          "p10": 5,
+          "p90": 2900,
+          "sampled": 100000
+        },
+        "pattern": 19
+      },
+      {
+        "duration": {
+          "max": 1291,
+          "median": 0,
+          "min": 0,
+          "occurrences": 284679,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 100000
+        },
+        "pattern": 20
+      },
+      {
+        "duration": {
+          "max": 1291,
+          "median": 0,
+          "min": 0,
+          "occurrences": 275716,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 100000
+        },
+        "pattern": 21
+      },
+      {
+        "duration": {
+          "max": 1291,
+          "median": 0,
+          "min": 0,
+          "occurrences": 282256,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 100000
+        },
+        "pattern": 22
+      },
+      {
+        "duration": {
+          "max": 731,
+          "median": 1,
+          "min": 0,
+          "occurrences": 312017,
+          "p10": 0,
+          "p90": 2,
+          "sampled": 100000
+        },
+        "pattern": 23
+      },
+      {
+        "duration": {
+          "max": 1291,
+          "median": 0,
+          "min": 0,
+          "occurrences": 273934,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 100000
+        },
+        "pattern": 24
+      },
+      {
+        "duration": {
+          "max": 25336,
+          "median": 97,
+          "min": 0,
+          "occurrences": 323577,
+          "p10": 9,
+          "p90": 4952,
+          "sampled": 100000
+        },
+        "pattern": 25
+      },
+      {
+        "duration": {
+          "max": 25197,
+          "median": 206,
+          "min": 0,
+          "occurrences": 289418,
+          "p10": 8,
+          "p90": 15634,
+          "sampled": 100000
+        },
+        "pattern": 26
+      },
+      {
+        "duration": {
+          "max": 25463,
+          "median": 1323,
+          "min": 0,
+          "occurrences": 226233,
+          "p10": 3,
+          "p90": 24904,
+          "sampled": 100000
+        },
+        "pattern": 27
+      },
+      {
+        "duration": {
+          "max": 46488,
+          "median": 11603,
+          "min": 0,
+          "occurrences": 90109,
+          "p10": 1665,
+          "p90": 30122,
+          "sampled": 90109
+        },
+        "pattern": 28
+      },
+      {
+        "duration": {
+          "max": 32290,
+          "median": 39,
+          "min": 0,
+          "occurrences": 6090,
+          "p10": 11,
+          "p90": 78,
+          "sampled": 6090
+        },
+        "pattern": 29
+      },
+      {
+        "duration": {
+          "max": 32290,
+          "median": 39,
+          "min": 0,
+          "occurrences": 6109,
+          "p10": 11,
+          "p90": 78,
+          "sampled": 6109
+        },
+        "pattern": 30
+      },
+      {
+        "duration": {
+          "max": 32290,
+          "median": 27,
+          "min": 0,
+          "occurrences": 6251,
+          "p10": 6,
+          "p90": 52,
+          "sampled": 6251
+        },
+        "pattern": 31
+      },
+      {
+        "duration": {
+          "max": 32290,
+          "median": 27,
+          "min": 0,
+          "occurrences": 6234,
+          "p10": 6,
+          "p90": 52,
+          "sampled": 6234
+        },
+        "pattern": 32
+      },
+      {
+        "duration": {
+          "max": 1067,
+          "median": 211,
+          "min": 2,
+          "occurrences": 15765,
+          "p10": 139,
+          "p90": 448,
+          "sampled": 15765
+        },
+        "pattern": 33
+      },
+      {
+        "duration": {
+          "max": 37103,
+          "median": 3680,
+          "min": 1,
+          "occurrences": 13893,
+          "p10": 3,
+          "p90": 11809,
+          "sampled": 13893
+        },
+        "pattern": 34
+      },
+      {
+        "duration": {
+          "max": 32497,
+          "median": 3879,
+          "min": 0,
+          "occurrences": 1744,
+          "p10": 3792,
+          "p90": 11372,
+          "sampled": 1744
+        },
+        "pattern": 35
+      },
+      {
+        "duration": {
+          "max": 32494,
+          "median": 3865,
+          "min": 0,
+          "occurrences": 1700,
+          "p10": 3801,
+          "p90": 11358,
+          "sampled": 1700
+        },
+        "pattern": 36
+      },
+      {
+        "duration": {
+          "max": 32497,
+          "median": 3879,
+          "min": 0,
+          "occurrences": 1704,
+          "p10": 3813,
+          "p90": 11373,
+          "sampled": 1704
+        },
+        "pattern": 37
+      },
+      {
+        "duration": {
+          "max": 32494,
+          "median": 3866,
+          "min": 0,
+          "occurrences": 1655,
+          "p10": 3809,
+          "p90": 11360,
+          "sampled": 1655
+        },
+        "pattern": 38
+      },
+      {
+        "duration": {
+          "max": 32289,
+          "median": 3,
+          "min": 1,
+          "occurrences": 5661,
+          "p10": 1,
+          "p90": 44,
+          "sampled": 5661
+        },
+        "pattern": 39
+      },
+      {
+        "duration": {
+          "max": 23998,
+          "median": 3876,
+          "min": 0,
+          "occurrences": 2177,
+          "p10": 0,
+          "p90": 11372,
+          "sampled": 2177
+        },
+        "pattern": 40
+      },
+      {
+        "duration": {
+          "max": 32248,
+          "median": 3903,
+          "min": 3,
+          "occurrences": 1467,
+          "p10": 3885,
+          "p90": 11399,
+          "sampled": 1467
+        },
+        "pattern": 41
+      },
+      {
+        "duration": {
+          "max": 32512,
+          "median": 0,
+          "min": 0,
+          "occurrences": 3957,
+          "p10": 0,
+          "p90": 3912,
+          "sampled": 3957
+        },
+        "pattern": 42
+      },
+      {
+        "duration": {
+          "max": 32289,
+          "median": 3904,
+          "min": 0,
+          "occurrences": 1346,
+          "p10": 3858,
+          "p90": 11400,
+          "sampled": 1346
+        },
+        "pattern": 43
+      },
+      {
+        "duration": {
+          "max": 32290,
+          "median": 3905,
+          "min": 0,
+          "occurrences": 1336,
+          "p10": 1,
+          "p90": 11399,
+          "sampled": 1336
+        },
+        "pattern": 44
+      },
+      {
+        "duration": {
+          "max": 32290,
+          "median": 0,
+          "min": 0,
+          "occurrences": 4019,
+          "p10": 0,
+          "p90": 3912,
+          "sampled": 4019
+        },
+        "pattern": 45
+      },
+      {
+        "duration": {
+          "max": 32290,
+          "median": 3914,
+          "min": 0,
+          "occurrences": 1247,
+          "p10": 3855,
+          "p90": 11411,
+          "sampled": 1247
+        },
+        "pattern": 46
+      },
+      {
+        "duration": {
+          "max": 964,
+          "median": 924,
+          "min": 2,
+          "occurrences": 3733,
+          "p10": 887,
+          "p90": 956,
+          "sampled": 3733
+        },
+        "pattern": 47
+      },
+      {
+        "duration": {
+          "max": 5,
+          "median": 0,
+          "min": 0,
+          "occurrences": 672,
+          "p10": 0,
+          "p90": 1,
+          "sampled": 672
+        },
+        "pattern": 48
+      },
+      {
+        "duration": {
+          "max": 32703,
+          "median": 3,
+          "min": 0,
+          "occurrences": 2263,
+          "p10": 1,
+          "p90": 11,
+          "sampled": 2263
+        },
+        "pattern": 49
+      }
+    ],
+    "timing_what": "per pattern, in the schema's time unit: time from the first event of an occurrence to its last; for a gapped pair, from the first symbol to the nearest second symbol within the window"
+  },
+  "held_out": {
+    "confirmed": 43,
+    "confirmed_fraction": 0.86,
+    "coverage": 0.9758026897096753,
+    "held_out": {
+      "alphabet": 22,
+      "conditional_entropy_bits": 0.9320340827669789,
+      "entropy_bits": 2.710903071208019,
+      "fingerprint": "sha256:68d445c463573f89c6090592874cdec445af7a9063115313fb7e84d5609c9da1",
+      "most_frequent": [
+        {
+          "count": 344208,
+          "symbol": "E5"
+        },
+        {
+          "count": 343042,
+          "symbol": "E26"
+        },
+        {
+          "count": 341936,
+          "symbol": "E11"
+        },
+        {
+          "count": 341934,
+          "symbol": "E9"
+        },
+        {
+          "count": 136471,
+          "symbol": "E21"
+        },
+        {
+          "count": 135947,
+          "symbol": "E23"
+        },
+        {
+          "count": 115012,
+          "symbol": "E22"
+        },
+        {
+          "count": 2559,
+          "symbol": "E2"
+        },
+        {
+          "count": 1221,
+          "symbol": "E3"
+        },
+        {
+          "count": 668,
+          "symbol": "E6"
+        }
+      ],
+      "records": 115012,
+      "symbols": 1766436
+    },
+    "patterns": [
+      {
+        "cohesion_bits": 2.3527753855617006,
+        "confirmed": true,
+        "pattern": 0,
+        "support": 338100
+      },
+      {
+        "cohesion_bits": 3.1151712700685925,
+        "confirmed": true,
+        "pattern": 1,
+        "support": 90657
+      },
+      {
+        "cohesion_bits": 3.100087137223422,
+        "confirmed": true,
+        "pattern": 2,
+        "support": 90407
+      },
+      {
+        "cohesion_bits": 1.6001544319164311,
+        "confirmed": true,
+        "pattern": 3,
+        "support": 201972
+      },
+      {
+        "cohesion_bits": 1.6030590893720407,
+        "confirmed": true,
+        "pattern": 4,
+        "support": 201075
+      },
+      {
+        "cohesion_bits": 1.6078530153033597,
+        "confirmed": true,
+        "pattern": 5,
+        "support": 199481
+      },
+      {
+        "cohesion_bits": 1.6049270349434959,
+        "confirmed": true,
+        "pattern": 6,
+        "support": 199078
+      },
+      {
+        "cohesion_bits": 1.611145925735548,
+        "confirmed": true,
+        "pattern": 7,
+        "support": 197695
+      },
+      {
+        "cohesion_bits": 1.3514696098347658,
+        "confirmed": true,
+        "pattern": 8,
+        "support": 171150
+      },
+      {
+        "cohesion_bits": 3.69092785579638,
+        "confirmed": true,
+        "pattern": 9,
+        "support": 45265
+      },
+      {
+        "cohesion_bits": 3.691846614015278,
+        "confirmed": true,
+        "pattern": 10,
+        "support": 45192
+      },
+      {
+        "cohesion_bits": 3.6899230528581093,
+        "confirmed": true,
+        "pattern": 11,
+        "support": 45059
+      },
+      {
+        "cohesion_bits": 2.7009500999527942,
+        "confirmed": true,
+        "pattern": 12,
+        "support": 45367
+      },
+      {
+        "cohesion_bits": 2.691060034735138,
+        "confirmed": true,
+        "pattern": 13,
+        "support": 45106
+      },
+      {
+        "cohesion_bits": 2.2129250952467827,
+        "confirmed": true,
+        "pattern": 14,
+        "support": 105743
+      },
+      {
+        "cohesion_bits": 2.2155623283894004,
+        "confirmed": true,
+        "pattern": 15,
+        "support": 104988
+      },
+      {
+        "cohesion_bits": 2.231442537670307,
+        "confirmed": true,
+        "pattern": 16,
+        "support": 105244
+      },
+      {
+        "cohesion_bits": 2.3292569491424526,
+        "confirmed": true,
+        "pattern": 17,
+        "support": 84634
+      },
+      {
+        "cohesion_bits": null,
+        "confirmed": false,
+        "pattern": 18,
+        "support": 0
+      },
+      {
+        "cohesion_bits": null,
+        "confirmed": false,
+        "pattern": 19,
+        "support": 0
+      },
+      {
+        "cohesion_bits": 2.0077320568711823,
+        "confirmed": true,
+        "pattern": 20,
+        "support": 87673
+      },
+      {
+        "cohesion_bits": 2.0757112583308794,
+        "confirmed": true,
+        "pattern": 21,
+        "support": 86567
+      },
+      {
+        "cohesion_bits": 2.0123886225854855,
+        "confirmed": true,
+        "pattern": 22,
+        "support": 87227
+      },
+      {
+        "cohesion_bits": 1.562782006043984,
+        "confirmed": true,
+        "pattern": 23,
+        "support": 66208
+      },
+      {
+        "cohesion_bits": 2.080053574439512,
+        "confirmed": true,
+        "pattern": 24,
+        "support": 86208
+      },
+      {
+        "cohesion_bits": null,
+        "confirmed": false,
+        "pattern": 25,
+        "support": 0
+      },
+      {
+        "cohesion_bits": 7.671572661620433,
+        "confirmed": true,
+        "pattern": 26,
+        "support": 1202
+      },
+      {
+        "cohesion_bits": null,
+        "confirmed": false,
+        "pattern": 27,
+        "support": 0
+      },
+      {
+        "cohesion_bits": null,
+        "confirmed": false,
+        "pattern": 28,
+        "support": 0
+      },
+      {
+        "cohesion_bits": 8.36296159756822,
+        "confirmed": true,
+        "pattern": 29,
+        "support": 554
+      },
+      {
+        "cohesion_bits": 8.326577427384922,
+        "confirmed": true,
+        "pattern": 30,
+        "support": 556
+      },
+      {
+        "cohesion_bits": 8.469731200031594,
+        "confirmed": true,
+        "pattern": 31,
+        "support": 614
+      },
+      {
+        "cohesion_bits": 8.511314276889209,
+        "confirmed": true,
+        "pattern": 32,
+        "support": 614
+      },
+      {
+        "cohesion_bits": 2.51687905814812,
+        "confirmed": true,
+        "pattern": 33,
+        "support": 789
+      },
+      {
+        "cohesion_bits": 0.7957401394959904,
+        "confirmed": true,
+        "pattern": 34,
+        "support": 1544
+      },
+      {
+        "cohesion_bits": 2.3775295077518654,
+        "confirmed": true,
+        "pattern": 35,
+        "support": 9
+      },
+      {
+        "cohesion_bits": 2.207604506309553,
+        "confirmed": true,
+        "pattern": 36,
+        "support": 8
+      },
+      {
+        "cohesion_bits": 2.2492341307844663,
+        "confirmed": true,
+        "pattern": 37,
+        "support": 8
+      },
+      {
+        "cohesion_bits": 1.8341966315056226,
+        "confirmed": true,
+        "pattern": 38,
+        "support": 6
+      },
+      {
+        "cohesion_bits": 4.405882703801105,
+        "confirmed": true,
+        "pattern": 39,
+        "support": 36
+      },
+      {
+        "cohesion_bits": 2.0433126244163966,
+        "confirmed": true,
+        "pattern": 40,
+        "support": 7
+      },
+      {
+        "cohesion_bits": -0.7640422976412076,
+        "confirmed": false,
+        "pattern": 41,
+        "support": 1
+      },
+      {
+        "cohesion_bits": 3.9757537376332595,
+        "confirmed": true,
+        "pattern": 42,
+        "support": 27
+      },
+      {
+        "cohesion_bits": 1.2359577023587924,
+        "confirmed": true,
+        "pattern": 43,
+        "support": 4
+      },
+      {
+        "cohesion_bits": 3.5012112534995383,
+        "confirmed": true,
+        "pattern": 44,
+        "support": 20
+      },
+      {
+        "cohesion_bits": 3.1278033786956083,
+        "confirmed": true,
+        "pattern": 45,
+        "support": 15
+      },
+      {
+        "cohesion_bits": 1.5844239548320667,
+        "confirmed": true,
+        "pattern": 46,
+        "support": 5
+      },
+      {
+        "cohesion_bits": -1.914950282228212,
+        "confirmed": false,
+        "pattern": 47,
+        "support": 2
+      },
+      {
+        "cohesion_bits": 8.43013945184042,
+        "confirmed": true,
+        "pattern": 48,
+        "support": 284
+      },
+      {
+        "cohesion_bits": 1.0816887259682741,
+        "confirmed": true,
+        "pattern": 49,
+        "support": 496
+      }
+    ]
+  },
+  "kute_version": "0.4.0",
+  "peak_memory_bytes": 1172836352
+}

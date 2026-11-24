@@ -39,7 +39,7 @@ fn read(dir: &Path, name: &str) -> Vec<u8> {
 #[test]
 fn use_case_1_text() {
     let dir = workdir("text");
-    let trained = ok(&dir, &["train", "--input", "data/words-train.txt", "--id", "example:words", "--vocab-size", "2000", "--output", "words.kvf"]);
+    let trained = ok(&dir, &["train", "--input", "data/words-train.txt", "--id", "example:words", "--vocab-size", "2000", "--embed-test-vectors", "--output", "words.kvf"]);
     assert_eq!(trained["summary"]["algorithm"], "bpe");
     assert_eq!(trained["summary"]["tokens"], 2000);
     let encoded = ok(&dir, &["encode", "--vocab", "words.kvf", "--input", "data/words-eval.txt", "--output", "words-eval.kute"]);
@@ -134,7 +134,7 @@ fn use_case_4_industrial_events() {
     // A private corpus: no excerpts in the published file.
     ok(&dir, &[
         "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:private", "--algorithm", "sequence-bpe",
-        "--adapter", "jsonl-events", "--adapter-option", "field=tag", "--vocab-size", "64", "--no-test-vectors", "--output", "private.kvf",
+        "--adapter", "jsonl-events", "--adapter-option", "field=tag", "--vocab-size", "64", "--output", "private.kvf",
     ]);
     let private: serde_json::Value = serde_json::from_slice(&read(&dir, "private.kvf")).unwrap();
     assert_eq!(private["test_vectors"].as_array().unwrap().len(), 0);
@@ -159,6 +159,20 @@ fn use_case_4_industrial_events() {
     ]);
     assert_eq!(evolved["summary"]["tokens"].as_u64().unwrap(), evolved["parent"]["tokens"].as_u64().unwrap() + 1);
     ok(&dir, &["validate", "industrial-0.2.kvf"]);
+    // The compact form of the same vocabulary: same digest, smaller, and
+    // every command reads it in place of the JSON file.
+    let converted = ok(&dir, &["convert", "--input", "industrial-0.2.kvf", "--output", "industrial-0.2.kvfb"]);
+    assert_eq!(converted["digest"], evolved["summary"]["digest"]);
+    assert!(converted["output"]["bytes"].as_u64().unwrap() < converted["input"]["bytes"].as_u64().unwrap());
+    ok(&dir, &["validate", "industrial-0.2.kvfb"]);
+    ok(&dir, &["encode", "--vocab", "industrial-0.2.kvfb", "--input", "novel.jsonl", "--output", "novel-0.2b.kute"]);
+    assert_eq!(read(&dir, "novel-0.2b.kute"), {
+        ok(&dir, &["encode", "--vocab", "industrial-0.2.kvf", "--input", "novel.jsonl", "--output", "novel-0.2a.kute"]);
+        read(&dir, "novel-0.2a.kute")
+    });
+    let back = ok(&dir, &["convert", "--input", "industrial-0.2.kvfb", "--output", "industrial-0.2-back.kvf"]);
+    assert_eq!(back["digest"], evolved["summary"]["digest"]);
+    assert_eq!(read(&dir, "industrial-0.2-back.kvf"), read(&dir, "industrial-0.2.kvf"));
     ok(&dir, &["encode", "--vocab", "industrial-0.2.kvf", "--input", "novel.jsonl", "--output", "novel-0.2.kute"]);
     assert!(fails(&dir, &["evolve", "--vocab", "industrial.kvf", "--add", "X", "--new-version", "0.0.1", "--output", "bad.kvf"]).contains("greater"));
     // Two processes: one serves with no vocabulary, the other shares its
@@ -196,6 +210,27 @@ fn use_case_4_industrial_events() {
     assert_eq!(sent["vocabulary_after_proposal"], evolved["summary"]["digest"]);
     let received = String::from_utf8(read(&dir, "received/message-1.bin")).unwrap();
     assert!(received.trim_end().ends_with("VALVE_7_STUCK\"}"));
+    // Typed events: two valves interleaved in one file, with times. Grouped,
+    // each valve shows OPEN then CLOSE; the report says how long that takes.
+    let mut lines = String::new();
+    for i in 0..20 {
+        for (valve, held) in [("v1", 5), ("v2", 9)] {
+            lines.push_str(&format!("{{\"valve\":\"{valve}\",\"tag\":\"OPEN\",\"ms\":{}}}\n", i * 100));
+            lines.push_str(&format!("{{\"valve\":\"{valve}\",\"tag\":\"CLOSE\",\"ms\":{}}}\n", i * 100 + held));
+        }
+    }
+    std::fs::write(dir.join("valves.jsonl"), lines).unwrap();
+    let timed = ok(&dir, &[
+        "discover", "--input", "valves.jsonl", "--symbol-field", "tag", "--group-field", "valve", "--time-field", "ms",
+        "--time-unit", "ms", "--schema-id", "kute:test:valves",
+    ]);
+    assert_eq!(timed["events"]["searched"]["records"], 2);
+    assert_eq!(timed["events"]["schema"]["time_unit"], "milliseconds");
+    let patterns = timed["discovery"]["patterns"].as_array().unwrap();
+    let open_close = patterns.iter().position(|p| p["kind"] == "contiguous" && p["symbols"] == serde_json::json!(["OPEN", "CLOSE"])).unwrap();
+    let duration = &timed["events"]["timing"][open_close]["duration"];
+    assert_eq!((duration["occurrences"].as_u64(), duration["min"].as_i64(), duration["max"].as_i64()), (Some(40), Some(5), Some(9)));
+    assert!(fails(&dir, &["discover", "--input", "valves.jsonl", "--symbol-field", "tag", "--time-field", "nope"]).contains("nope"));
     // Dictionary baseline over the same events, then compare the two.
     ok(&dir, &[
         "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:event-names", "--algorithm", "dictionary",
