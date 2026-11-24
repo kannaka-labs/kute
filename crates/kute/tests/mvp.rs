@@ -700,3 +700,31 @@ fn training_checks_its_result_without_storing_vectors() {
     let v = engine.train("bytes", "binary", &AdapterConfig::default(), &docs, &c).unwrap();
     assert!(v.test_vectors.is_empty());
 }
+
+/// An added sequence must be reachable by the encoder even when the parent
+/// already merges part of it (ADR-0021).
+#[test]
+fn an_evolved_sequence_is_used_where_the_parent_merges_inside_it() {
+    let engine = Engine::new();
+    // "HEAT HOLD" is by far the most common pair, so the parent merges it.
+    let mut text = String::new();
+    for i in 0..200 {
+        text.push_str(if i % 5 == 0 { concat!(r#"{"event":"START"}"#, "\n", r#"{"event":"HEAT"}"#, "\n", r#"{"event":"HOLD"}"#, "\n", r#"{"event":"DONE"}"#, "\n") } else { concat!(r#"{"event":"HEAT"}"#, "\n", r#"{"event":"HOLD"}"#, "\n") });
+    }
+    let docs = vec![text.into_bytes()];
+    let mut c = config("test:evolve-inside", 5);
+    c.pretokenizer = Pretokenizer::None;
+    let parent = engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &docs, &c).unwrap();
+    let pattern = ["START", "HEAT", "HOLD"];
+    let before = engine.tokenizer(parent.clone()).unwrap().encode(&CanonicalInput::symbols(pattern)).unwrap();
+    assert_eq!(before.ids.len(), 2, "the parent joins HEAT HOLD and leaves START alone");
+    let additions = vec![pattern.iter().map(|s| s.to_string()).collect::<Vec<_>>()];
+    let child = kute::bpe::sequence::evolve(&parent, &additions, Version::parse("0.2.0").unwrap()).unwrap();
+    assert_eq!(child.tokens.len(), parent.tokens.len() + 1);
+    assert_eq!(&child.tokens[..parent.tokens.len()], &parent.tokens[..]);
+    let tokenizer = engine.tokenizer(child).unwrap();
+    let after = tokenizer.encode(&CanonicalInput::symbols(pattern)).unwrap();
+    assert_eq!(after.ids.len(), 1);
+    let back = tokenizer.decode(&after).unwrap();
+    assert_eq!(back.payload, Payload::Symbols(pattern.iter().map(|s| s.to_string()).collect()));
+}

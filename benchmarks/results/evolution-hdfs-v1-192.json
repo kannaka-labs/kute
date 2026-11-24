@@ -209,12 +209,12 @@
     {
       "vocabulary": "evolved",
       "what": "frozen plus 24 patterns discovered in the late half",
-      "vocabulary_tokens": 229,
-      "vocabulary_file_bytes": 1838,
-      "tokens": 254215,
+      "vocabulary_tokens": 216,
+      "vocabulary_file_bytes": 1802,
+      "tokens": 253341,
       "escaped_symbols": 0,
-      "plain_bytes": 296512,
-      "compressed_bytes": 85322,
+      "plain_bytes": 295979,
+      "compressed_bytes": 85375,
       "round_trip_exact": true
     },
     {
@@ -231,23 +231,23 @@
     {
       "vocabulary": "retrained-larger",
       "what": "sequence-bpe on all of TRAIN, size of evolved",
-      "vocabulary_tokens": 229,
-      "vocabulary_file_bytes": 1706,
-      "tokens": 142441,
+      "vocabulary_tokens": 216,
+      "vocabulary_file_bytes": 1649,
+      "tokens": 144926,
       "escaped_symbols": 0,
-      "plain_bytes": 182410,
-      "compressed_bytes": 81405,
+      "plain_bytes": 182468,
+      "compressed_bytes": 81596,
       "round_trip_exact": true
     },
     {
       "vocabulary": "mined",
       "what": "bare alphabet plus 162 discovered patterns, no pair merging",
-      "vocabulary_tokens": 232,
-      "vocabulary_file_bytes": 1871,
-      "tokens": 831731,
+      "vocabulary_tokens": 193,
+      "vocabulary_file_bytes": 1731,
+      "tokens": 399211,
       "escaped_symbols": 0,
-      "plain_bytes": 859551,
-      "compressed_bytes": 104368,
+      "plain_bytes": 450054,
+      "compressed_bytes": 93234,
       "round_trip_exact": true
     }
   ]

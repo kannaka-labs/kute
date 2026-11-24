@@ -375,8 +375,10 @@ pub const MAX_ADDITIONS: usize = 65_536;
 ///
 /// The parent is not modified. Every token of the parent keeps its id and
 /// payload, so the child's table extends the parent's. New single symbols
-/// are appended as symbol tokens; a sequence is appended as a chain of merge
-/// tokens, reusing any merge the parent already has. The result is a pure
+/// are appended as symbol tokens; a sequence is first tokenized by the merges
+/// already present and the tokens that remain are joined by a chain of new
+/// merges, so the new token forms where the parent's encoding leaves those
+/// tokens side by side. The result is a pure
 /// function of the parent, `additions` and `version`: two parties that
 /// apply the same step hold the same digest.
 ///
@@ -443,10 +445,19 @@ pub fn evolve(parent: &Vocabulary, additions: &[Vec<String>], version: kute_type
             };
             ids.push(id);
         }
+        // Tokenize the addition as the vocabulary so far would, then chain
+        // what is left. A chain built over the bare symbols would seldom
+        // apply: the encoder runs the earlier merges first, and they have
+        // already joined those symbols into other tokens.
+        apply_merges(&mut ids, &by_pair);
+        let symbols_of = |tokens: &[TokenEntry], id: u32| match &tokens[id as usize].payload {
+            TokenPayload::Symbols(s) => s.clone(),
+            TokenPayload::Bytes(_) => Vec::new(),
+        };
         let mut left = ids[0];
-        let mut payload = vec![addition[0].clone()];
-        for (i, &right) in ids.iter().enumerate().skip(1) {
-            payload.push(addition[i].clone());
+        let mut payload = symbols_of(&child.tokens, left);
+        for &right in ids.iter().skip(1) {
+            payload.extend(symbols_of(&child.tokens, right));
             left = match by_pair.get(&(left, right)) {
                 Some(&id) => id,
                 None => {

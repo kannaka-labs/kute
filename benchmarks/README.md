@@ -391,36 +391,42 @@ with a small number; the name table that needs is not counted.
 `benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by
 time, and encodes the same held-out events (1,766,436 events, none seen by
 any vocabulary) with each of the vocabularies below. Sizes are the compressed
-container. Every row decoded back to the input exactly. Reports:
-`results/evolution-hdfs-v1-192.json` and `results/evolution-hdfs-v1-256.json`.
+container. Every row decoded back to the input exactly. Report:
+`results/evolution-hdfs-v1-192.json`.
 
 | vocabulary | tokens in vocabulary | tokens out | compressed bytes |
 |---|---:|---:|---:|
 | dictionary, one token per event name | 30 | 1,881,448 | 118,824 |
 | frozen: sequence-bpe on the early half | 192 | 255,332 | 85,311 |
-| evolved: frozen plus 24 patterns discovered in the late half | 229 | 254,215 | 85,322 |
+| evolved: frozen plus 24 patterns discovered in the late half | 216 | 253,341 | 85,375 |
 | retrained on all training events | 192 | 153,733 | 81,547 |
-| retrained, at the size of evolved | 229 | 142,441 | 81,405 |
-| mined: bare alphabet plus discovered patterns, no pair merging | 232 | 831,731 | 104,368 |
-
-With a frozen size of 256 and 32 patterns: frozen 81,511 bytes, evolved
-(310 tokens) 95,119, retrained 80,793, retrained at 310 tokens 94,439,
-mined (320 tokens) 119,171.
+| retrained, at the size of evolved | 216 | 144,926 | 81,596 |
+| mined: bare alphabet plus 162 discovered patterns, no pair merging | 193 | 399,211 | 93,234 |
 
 What this shows, on this one dataset:
 
 - Adding discovered patterns to a frozen vocabulary with `kute evolve` did
-  not help. It removed 0.4% of the tokens and left the compressed size
-  unchanged. The added tokens are seldom chosen by the encoder; why is not
-  yet examined.
+  not help: 0.8% fewer tokens and no fewer bytes. The late half of this
+  data holds little the early half did not.
 - A vocabulary trained on the early half and never updated cost 4.6% more
-  bytes than retraining on everything at 192 tokens, and 0.9% more at 256,
-  while emitting 45% to 66% more tokens.
-- Discovered patterns alone, without pair merging, did little better than
-  one token per event (104,368 against 118,824 bytes).
-- Every vocabulary above 256 tokens compressed about 17% worse than its
-  256-token counterpart, retrained ones included. Past that size a token id
-  no longer fits one byte.
+  bytes than retraining on everything, and emitted 66% more tokens.
+- Discovered patterns alone, without pair merging, sit between one token
+  per event and trained merges.
+
+These rows were first measured with the evolution step of v0.5.0
+(`results/evolution-hdfs-v1-256.json`, and the same table at 192 tokens:
+evolved 254,215 tokens and 85,322 bytes with 37 added tokens; mined 831,731
+tokens and 104,368 bytes with 202 added tokens). That step built an added
+sequence over bare symbols, which the parent's merges had already consumed,
+so most added tokens were never used. The step was changed (ADR-0021) and
+the table above is the rerun. The change halved the token count of the
+mined vocabulary; it did not change the verdict on evolving this data.
+
+The 256-token run also shows that every vocabulary above 256 tokens
+compressed about 17% worse than its 256-token counterpart, retrained ones
+included: frozen 81,511 bytes, evolved (310 tokens) 95,119, retrained
+80,793, retrained at 310 tokens 94,439. Past that size a token id no longer
+fits one byte.
 
 Limits: one dataset, one split, one run per row; HDFS_v1 has 30 event names
 and its late half looks much like its early half, so this says nothing about
