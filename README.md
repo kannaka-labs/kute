@@ -41,6 +41,12 @@ On the development branch, after v0.2.0 (not yet released):
   by digest, transfer it if needed, extend it together and exchange encoded
   messages with a receipt. No encryption or authentication. See
   `specifications/protocol`.
+* `kute train --stream-bytes`: training memory that does not grow with
+  file size (227 MiB against 959 MiB on a 500 MB input), and a peak-memory
+  figure in every training report.
+* Vocabulary identity specified rule by rule and checked by a second
+  implementation in Python (`conformance/`), with recorded vectors that
+  include files written by v0.2.0.
 * `kute train --no-test-vectors` for private corpora, `kute decode
   --max-units` for untrusted sequences, and a registry that refuses a second
   registration of a name.
@@ -99,6 +105,7 @@ backends/rustbpe        rustbpe reference backend and the kute-ref command (not 
 bindings/python         Python package (PyO3, built with maturin)
 specifications/         KVF 0.1, token envelope and .kute container, exchange protocol
 docs/                   use cases, HRM contract, decision records
+conformance/            independent implementation of the vocabulary digest
 benchmarks/             how to run the suite, and recorded results
 ```
 

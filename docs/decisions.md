@@ -257,8 +257,31 @@ anything: a loaded vocabulary carries its digest, `digest()` returns the
 stored value, and the content hash is computed once at load. No change was
 needed.
 
+## ADR-0024: Training reads the corpus as a stream
+
+Trainers already kept only counts, but the engine read every input file
+into memory before training started, and the event trainer kept every
+record. Now files are read one at a time, the event trainer keeps window
+counts only, and `stream_bytes` reads a file in pieces cut after a line
+feed, so one very large file is no different from many small ones.
+
+Memory budget: one piece (or one file without `stream_bytes`), plus the
+table of distinct chunks or windows, plus the merge trainer's working set.
+The last two depend on how varied the data is, not on how much there is.
+Measured figures are in `benchmarks/README.md`.
+
+`stream_bytes` is part of the training configuration and is stored with the
+vocabulary, because a piece is a record: it changes the corpus fingerprint,
+and for training without a pre-tokenizer, where input is counted in fixed
+windows that restart at each record, it can change what is learned. With a
+pre-tokenizer on text, chunks do not cross line feeds and the learned tokens
+come out the same. Checkpointing a training run and resuming it is not
+implemented.
+
 ## Deferred
 
-Registry service and signing, streaming, import from other tokenizer formats,
-memory measurement in benchmarks, and adapters for DNA, telemetry,
-mathematics and quantum circuits.
+Registry service and signing, import from other tokenizer formats, training
+checkpoints, typed fields and timestamps in events, a compact binary
+vocabulary file, entropy-coded containers, comparison with Zstandard and
+with binary record formats, and adapters for DNA, telemetry, mathematics and
+quantum circuits.

@@ -377,6 +377,7 @@ fn discover(engine: &Engine, args: DiscoverArgs) -> kute::Result<()> {
     let report = json!({
         "kute_version": kute::KUTE_VERSION,
         "discover_seconds": seconds,
+        "peak_memory_bytes": kute_bench::peak_memory_bytes(),
         "discovery": found,
         "held_out": evaluation,
         "control": control,
@@ -425,6 +426,11 @@ struct TrainArgs {
     /// License of the vocabulary, e.g. an SPDX identifier.
     #[arg(long)]
     license: Option<String>,
+    /// Read input files in pieces of about this many bytes, cut at line
+    /// breaks, so memory does not grow with file size. Recorded in the
+    /// vocabulary, because it decides where records end.
+    #[arg(long, value_name = "BYTES")]
+    stream_bytes: Option<usize>,
     /// Do not store excerpts of the training data in the vocabulary as
     /// self-test vectors. Use it when the corpus is private.
     #[arg(long)]
@@ -471,6 +477,7 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     config.description = args.description;
     config.license = args.license;
     config.embed_test_vectors = !args.no_test_vectors;
+    config.stream_bytes = args.stream_bytes;
     if let Some(path) = &args.dictionary_file {
         let text = std::fs::read_to_string(path)?;
         config.dictionary = text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.is_empty()).map(str::to_string).collect();
@@ -490,6 +497,7 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     print(&json!({
         "output": args.output,
         "train_seconds": seconds,
+        "peak_memory_bytes": kute_bench::peak_memory_bytes(),
         "summary": vocab::summarize(&vocabulary)?,
     }))
 }

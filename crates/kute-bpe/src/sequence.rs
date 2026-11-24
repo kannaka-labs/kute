@@ -97,9 +97,17 @@ fn encode_symbols_open(loaded: &Loaded, symbols: &[String]) -> Result<(Vec<u32>,
 impl Tokenizer for SequenceBpeTokenizer {
     fn train(&mut self, corpus: &mut dyn CorpusSource, config: &TrainingConfig) -> Result<Vocabulary> {
         config.validate()?;
+        // One pass. Only the window counts, the alphabet and a few sample
+        // records are kept, so memory follows the number of distinct
+        // windows, not the size of the corpus. Symbols get provisional ids
+        // in order of first appearance and are renumbered in sorted order
+        // afterwards, which keeps the result independent of that order.
         let mut fingerprint = CorpusFingerprint::new();
-        let mut records: Vec<Vec<String>> = Vec::new();
         let mut modality = Modality::Events;
+        let mut seen: FxHashMap<String, u32> = FxHashMap::default();
+        let mut provisional: FxHashMap<Vec<u32>, u64> = FxHashMap::default();
+        let mut samples: Vec<Vec<String>> = Vec::new();
+        let mut ids: Vec<u32> = Vec::new();
         while let Some(record) = corpus.next_record()? {
             fingerprint.update(&record);
             if let Some(limit) = config.max_corpus_units {
@@ -108,21 +116,32 @@ impl Tokenizer for SequenceBpeTokenizer {
                 }
             }
             modality = record.modality;
-            match record.payload {
-                Payload::Symbols(s) => records.push(s),
-                Payload::Bytes(_) => {
-                    return Err(KuteError::InvalidInput("sequence-bpe takes symbol payloads; use bpe for bytes".into()))
+            let Payload::Symbols(symbols) = record.payload else {
+                return Err(KuteError::InvalidInput("sequence-bpe takes symbol payloads; use bpe for bytes".into()));
+            };
+            if samples.len() < 4 && !symbols.is_empty() {
+                samples.push(symbols.iter().take(32).cloned().collect());
+            }
+            ids.clear();
+            for s in symbols {
+                if s.is_empty() || s.len() > kute_types::vocab::MAX_SYMBOL_BYTES {
+                    return Err(KuteError::InvalidInput("symbols must be 1 to 1024 bytes".into()));
+                }
+                let next = seen.len() as u32;
+                ids.push(*seen.entry(s).or_insert(next));
+            }
+            for window in ids.chunks(config.train_window) {
+                match provisional.get_mut(window) {
+                    Some(count) => *count += 1,
+                    None => {
+                        provisional.insert(window.to_vec(), 1);
+                    }
                 }
             }
         }
-        let alphabet_set: BTreeSet<&str> = records.iter().flatten().map(String::as_str).collect();
+        let alphabet_set: BTreeSet<&str> = seen.keys().map(String::as_str).collect();
         if alphabet_set.is_empty() {
             return Err(KuteError::InvalidInput("the corpus contains no symbols".into()));
-        }
-        for s in &alphabet_set {
-            if s.is_empty() || s.len() > kute_types::vocab::MAX_SYMBOL_BYTES {
-                return Err(KuteError::InvalidInput("symbols must be 1 to 1024 bytes".into()));
-            }
         }
         let base = alphabet_set.len() as u32;
         let reserved = config.reserved_tokens.len() as u32;
@@ -133,15 +152,12 @@ impl Tokenizer for SequenceBpeTokenizer {
             )));
         }
         let index: FxHashMap<&str, u32> = alphabet_set.iter().enumerate().map(|(i, s)| (*s, i as u32)).collect();
-
-        let mut window_counts: FxHashMap<Vec<u32>, u64> = FxHashMap::default();
-        for record in &records {
-            let ids: Vec<u32> = record.iter().map(|s| index[s.as_str()]).collect();
-            for window in ids.chunks(config.train_window) {
-                *window_counts.entry(window.to_vec()).or_insert(0) += 1;
-            }
+        let mut renumber = vec![0u32; seen.len()];
+        for (symbol, &first) in &seen {
+            renumber[first as usize] = index[symbol.as_str()];
         }
-        let mut windows: Vec<(Vec<u32>, u64)> = window_counts.into_iter().collect();
+        let mut windows: Vec<(Vec<u32>, u64)> =
+            provisional.into_iter().map(|(w, c)| (w.into_iter().map(|id| renumber[id as usize]).collect(), c)).collect();
         windows.sort_unstable();
         let counts: Vec<u64> = windows.iter().map(|(_, c)| *c).collect();
         let words: Vec<Vec<u32>> = windows.into_iter().map(|(w, _)| w).collect();
@@ -219,8 +235,7 @@ impl Tokenizer for SequenceBpeTokenizer {
         self.load(vocabulary)?;
         let loaded = self.loaded.as_mut().ok_or_else(|| KuteError::NotTrained("load failed".into()))?;
         let mut vectors = Vec::new();
-        for record in records.iter().filter(|r| !r.is_empty() && config.embed_test_vectors).take(4) {
-            let sample: Vec<String> = record.iter().take(32).cloned().collect();
+        for sample in samples.into_iter().filter(|_| config.embed_test_vectors) {
             let ids = encode_symbols(loaded, &sample)?;
             vectors.push(TestVector { input: TokenPayload::Symbols(sample), ids });
         }

@@ -257,3 +257,50 @@ pub fn read_dataset(path: &std::path::Path) -> Result<Vec<Document>> {
     }
     Ok(out)
 }
+
+/// Peak resident memory of this process so far, in bytes, where the
+/// platform reports it (Linux and Windows). It is a high-water mark for the
+/// whole process: measure one job per process.
+#[cfg(target_os = "linux")]
+pub fn peak_memory_bytes() -> Option<u64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|l| l.starts_with("VmHWM:"))?;
+    line.split_whitespace().nth(1)?.parse::<u64>().ok().map(|kb| kb * 1024)
+}
+
+#[cfg(windows)]
+pub fn peak_memory_bytes() -> Option<u64> {
+    #[repr(C)]
+    struct Counters {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentProcess() -> isize;
+        fn K32GetProcessMemoryInfo(process: isize, counters: *mut Counters, cb: u32) -> i32;
+    }
+    let mut counters = std::mem::MaybeUninit::<Counters>::zeroed();
+    let size = std::mem::size_of::<Counters>() as u32;
+    // SAFETY: the structure matches PROCESS_MEMORY_COUNTERS, is zeroed, and
+    // its size is passed; the call only writes within it.
+    let ok = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), counters.as_mut_ptr(), size) };
+    if ok == 0 {
+        return None;
+    }
+    // SAFETY: the call succeeded and filled the structure.
+    Some(unsafe { counters.assume_init() }.peak_working_set_size as u64)
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+pub fn peak_memory_bytes() -> Option<u64> {
+    None
+}

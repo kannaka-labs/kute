@@ -97,13 +97,28 @@ impl Engine {
         documents: &[Vec<u8>],
         config: &TrainingConfig,
     ) -> Result<Vocabulary> {
+        let mut next = documents.iter();
+        self.train_stream(algorithm, adapter, adapter_config, config, &mut || Ok(next.next().map(std::borrow::Cow::Borrowed)))
+    }
+
+    /// Train on documents that are produced one at a time. Only the
+    /// document being read is held, so a corpus larger than memory can be
+    /// trained on as long as each document fits.
+    pub fn train_stream<'a>(
+        &self,
+        algorithm: &str,
+        adapter: &str,
+        adapter_config: &AdapterConfig,
+        config: &TrainingConfig,
+        documents: &mut dyn FnMut() -> Result<Option<std::borrow::Cow<'a, Vec<u8>>>>,
+    ) -> Result<Vocabulary> {
         let adapter_impl = self.registry.adapter(adapter)?;
         let mut tokenizer = self.registry.tokenizer(algorithm)?;
-        let mut records = Vec::with_capacity(documents.len());
-        for doc in documents {
-            records.push(adapter_impl.ingest(doc, adapter_config)?);
-        }
-        let mut vocabulary = tokenizer.train(&mut VecCorpus::new(records), config)?;
+        let mut corpus = FnCorpus(|| match documents()? {
+            Some(doc) => adapter_impl.ingest(&doc, adapter_config).map(Some),
+            None => Ok(None),
+        });
+        let mut vocabulary = tokenizer.train(&mut corpus, config)?;
         vocabulary.adapter = Some(adapter_impl.spec(adapter_config));
         vocabulary.manifest.modality = adapter_impl.modality();
         vocabulary.seal()?;
@@ -124,16 +139,34 @@ impl Engine {
         paths: &[PathBuf],
         config: &TrainingConfig,
     ) -> Result<Vocabulary> {
-        let mut documents = Vec::new();
+        let mut files = Vec::new();
         for path in paths {
-            for file in collect_files(path)? {
-                documents.push(std::fs::read(&file)?);
-            }
+            files.extend(collect_files(path)?);
         }
-        if documents.is_empty() {
+        if files.is_empty() {
             return Err(KuteError::InvalidInput("no input files found".into()));
         }
-        self.train(algorithm, adapter, adapter_config, &documents, config)
+        if config.stream_bytes.is_some() && adapter == kute_adapters::JSON {
+            return Err(KuteError::InvalidConfig("the json adapter reads whole documents and cannot be streamed in pieces".into()));
+        }
+        // Files are read one at a time, or one piece at a time, so memory
+        // does not grow with the size of the corpus.
+        let line_cut = adapter != kute_adapters::BINARY;
+        let mut files = files.into_iter();
+        let mut open: Option<Pieces> = None;
+        self.train_stream(algorithm, adapter, adapter_config, config, &mut || loop {
+            if let Some(pieces) = open.as_mut() {
+                if let Some(piece) = pieces.next_piece()? {
+                    return Ok(Some(std::borrow::Cow::Owned(piece)));
+                }
+                open = None;
+            }
+            let Some(file) = files.next() else { return Ok(None) };
+            match config.stream_bytes {
+                Some(size) => open = Some(Pieces::open(&file, size, line_cut)?),
+                None => return Ok(Some(std::borrow::Cow::Owned(std::fs::read(&file)?))),
+            }
+        })
     }
 
     /// A tokenizer with `vocabulary` installed.
@@ -221,6 +254,49 @@ impl Engine {
             passed,
             failures,
         })
+    }
+}
+
+/// A file read in pieces of about `size` bytes. With `line_cut`, a piece ends
+/// after the last line feed within `size` bytes, or runs on to the next line
+/// feed when a single line is longer than that, so no line is ever split.
+struct Pieces {
+    reader: std::io::BufReader<std::fs::File>,
+    size: usize,
+    line_cut: bool,
+    carry: Vec<u8>,
+    done: bool,
+}
+
+impl Pieces {
+    fn open(path: &Path, size: usize, line_cut: bool) -> Result<Self> {
+        Ok(Self { reader: std::io::BufReader::new(std::fs::File::open(path)?), size, line_cut, carry: Vec::new(), done: false })
+    }
+
+    fn next_piece(&mut self) -> Result<Option<Vec<u8>>> {
+        use std::io::{BufRead, Read};
+        if self.done && self.carry.is_empty() {
+            return Ok(None);
+        }
+        let mut piece = std::mem::take(&mut self.carry);
+        if !self.done && piece.len() < self.size {
+            let want = (self.size - piece.len()) as u64;
+            if (&mut self.reader).take(want).read_to_end(&mut piece)? < want as usize {
+                self.done = true;
+            }
+        }
+        if self.line_cut && !self.done {
+            match piece.iter().rposition(|&b| b == b'\n') {
+                Some(at) => self.carry = piece.split_off(at + 1),
+                None => {
+                    // One line longer than a piece: finish the line.
+                    if self.reader.read_until(b'\n', &mut piece)? == 0 || piece.last() != Some(&b'\n') {
+                        self.done = true;
+                    }
+                }
+            }
+        }
+        Ok(if piece.is_empty() { None } else { Some(piece) })
     }
 }
 

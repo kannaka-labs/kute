@@ -177,3 +177,32 @@ What this does and does not show:
 * A unit test plants a known four-event motif and a delayed pair in random
   noise and checks that both are found with exact counts and that the
   shuffled control comes back nearly empty. That data is synthetic.
+
+## Training memory with streaming (development branch, after v0.2.0)
+
+`kute train --stream-bytes N` reads input in pieces of about N bytes, cut
+after a line feed. `train` now reports the peak resident memory of the
+process (Windows and Linux). Both runs below train a 32,768-token text
+vocabulary on this machine; one process per run.
+
+| input | read as | peak memory | tokens learned |
+|-------|---------|-------------|----------------|
+| enwik8, 100 MB | whole file | 226 MiB | reference |
+| enwik8, 100 MB | 4 MiB pieces | 226 MiB | the same 32,768 tokens, same ids |
+| enwik8 repeated five times, 500 MB | whole file | 959 MiB | |
+| enwik8 repeated five times, 500 MB | 4 MiB pieces | 227 MiB | |
+
+* At 100 MB the file is not what fills memory; the chunk table and the
+  merge trainer are. Streaming changes nothing there.
+* At 500 MB the whole-file run grows with the file and the streamed run
+  does not. The 500 MB input is the same text five times over, which keeps
+  the chunk table the same size by construction: it isolates the effect of
+  file size and says nothing about a corpus with five times the variety.
+* The streamed vocabulary has a different digest from the whole-file one,
+  since the piece size is recorded and the corpus fingerprint covers
+  records. `kute compare` shows the token tables are identical.
+* Run times are not reported: the machine was under other load and they
+  varied by more than the difference between the two modes.
+* Peak memory of encoding, of discovery and of the benchmark suite's cases
+  is not measured yet.
+
