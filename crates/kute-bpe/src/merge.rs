@@ -36,7 +36,9 @@ pub fn train_merges(
 ) -> Vec<LearnedMerge> {
     debug_assert_eq!(words.len(), counts.len());
     let mut pair_counts: FxHashMap<Pair, i64> = FxHashMap::default();
-    let mut where_used: FxHashMap<Pair, FxHashSet<u32>> = FxHashMap::default();
+    // The words a pair has occurred in. A word may be listed more than once
+    // and may no longer hold the pair; both are checked when it is visited.
+    let mut where_used: FxHashMap<Pair, Vec<u32>> = FxHashMap::default();
     for (i, w) in words.iter().enumerate() {
         if counts[i] == 0 {
             continue;
@@ -44,7 +46,10 @@ pub fn train_merges(
         for p in w.windows(2) {
             let pair = (p[0], p[1]);
             *pair_counts.entry(pair).or_insert(0) += counts[i] as i64;
-            where_used.entry(pair).or_default().insert(i as u32);
+            let list = where_used.entry(pair).or_default();
+            if list.last() != Some(&(i as u32)) {
+                list.push(i as u32);
+            }
         }
     }
 
@@ -53,6 +58,10 @@ pub fn train_merges(
     let mut banned: FxHashSet<Pair> = FxHashSet::default();
     let mut merges = Vec::new();
     let min_frequency = min_frequency.max(1) as i64;
+    let mut touched: FxHashSet<Pair> = FxHashSet::default();
+    let mut merged: Vec<u32> = Vec::new();
+    // For each id of the word being rewritten: was it consumed by the merge?
+    let mut consumed: Vec<bool> = Vec::new();
 
     while (merges.len() as u32) < max_merges {
         let Some((count, Reverse(pair))) = heap.pop() else { break };
@@ -76,41 +85,55 @@ pub fn train_merges(
         let new_id = first_id + merges.len() as u32;
         merges.push(LearnedMerge { left: pair.0, right: pair.1, id: new_id, count: current as u64 });
 
-        let mut touched: FxHashSet<Pair> = FxHashSet::default();
+        touched.clear();
         let users = where_used.remove(&pair).unwrap_or_default();
         for word_index in users {
             let i = word_index as usize;
             let word = &words[i];
-            if !word.windows(2).any(|p| (p[0], p[1]) == pair) {
-                continue;
-            }
-            let weight = counts[i] as i64;
-            for p in word.windows(2) {
-                let old = (p[0], p[1]);
-                *pair_counts.entry(old).or_insert(0) -= weight;
-                touched.insert(old);
-            }
-            let mut merged = Vec::with_capacity(word.len());
+            merged.clear();
+            consumed.clear();
             let mut j = 0;
             while j < word.len() {
                 if j + 1 < word.len() && word[j] == pair.0 && word[j + 1] == pair.1 {
                     merged.push(new_id);
+                    consumed.extend([true, true]);
                     j += 2;
                 } else {
                     merged.push(word[j]);
+                    consumed.push(false);
                     j += 1;
                 }
             }
-            for p in merged.windows(2) {
-                let new = (p[0], p[1]);
-                *pair_counts.entry(new).or_insert(0) += weight;
-                where_used.entry(new).or_default().insert(word_index);
-                touched.insert(new);
+            if merged.len() == word.len() {
+                // Listed, but an earlier merge (or an earlier visit in this
+                // one) already took the pair out of this word.
+                continue;
             }
-            words[i] = merged;
+            // Only the pairs next to a merged position change; every other
+            // adjacent pair of the word is in the new word too.
+            let weight = counts[i] as i64;
+            for (k, p) in word.windows(2).enumerate() {
+                if consumed[k] || consumed[k + 1] {
+                    let old = (p[0], p[1]);
+                    *pair_counts.entry(old).or_insert(0) -= weight;
+                    touched.insert(old);
+                }
+            }
+            for p in merged.windows(2) {
+                if p[0] == new_id || p[1] == new_id {
+                    let new = (p[0], p[1]);
+                    *pair_counts.entry(new).or_insert(0) += weight;
+                    let list = where_used.entry(new).or_default();
+                    if list.last() != Some(&word_index) {
+                        list.push(word_index);
+                    }
+                    touched.insert(new);
+                }
+            }
+            words[i].clone_from(&merged);
         }
         pair_counts.remove(&pair);
-        for p in touched {
+        for &p in &touched {
             if p == pair {
                 continue;
             }
@@ -320,6 +343,64 @@ mod tests {
         assert_eq!(merges.len(), 2);
         let none = train_merges(words, &[5, 1], 10, 9, 1, |_, _| false);
         assert!(none.is_empty());
+    }
+
+    /// Textbook trainer: recount every pair from scratch before each merge.
+    fn reference_training(mut words: Vec<Vec<u32>>, counts: &[u64], first_id: u32, max_merges: u32, min_frequency: i64) -> Vec<LearnedMerge> {
+        let mut merges = Vec::new();
+        while (merges.len() as u32) < max_merges {
+            let mut pair_counts: std::collections::BTreeMap<Pair, i64> = Default::default();
+            for (w, &c) in words.iter().zip(counts) {
+                for p in w.windows(2) {
+                    *pair_counts.entry((p[0], p[1])).or_insert(0) += c as i64;
+                }
+            }
+            // most frequent, then the smallest pair
+            let Some((&pair, &count)) = pair_counts.iter().filter(|(_, &c)| c > 0).max_by_key(|(&p, &c)| (c, Reverse(p))) else { break };
+            if count < min_frequency {
+                break;
+            }
+            let id = first_id + merges.len() as u32;
+            merges.push(LearnedMerge { left: pair.0, right: pair.1, id, count: count as u64 });
+            for w in words.iter_mut() {
+                let mut out = Vec::with_capacity(w.len());
+                let mut i = 0;
+                while i < w.len() {
+                    if i + 1 < w.len() && (w[i], w[i + 1]) == pair {
+                        out.push(id);
+                        i += 2;
+                    } else {
+                        out.push(w[i]);
+                        i += 1;
+                    }
+                }
+                *w = out;
+            }
+        }
+        merges
+    }
+
+    #[test]
+    fn training_matches_reference() {
+        let mut state = 0x2545f4914f6cdd1du64;
+        let mut rand = move |m: u32| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state % m as u64) as u32
+        };
+        for round in 0..300 {
+            // Small alphabets force repeats such as "aaaa" and "abab".
+            let alphabet = 1 + rand(6);
+            let n = 1 + rand(24) as usize;
+            let words: Vec<Vec<u32>> = (0..n).map(|_| (0..rand(30)).map(|_| rand(alphabet)).collect()).collect();
+            let counts: Vec<u64> = (0..n).map(|_| rand(5) as u64).collect();
+            let min_frequency = 1 + rand(3) as u64;
+            let max = 1 + rand(60);
+            let fast = train_merges(words.clone(), &counts, alphabet, max, min_frequency, |_, _| true);
+            let slow = reference_training(words, &counts, alphabet, max, min_frequency as i64);
+            assert_eq!(fast, slow, "round {round}");
+        }
     }
 
     #[test]

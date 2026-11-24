@@ -507,6 +507,17 @@ ratio and not the seconds: about 2.6 against 1.8 before. Counting was about
 8 s of a run and is now about 3 s; the rest of training does not use more
 threads yet. Not yet run on the 24-thread machine.
 
+A second change, also after v0.6.0, is in the merging itself: when a pair
+is merged, only the pairs next to it in each word are recounted, where
+before every pair of the word was. The vocabulary is again the same, and a
+test checks the trainer against one that recounts everything before each
+merge. On the laptop, ten runs (report
+`results/tokenizers-enwik8-10runs-local-merge.json`): KUTE trained in a
+median of 4.0 s (range 3.9 to 4.8) and `tokenizers` in 27.0 s (26.0 to
+64.7), a ratio of about 6.7. Encoding was unchanged (0.29 s against 2.66 s
+for a batch of lines). One machine; not yet run on the 24-thread one, where
+`tokenizers` trains in about 10.8 s.
+
 How to read it:
 
 - The two trainers split text differently before merging, each by its
