@@ -433,6 +433,36 @@ and its late half looks much like its early half, so this says nothing about
 data that drifts. Delta encoding, which the directive lists for this row, has
 nothing to work on here: the events are names without values.
 
+## Against Hugging Face `tokenizers` on text (after v0.5.0)
+
+`benchmarks/hf_compare.py` trains a byte-level BPE vocabulary of 32,768
+tokens with each tool on the first 90,000,189 bytes of enwik8 and encodes the
+last 9,999,811 bytes, which neither saw. Report:
+`results/tokenizers-enwik8.json`.
+
+| tool | train | tokens for the held-out text | encode | round trip |
+|---|---:|---:|---:|---|
+| KUTE (CLI, all cores) | 13.59 s | 2,551,171 | 0.281 s | exact |
+| tokenizers 0.23.2 | 56.25 s | 2,703,872 | 8.231 s as one document, 3.012 s as a batch of lines | exact |
+| tiktoken `cl100k_base`, pretrained on other data, 100,277 tokens | n/a | 2,573,485 | 1.812 s | exact |
+
+How to read it:
+
+- One run each on a machine that was doing other work. Treat the times as
+  rough; a second run gave the same order.
+- The KUTE times include starting the process and reading and writing
+  files. The other two are timed inside Python.
+- The two trainers split text differently before merging, each by its
+  default, so the token counts compare the tools as used, not one algorithm
+  against itself. KUTE needed 5.6% fewer tokens here.
+- `tokenizers` encodes one document on one thread; given the same text as a
+  batch of lines it uses its threads, and the line split changes its count
+  slightly (2,701,223).
+- The tiktoken row is for scale only: a vocabulary three times larger,
+  trained on other text.
+- An AST baseline for code, which the directive lists in this row, is not
+  measured.
+
 ## Resumed training (v0.5.0)
 
 90 MB of enwik8, byte BPE, single runs on one machine that was not idle.
