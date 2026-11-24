@@ -19,8 +19,9 @@ laptop:
 | encode the held-out text (median) | 0.31 s | 2.99 s as a batch of lines, 9.48 s as one document |
 
 Both decode back to the input exactly. The two tools split text differently
-before merging, so this compares them as used, on one dataset and one
-machine. Method, ranges, limits and the command to rerun it:
+before merging, so this compares them as used, on one dataset. On a second,
+24-thread machine the token counts were identical and the time gaps smaller:
+1.1 times faster to train, about 4 times faster to encode. Method, ranges, limits and the command to rerun it:
 [`benchmarks/README.md`](benchmarks/README.md#against-hugging-face-tokenizers-on-text-v050).
 
 ```
