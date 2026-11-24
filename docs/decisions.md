@@ -239,6 +239,24 @@ test vectors, and refuses a vocabulary that collides with one it holds. An
 both sides read the vocabulary the same way. Security of the channel is out
 of scope and stated as such. See `specifications/protocol`.
 
+## ADR-0023: Vocabulary identity is specified and checked twice
+
+ADR-0006 left the digest defined by what the Rust serializer happened to
+write. The canonical form is now written out rule by rule in KVF section 4,
+and `conformance/kvf_digest.py` implements it from that text with the Python
+standard library alone. CI runs it on recorded vectors, including files
+written by the v0.2.0 release, and on vocabularies trained in the same job.
+
+The existing form was specified as it is instead of moving to RFC 8785 or
+CBOR, because a new form would change the digest of every published
+vocabulary and invalidate every sequence that names one. Numbers with a
+fraction are excluded from the canonical form; nothing in KVF needs them.
+
+The review item "cache the verified digest" was checked before changing
+anything: a loaded vocabulary carries its digest, `digest()` returns the
+stored value, and the content hash is computed once at load. No change was
+needed.
+
 ## Deferred
 
 Registry service and signing, streaming, import from other tokenizer formats,

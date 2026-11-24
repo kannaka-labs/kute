@@ -1,0 +1,137 @@
+{
+"manifest": {
+  "algorithm": "sequence-bpe",
+  "generator": "kute 0.2.0",
+  "id": "conformance:events",
+  "kvf_version": "0.1",
+  "lossless": true,
+  "modality": "events",
+  "payload_kind": "symbols",
+  "version": "0.2.0"
+},
+"adapter": {
+  "lossless": false,
+  "name": "jsonl-events",
+  "options": {
+    "field": "tag"
+  }
+},
+"statistics": {
+  "alphabet_size": 20,
+  "corpus_records": 1,
+  "corpus_symbols": 16846,
+  "evolved_tokens": 2,
+  "merges_learned": 20,
+  "requested_vocab_size": 40,
+  "unique_windows": 66
+},
+"provenance": {
+  "corpus_fingerprints": [
+    "sha256:4c74275c1b93eac6321e46d3e55c800ab202ee381c25132e6a5092c77e9a8823"
+  ],
+  "training": {
+    "additions": [
+      [
+        "VALVE_7_STUCK"
+      ],
+      [
+        "VALVE_7_STUCK",
+        "OPERATOR_ACK"
+      ]
+    ],
+    "evolved_from": {
+      "digest": "sha256:35210fec3acb25d7e80a8a6b00f4af57dd4889cd2dbc406761a5d08d9d851046",
+      "version": "0.1.0"
+    },
+    "parent_training": {
+      "description": null,
+      "dictionary": [],
+      "license": null,
+      "max_corpus_units": null,
+      "max_token_length": null,
+      "min_frequency": 1,
+      "pretokenizer": "none",
+      "reserved_tokens": [],
+      "seed": 0,
+      "train_window": 256,
+      "vocab_size": 40,
+      "vocabulary_id": "conformance:events",
+      "vocabulary_version": "0.1.0"
+    }
+  }
+},
+"tokens": [
+{"id":0,"kind":"symbol","symbols":["COMM_LOSS"]},
+{"id":1,"kind":"symbol","symbols":["COMM_RESTORED"]},
+{"id":2,"kind":"symbol","symbols":["CURRENT_HI"]},
+{"id":3,"kind":"symbol","symbols":["DOOR_OPEN"]},
+{"id":4,"kind":"symbol","symbols":["FILTER_DP_HI"]},
+{"id":5,"kind":"symbol","symbols":["HEARTBEAT"]},
+{"id":6,"kind":"symbol","symbols":["MOTOR_TRIP"]},
+{"id":7,"kind":"symbol","symbols":["OPERATOR_ACK"]},
+{"id":8,"kind":"symbol","symbols":["PUMP_STOP_CMD"]},
+{"id":9,"kind":"symbol","symbols":["RESET_CMD"]},
+{"id":10,"kind":"symbol","symbols":["RUN_FB"]},
+{"id":11,"kind":"symbol","symbols":["RUN_FB_LOST"]},
+{"id":12,"kind":"symbol","symbols":["SHIFT_CHANGE"]},
+{"id":13,"kind":"symbol","symbols":["SPEED_OK"]},
+{"id":14,"kind":"symbol","symbols":["START_CMD"]},
+{"id":15,"kind":"symbol","symbols":["TANK_LEVEL_HI"]},
+{"id":16,"kind":"symbol","symbols":["TEMP_WARN"]},
+{"id":17,"kind":"symbol","symbols":["VALVE_FAULT"]},
+{"id":18,"kind":"symbol","symbols":["VALVE_OPEN_CMD"]},
+{"id":19,"kind":"symbol","symbols":["VALVE_TRAVEL_TIMEOUT"]},
+{"frequency":834,"id":20,"kind":"merge","symbols":["COMM_LOSS","COMM_RESTORED"]},
+{"frequency":827,"id":21,"kind":"merge","symbols":["VALVE_TRAVEL_TIMEOUT","VALVE_FAULT"]},
+{"frequency":822,"id":22,"kind":"merge","symbols":["VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK"]},
+{"frequency":816,"id":23,"kind":"merge","symbols":["VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK"]},
+{"frequency":798,"id":24,"kind":"merge","symbols":["CURRENT_HI","MOTOR_TRIP"]},
+{"frequency":798,"id":25,"kind":"merge","symbols":["OPERATOR_ACK","RESET_CMD"]},
+{"frequency":791,"id":26,"kind":"merge","symbols":["CURRENT_HI","MOTOR_TRIP","OPERATOR_ACK","RESET_CMD"]},
+{"frequency":778,"id":27,"kind":"merge","symbols":["PUMP_STOP_CMD","RUN_FB_LOST"]},
+{"frequency":774,"id":28,"kind":"merge","symbols":["TANK_LEVEL_HI","PUMP_STOP_CMD","RUN_FB_LOST"]},
+{"frequency":751,"id":29,"kind":"merge","symbols":["RUN_FB","SPEED_OK"]},
+{"frequency":746,"id":30,"kind":"merge","symbols":["START_CMD","RUN_FB","SPEED_OK"]},
+{"frequency":135,"id":31,"kind":"merge","symbols":["COMM_LOSS","COMM_RESTORED","HEARTBEAT"]},
+{"frequency":124,"id":32,"kind":"merge","symbols":["VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK","TEMP_WARN"]},
+{"frequency":120,"id":33,"kind":"merge","symbols":["SHIFT_CHANGE","TANK_LEVEL_HI","PUMP_STOP_CMD","RUN_FB_LOST"]},
+{"frequency":120,"id":34,"kind":"merge","symbols":["COMM_LOSS","COMM_RESTORED","FILTER_DP_HI"]},
+{"frequency":120,"id":35,"kind":"merge","symbols":["VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK","HEARTBEAT"]},
+{"frequency":118,"id":36,"kind":"merge","symbols":["DOOR_OPEN","TANK_LEVEL_HI","PUMP_STOP_CMD","RUN_FB_LOST"]},
+{"frequency":112,"id":37,"kind":"merge","symbols":["SHIFT_CHANGE","CURRENT_HI","MOTOR_TRIP","OPERATOR_ACK","RESET_CMD"]},
+{"frequency":110,"id":38,"kind":"merge","symbols":["START_CMD","RUN_FB","SPEED_OK","FILTER_DP_HI"]},
+{"frequency":104,"id":39,"kind":"merge","symbols":["START_CMD","RUN_FB","SPEED_OK","HEARTBEAT"]},
+{"id":40,"kind":"symbol","symbols":["VALVE_7_STUCK"]},
+{"id":41,"kind":"merge","symbols":["VALVE_7_STUCK","OPERATOR_ACK"]}
+],
+"merges": [
+{"id":20,"left":0,"right":1},
+{"id":21,"left":19,"right":17},
+{"id":22,"left":21,"right":7},
+{"id":23,"left":18,"right":22},
+{"id":24,"left":2,"right":6},
+{"id":25,"left":7,"right":9},
+{"id":26,"left":24,"right":25},
+{"id":27,"left":8,"right":11},
+{"id":28,"left":15,"right":27},
+{"id":29,"left":10,"right":13},
+{"id":30,"left":14,"right":29},
+{"id":31,"left":20,"right":5},
+{"id":32,"left":23,"right":16},
+{"id":33,"left":12,"right":28},
+{"id":34,"left":20,"right":4},
+{"id":35,"left":23,"right":5},
+{"id":36,"left":3,"right":28},
+{"id":37,"left":12,"right":26},
+{"id":38,"left":30,"right":4},
+{"id":39,"left":30,"right":5},
+{"id":41,"left":40,"right":7}
+],
+"test_vectors": [
+{"ids":[32,26,4,23,23,23,12,33,16,23],"symbols":["VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK","TEMP_WARN","CURRENT_HI","MOTOR_TRIP","OPERATOR_ACK","RESET_CMD","FILTER_DP_HI","VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK","VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK","VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK","SHIFT_CHANGE","SHIFT_CHANGE","TANK_LEVEL_HI","PUMP_STOP_CMD","RUN_FB_LOST","TEMP_WARN","VALVE_OPEN_CMD","VALVE_TRAVEL_TIMEOUT","VALVE_FAULT","OPERATOR_ACK"]}
+],
+"integrity": {
+  "algorithm": "sha256",
+  "digest": "sha256:58174af6e894d20f2d393313cbb0222dfa3c4a154313e6bbdc64950e39ef9153"
+}
+}
