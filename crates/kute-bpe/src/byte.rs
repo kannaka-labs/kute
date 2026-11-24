@@ -295,6 +295,35 @@ impl Tokenizer for BpeTokenizer {
                 for window in bytes.chunks(config.train_window) {
                     *chunk_counts.entry(window.to_vec()).or_insert(0) += 1;
                 }
+            } else if bytes.len() >= PARALLEL_MIN_BYTES && matches!(regex, Some(Splitter::Gpt4(_))) {
+                // A long text under the preset is cut where no match can
+                // cross (see `parallel_cuts`), the pieces are counted on
+                // every core, and the counts are added up. The chunks, and
+                // so the vocabulary, are the same as for the whole text.
+                let cuts = parallel_cuts(bytes);
+                let window = config.train_window.max(4096);
+                let parts: Vec<FxHashMap<&[u8], u64>> = cuts
+                    .par_windows(2)
+                    .map(|c| {
+                        let mut local: FxHashMap<&[u8], u64> = FxHashMap::default();
+                        for_each_chunk(regex.as_ref(), &bytes[c[0]..c[1]], |chunk| {
+                            for w in chunk.chunks(window) {
+                                *local.entry(w).or_insert(0) += 1;
+                            }
+                        });
+                        local
+                    })
+                    .collect();
+                for part in parts {
+                    for (chunk, n) in part {
+                        match chunk_counts.get_mut(chunk) {
+                            Some(total) => *total += n,
+                            None => {
+                                chunk_counts.insert(chunk.to_vec(), n);
+                            }
+                        }
+                    }
+                }
             } else {
                 for_each_chunk(regex.as_ref(), bytes, |chunk| {
                     // A pattern that matches nothing would hand back the whole
@@ -526,5 +555,35 @@ mod tests {
         let loaded = tokenizer.loaded().unwrap();
         assert!(parallel_cuts(text.as_bytes()).len() > 3, "the text should be cut into several pieces");
         assert_eq!(encode_bytes(loaded, text.as_bytes()), encode_piece(loaded, text.as_bytes()));
+    }
+
+    /// Counting a long text on several cores gives the vocabulary that
+    /// counting its pieces one after another gives.
+    #[test]
+    fn parallel_training_matches_serial() {
+        let words = ["alpha", "beta", "gamma", "delta", "x1", "42", "naïve", "日本", "don't", "--", "\t", "Ab", "aB"];
+        let mut state = 0x243f6a8885a308d3u64;
+        let mut text = String::new();
+        while text.len() < (PARALLEL_MIN_BYTES * 7) / 2 {
+            for _ in 0..(1 + xorshift(&mut state) % 14) {
+                text.push_str(words[(xorshift(&mut state) % words.len() as u64) as usize]);
+                text.push_str(if xorshift(&mut state) % 9 == 0 { "  " } else { " " });
+            }
+            text.push_str(match xorshift(&mut state) % 5 { 0 => "\n\n", 1 => " \n", 2 => "\r\n", _ => "\n" });
+        }
+        let bytes = text.as_bytes();
+        let cuts = parallel_cuts(bytes);
+        assert!(cuts.len() > 8);
+        let mut config = TrainingConfig::new(VocabularyId::parse("test:parallel-train").unwrap(), 700);
+        config.pretokenizer = kute_types::Pretokenizer::Gpt4;
+        let whole = BpeTokenizer::new().train(&mut kute_core::VecCorpus::new(vec![CanonicalInput::bytes(Modality::Text, bytes.to_vec())]), &config).unwrap();
+        // every piece is below the size at which counting goes parallel
+        let pieces: Vec<CanonicalInput> = cuts.windows(2).map(|c| CanonicalInput::bytes(Modality::Text, bytes[c[0]..c[1]].to_vec())).collect();
+        assert!(cuts.windows(2).all(|c| c[1] - c[0] < PARALLEL_MIN_BYTES));
+        let apart = BpeTokenizer::new().train(&mut kute_core::VecCorpus::new(pieces), &config).unwrap();
+        assert_eq!(whole.tokens, apart.tokens);
+        assert_eq!(whole.merges, apart.merges);
+        assert_eq!(whole.statistics.get("unique_chunks"), apart.statistics.get("unique_chunks"));
+        assert!(whole.merges.len() > 20, "{}", whole.merges.len());
     }
 }

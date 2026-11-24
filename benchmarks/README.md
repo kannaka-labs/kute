@@ -496,6 +496,17 @@ trainer gains little from more threads here, while `tokenizers` gets a
 large part of its training speed from them. That is why the training gap
 narrows on the 24-thread machine.
 
+After v0.6.0 the trainer counts the chunks of a long text on every core
+(the merging that follows is still one thread). The vocabulary is the same.
+On the laptop, ten runs with a wheel built from that change (report
+`results/tokenizers-enwik8-10runs-parallel-count.json`): KUTE trained in a
+median of 12.3 s (range 11.2 to 21.2) while `tokenizers`, in the same
+alternating runs, took 31.5 s (30.0 to 88.0). The machine was busier than
+during the table above (`tokenizers` took 27.0 s there), so compare the
+ratio and not the seconds: about 2.6 against 1.8 before. Counting was about
+8 s of a run and is now about 3 s; the rest of training does not use more
+threads yet. Not yet run on the 24-thread machine.
+
 How to read it:
 
 - The two trainers split text differently before merging, each by its

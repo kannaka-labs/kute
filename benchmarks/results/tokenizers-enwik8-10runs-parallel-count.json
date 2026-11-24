@@ -1,0 +1,65 @@
+{
+  "machine": {
+    "platform": "Windows-11-10.0.22621-SP0",
+    "processor": "Intel64 Family 6 Model 126 Stepping 5, GenuineIntel",
+    "logical_cpus": 8,
+    "python": "3.14.3"
+  },
+  "train_bytes": 90000189,
+  "eval_bytes": 9999811,
+  "vocab_size": 32768,
+  "kute": {
+    "version": "0.6.0",
+    "train_seconds": {
+      "median": 12.325,
+      "min": 11.241,
+      "max": 21.208,
+      "runs": 10
+    },
+    "encode_seconds": {
+      "median": 0.35,
+      "min": 0.283,
+      "max": 0.617,
+      "runs": 10
+    },
+    "eval_tokens": [
+      2551171
+    ],
+    "distinct_vocabulary_digests": 1,
+    "round_trip_exact": true
+  },
+  "tokenizers": {
+    "version": "0.23.2",
+    "train_seconds": {
+      "median": 31.507,
+      "min": 30.005,
+      "max": 87.987,
+      "runs": 10
+    },
+    "encode_seconds_one_document": {
+      "median": 10.6,
+      "min": 8.958,
+      "max": 21.273,
+      "runs": 10
+    },
+    "encode_seconds_batch_of_lines": {
+      "median": 3.599,
+      "min": 3.024,
+      "max": 5.948,
+      "runs": 10
+    },
+    "encode_seconds_batch_of_lines_fast": {
+      "median": 3.405,
+      "min": 3.036,
+      "max": 6.075,
+      "runs": 10
+    },
+    "eval_tokens": [
+      2703872
+    ],
+    "eval_tokens_batch_of_lines": [
+      2701223
+    ],
+    "round_trip_exact": true
+  }
+}
