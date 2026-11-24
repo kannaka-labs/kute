@@ -433,35 +433,52 @@ and its late half looks much like its early half, so this says nothing about
 data that drifts. Delta encoding, which the directive lists for this row, has
 nothing to work on here: the events are names without values.
 
-## Against Hugging Face `tokenizers` on text (after v0.5.0)
+## Against Hugging Face `tokenizers` on text (v0.5.0)
 
-`benchmarks/hf_compare.py` trains a byte-level BPE vocabulary of 32,768
-tokens with each tool on the first 90,000,189 bytes of enwik8 and encodes the
-last 9,999,811 bytes, which neither saw. Report:
-`results/tokenizers-enwik8.json`.
+`benchmarks/hf_repeat.py` calls both libraries from Python in one process,
+in alternation, ten times each. Each trains a byte-level BPE vocabulary of
+32,768 tokens on the first 90,000,189 bytes of enwik8, then encodes the last
+9,999,811 bytes, which neither saw. KUTE is the `kute-engine` 0.5.0 wheel
+from PyPI; `tokenizers` is 0.23.2. Machine: one 8-thread laptop (Intel Ice
+Lake, Windows 11, Python 3.14), not idle. Report:
+`results/tokenizers-enwik8-10runs.json`.
 
-| tool | train | tokens for the held-out text | encode | round trip |
-|---|---:|---:|---:|---|
-| KUTE (CLI, all cores) | 13.59 s | 2,551,171 | 0.281 s | exact |
-| tokenizers 0.23.2 | 56.25 s | 2,703,872 | 8.231 s as one document, 3.012 s as a batch of lines | exact |
-| tiktoken `cl100k_base`, pretrained on other data, 100,277 tokens | n/a | 2,573,485 | 1.812 s | exact |
+| | KUTE 0.5.0 | tokenizers 0.23.2 |
+|---|---:|---:|
+| train, median of 10 (range) | 14.6 s (12.9 to 18.6) | 27.0 s (22.5 to 57.8) |
+| tokens for the held-out text | 2,551,171 | 2,703,872 |
+| encode as one document, median (range) | 0.31 s (0.26 to 0.38) | 9.48 s (8.31 to 11.75) |
+| encode as a batch of lines, median (range) | not run | 2.99 s (2.69 to 3.55) |
+| decodes back to the input exactly | yes, all runs | yes, all runs |
+
+So on this text and this machine KUTE trained 1.8 times faster, produced
+5.6% fewer tokens, and encoded the held-out text about 10 times faster than
+`tokenizers` did in its faster form. All ten KUTE runs gave the same
+vocabulary digest.
 
 How to read it:
 
-- One run each on a machine that was doing other work. Treat the times as
-  rough; a second run gave the same order.
-- The KUTE times include starting the process and reading and writing
-  files. The other two are timed inside Python.
 - The two trainers split text differently before merging, each by its
-  default, so the token counts compare the tools as used, not one algorithm
-  against itself. KUTE needed 5.6% fewer tokens here.
-- `tokenizers` encodes one document on one thread; given the same text as a
-  batch of lines it uses its threads, and the line split changes its count
-  slightly (2,701,223).
-- The tiktoken row is for scale only: a vocabulary three times larger,
-  trained on other text.
-- An AST baseline for code, which the directive lists in this row, is not
-  measured.
+  default (`tokenizers` with its ByteLevel pre-tokenizer). Their vocabularies
+  differ, and so the token counts compare the tools as people use them, not
+  one algorithm against itself.
+- `tokenizers` encodes one document on one thread and a batch on several.
+  KUTE spreads one long document over every core. On a single thread the gap
+  in encode time would be smaller; that was not measured here.
+- The slowest `tokenizers` training run (57.8 s) was the first; the other
+  nine took 22.5 to 29.9 s.
+- One dataset, one machine. Nothing here says how either tool does on other
+  text, on code, or on other hardware.
+
+To reproduce:
+
+```
+pip install kute-engine==0.5.0 tokenizers==0.23.2
+python benchmarks/hf_repeat.py --train train.txt --eval eval.txt --runs 10
+```
+
+with `train.txt` and `eval.txt` the first 90,000,189 and last 9,999,811
+bytes of [enwik8](https://mattmahoney.net/dc/textdata.html).
 
 ## Resumed training (v0.5.0)
 
