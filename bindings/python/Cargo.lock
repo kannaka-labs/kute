@@ -183,7 +183,7 @@ checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "kute-adapters"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -192,7 +192,7 @@ dependencies = [
 
 [[package]]
 name = "kute-algorithms"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bench"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "flate2",
  "kute-engine",
@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bpe"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "fancy-regex",
  "kute-core",
@@ -227,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "kute-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "kute-types",
  "sha2",
@@ -235,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "kute-discover"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "kute-engine"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "kute-adapters",
  "kute-algorithms",
@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "kute-python"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "kute-bench",
  "kute-discover",
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "kute-types"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64",
  "flate2",
@@ -284,7 +284,7 @@ dependencies = [
 
 [[package]]
 name = "kute-vocab"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "flate2",
  "kute-types",

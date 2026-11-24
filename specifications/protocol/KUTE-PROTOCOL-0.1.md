@@ -84,12 +84,21 @@ vocabularies:
 
 * every token of the parent keeps its id and payload;
 * for each addition in order, each symbol not yet in the alphabet is appended
-  as a symbol token; then a sequence of two or more symbols is folded from
-  the left into merge tokens, reusing any merge that already exists;
-* the version is replaced, `statistics.evolved_tokens` is set, and
+  as a symbol token; then a sequence of two or more symbols is encoded with
+  the merges present so far, and while more than one token remains, the
+  first two are joined by a new merge token and the sequence is encoded
+  again. Afterwards the addition on its own encodes as one token;
+* the version is replaced, `generator` becomes `kute evolve-2` (the name of
+  this rule, so that releases implementing it agree on the digest),
+  `statistics.evolved_tokens` is set, and
   `provenance.training` becomes `{evolved_from: {version, digest},
   additions, parent_training}`;
 * expected ids of the embedded test vectors are recomputed.
+
+Releases up to v0.5.0 implemented an earlier rule (a left fold over the
+bare symbols, with `kute <release>` as generator). A peer on the earlier rule
+derives a different child; the digests differ and the proposal fails to
+agree, which is the intended outcome.
 
 A proposal that adds nothing, does not raise the version or uses a reserved
 token name is refused with `invalid`. The parent remains valid: sequences

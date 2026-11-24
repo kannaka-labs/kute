@@ -386,6 +386,53 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
+## Frozen, evolved and retrained event vocabularies (v0.6.0)
+
+`benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by
+time, and encodes the same held-out events (1,766,436 events, none seen by
+any vocabulary) with each of the vocabularies below. Sizes are the compressed
+container. Every row decoded back to the input exactly. Report:
+`results/evolution-hdfs-v1-192.json`.
+
+| vocabulary | tokens in vocabulary | tokens out | compressed bytes |
+|---|---:|---:|---:|
+| dictionary, one token per event name | 30 | 1,881,448 | 118,824 |
+| frozen: sequence-bpe on the early half | 192 | 255,332 | 85,311 |
+| evolved: frozen plus 24 patterns discovered in the late half | 216 | 253,341 | 85,375 |
+| retrained on all training events | 192 | 153,733 | 81,547 |
+| retrained, at the size of evolved | 216 | 144,926 | 81,596 |
+| mined: bare alphabet plus 162 discovered patterns, no pair merging | 193 | 399,211 | 93,234 |
+
+What this shows, on this one dataset:
+
+- Adding discovered patterns to a frozen vocabulary with `kute evolve` did
+  not help: 0.8% fewer tokens and no fewer bytes. The late half of this
+  data holds little the early half did not.
+- A vocabulary trained on the early half and never updated cost 4.6% more
+  bytes than retraining on everything, and emitted 66% more tokens.
+- Discovered patterns alone, without pair merging, sit between one token
+  per event and trained merges.
+
+These rows were first measured with the evolution step of v0.5.0
+(`results/evolution-hdfs-v1-256.json`, and the same table at 192 tokens:
+evolved 254,215 tokens and 85,322 bytes with 37 added tokens; mined 831,731
+tokens and 104,368 bytes with 202 added tokens). That step built an added
+sequence over bare symbols, which the parent's merges had already consumed,
+so most added tokens were never used. The step was changed (ADR-0021) and
+the table above is the rerun. The change halved the token count of the
+mined vocabulary; it did not change the verdict on evolving this data.
+
+The 256-token run also shows that every vocabulary above 256 tokens
+compressed about 17% worse than its 256-token counterpart, retrained ones
+included: frozen 81,511 bytes, evolved (310 tokens) 95,119, retrained
+80,793, retrained at 310 tokens 94,439. Past that size a token id no longer
+fits one byte.
+
+Limits: one dataset, one split, one run per row; HDFS_v1 has 30 event names
+and its late half looks much like its early half, so this says nothing about
+data that drifts. Delta encoding, which the directive lists for this row, has
+nothing to work on here: the events are names without values.
+
 ## Against Hugging Face `tokenizers` on text (v0.5.0)
 
 `benchmarks/hf_repeat.py` calls both libraries from Python in one process,
@@ -433,6 +480,22 @@ into. So read the speed figures as "faster on both machines measured, by
 between 1.1 and 1.8 times to train and 4 and 10 times to encode", not as
 one ratio.
 
+Both libraries held to one thread (`RAYON_NUM_THREADS=1`,
+`TOKENIZERS_PARALLELISM=false`), five runs each on the laptop; report
+`results/tokenizers-enwik8-1thread.json`:
+
+| | KUTE 0.5.0 | tokenizers 0.23.2 |
+|---|---:|---:|
+| train, median of 5 (range) | 12.4 s (11.9 to 16.4) | 49.0 s (40.0 to 53.0) |
+| encode as one document, median (range) | 0.63 s (0.52 to 0.78) | 7.82 s (7.32 to 8.65) |
+| encode as a batch of lines, median (range) | not run | 6.24 s (5.97 to 7.14) |
+
+On one thread KUTE trained about 4 times faster and encoded about 10 times
+faster. KUTE's training took no longer on one thread than on eight, so its
+trainer gains little from more threads here, while `tokenizers` gets a
+large part of its training speed from them. That is why the training gap
+narrows on the 24-thread machine.
+
 How to read it:
 
 - The two trainers split text differently before merging, each by its
@@ -440,8 +503,8 @@ How to read it:
   differ, and so the token counts compare the tools as people use them, not
   one algorithm against itself.
 - `tokenizers` encodes one document on one thread and a batch on several.
-  KUTE spreads one long document over every core. On a single thread the gap
-  in encode time would be smaller; that was not measured here.
+  KUTE spreads one long document over every core. The single-thread table
+  above removes that difference.
 - The slowest `tokenizers` training run (57.8 s) was the first; the other
   nine took 22.5 to 29.9 s.
 - One dataset, one machine. Nothing here says how either tool does on other

@@ -367,6 +367,13 @@ impl Tokenizer for SequenceBpeTokenizer {
     }
 }
 
+/// The `generator` an evolved vocabulary carries. The generator is part of
+/// the digest, so it names the rule of the evolution step and not the
+/// release that ran it: two releases that implement the same rule give the
+/// same child and the same digest. It changes only when the rule does.
+/// Rule 1 (v0.3.0 to v0.5.0) wrote `kute <release>` here.
+pub const EVOLVE_GENERATOR: &str = "kute evolve-2";
+
 /// Most additions one evolution step accepts.
 pub const MAX_ADDITIONS: usize = 65_536;
 
@@ -375,8 +382,10 @@ pub const MAX_ADDITIONS: usize = 65_536;
 ///
 /// The parent is not modified. Every token of the parent keeps its id and
 /// payload, so the child's table extends the parent's. New single symbols
-/// are appended as symbol tokens; a sequence is appended as a chain of merge
-/// tokens, reusing any merge the parent already has. The result is a pure
+/// are appended as symbol tokens; a sequence is first tokenized by the merges
+/// already present and the tokens that remain are joined by new merges, each
+/// applied to the whole sequence before the next is chosen, so the sequence
+/// on its own encodes as one token under the child. The result is a pure
 /// function of the parent, `additions` and `version`: two parties that
 /// apply the same step hold the same digest.
 ///
@@ -397,7 +406,7 @@ pub fn evolve(parent: &Vocabulary, additions: &[Vec<String>], version: kute_type
     let mut child = parent.clone();
     child.integrity = None;
     child.manifest.version = version;
-    child.manifest.generator = format!("kute {KUTE_VERSION}");
+    child.manifest.generator = EVOLVE_GENERATOR.to_string();
     let mut by_symbol: FxHashMap<String, u32> = FxHashMap::default();
     let mut by_pair: FxHashMap<Pair, u32> = FxHashMap::default();
     for t in &child.tokens {
@@ -443,20 +452,28 @@ pub fn evolve(parent: &Vocabulary, additions: &[Vec<String>], version: kute_type
             };
             ids.push(id);
         }
-        let mut left = ids[0];
-        let mut payload = vec![addition[0].clone()];
-        for (i, &right) in ids.iter().enumerate().skip(1) {
-            payload.push(addition[i].clone());
-            left = match by_pair.get(&(left, right)) {
-                Some(&id) => id,
-                None => {
-                    let id = child.tokens.len() as u32;
-                    child.tokens.push(TokenEntry { id, kind: TokenKind::Merge, payload: TokenPayload::Symbols(payload.clone()), frequency: None });
-                    child.merges.push(MergeRule { left, right, id });
-                    by_pair.insert((left, right), id);
-                    id
-                }
-            };
+        // Tokenize the addition as the vocabulary so far would, then join
+        // what is left, one new merge at a time. A chain built over the bare
+        // symbols would seldom apply: the encoder runs the earlier merges
+        // first, and they have already joined those symbols into other
+        // tokens. Each new merge is applied to the whole addition before the
+        // next is chosen, because the encoder will apply it that way too:
+        // in A A A A the merge of A A leaves two tokens, not three.
+        apply_merges(&mut ids, &by_pair);
+        let symbols_of = |tokens: &[TokenEntry], id: u32| match &tokens[id as usize].payload {
+            TokenPayload::Symbols(s) => s.clone(),
+            TokenPayload::Bytes(_) => Vec::new(),
+        };
+        while ids.len() > 1 {
+            // No pair left in `ids` is a known merge, so this one is new.
+            let (left, right) = (ids[0], ids[1]);
+            let mut payload = symbols_of(&child.tokens, left);
+            payload.extend(symbols_of(&child.tokens, right));
+            let id = child.tokens.len() as u32;
+            child.tokens.push(TokenEntry { id, kind: TokenKind::Merge, payload: TokenPayload::Symbols(payload), frequency: None });
+            child.merges.push(MergeRule { left, right, id });
+            by_pair.insert((left, right), id);
+            apply_merges(&mut ids, &by_pair);
         }
     }
     let added = child.tokens.len() - before;
