@@ -189,6 +189,11 @@ loses is the encode check that `kute validate` runs. Learned tokens are frequent
 remain visible in any vocabulary; that is inherent and is not hidden by this
 switch.
 
+Since v0.4.0 a training run through the engine also encodes and decodes the
+start of its first four records (up to 64 KiB or 4,096 symbols each) and
+fails if they do not come back exact. This check runs whether or not vectors
+are stored, and keeps nothing (issue #2).
+
 ## ADR-0019: Decoders can bound output before producing it
 
 `decoded_units` computes the decoded length from the token table alone, and

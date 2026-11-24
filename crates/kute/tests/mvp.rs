@@ -653,3 +653,50 @@ fn a_resumed_event_run_gives_the_vocabulary_of_one_run() {
     c.resume_from = Some(Box::new(bytes));
     assert!(engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &docs, &c).is_err());
 }
+
+/// Issue #2: a run checks its result even when no test vectors are stored.
+#[test]
+fn training_checks_its_result_without_storing_vectors() {
+    /// The `bytes` baseline, except that decoding drops the last token.
+    #[derive(Default)]
+    struct Lossy(Option<Box<dyn Tokenizer>>);
+
+    impl Tokenizer for Lossy {
+        fn train(&mut self, corpus: &mut dyn CorpusSource, config: &TrainingConfig) -> kute::Result<Vocabulary> {
+            let mut inner = Engine::new().registry().tokenizer("bytes")?;
+            let v = inner.train(corpus, config)?;
+            self.0 = Some(inner);
+            Ok(v)
+        }
+        fn load(&mut self, vocabulary: Vocabulary) -> kute::Result<()> {
+            self.0 = Some(Engine::new().tokenizer(vocabulary)?);
+            Ok(())
+        }
+        fn encode(&self, input: &CanonicalInput) -> kute::Result<TokenSequence> {
+            self.0.as_ref().unwrap().encode(input)
+        }
+        fn decode(&self, tokens: &TokenSequence) -> kute::Result<CanonicalInput> {
+            let mut t = tokens.clone();
+            t.ids.pop();
+            self.0.as_ref().unwrap().decode(&t)
+        }
+        fn vocabulary(&self) -> Option<&Vocabulary> {
+            self.0.as_ref().and_then(|t| t.vocabulary())
+        }
+        fn capabilities(&self) -> TokenizerCapabilities {
+            Engine::new().registry().tokenizer("bytes").unwrap().capabilities()
+        }
+    }
+
+    let mut engine = Engine::new();
+    engine.registry_mut().register_algorithm("lossy", || Box::new(Lossy::default())).unwrap();
+    let mut c = TrainingConfig::new(VocabularyId::parse("test:lossy").unwrap(), 256);
+    assert!(!c.embed_test_vectors);
+    c.pretokenizer = Pretokenizer::None;
+    let docs = vec![TEXT.as_bytes().to_vec()];
+    let err = engine.train("lossy", "binary", &AdapterConfig::default(), &docs, &c).unwrap_err();
+    assert!(err.to_string().contains("does not reproduce the start of training record 1"), "{err}");
+    // the honest algorithm passes, and nothing of the corpus is kept
+    let v = engine.train("bytes", "binary", &AdapterConfig::default(), &docs, &c).unwrap();
+    assert!(v.test_vectors.is_empty());
+}
