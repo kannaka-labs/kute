@@ -327,6 +327,25 @@ conversion.
 
 Measured on real data in `benchmarks/README.md`.
 
+## ADR-0027: Adapters reconstruct with the configuration they ingested with
+
+`jsonl-events` read the field named in its configuration and wrote the
+default name, `event`, on the way back, so its own output could not be fed
+to the same vocabulary (issue #3). `reconstruct` now receives the adapter
+configuration, which the vocabulary already stores. This changes the bytes
+that decoding produces for event vocabularies trained with a `field`
+option: `{"tag":"A"}` where earlier releases wrote `{"event":"A"}`. Token
+ids, files and digests are unaffected, and the two recorded `.expected`
+files for event sequences were updated to the new output.
+
+The JSON adapters' descriptions said values survive. They now say what
+happens: numbers beyond a 64-bit integer or a double are rounded to a
+double, and of repeated keys the last is kept. Refusing such input instead
+is not implemented.
+
+Token ids in the plain container must be in their shortest varint form;
+padded forms are refused (issue #4).
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats, training

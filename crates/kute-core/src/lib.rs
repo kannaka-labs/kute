@@ -101,7 +101,9 @@ pub trait ModalityAdapter: Send + Sync {
 
     fn ingest(&self, input: &[u8], config: &AdapterConfig) -> Result<CanonicalInput>;
 
-    fn reconstruct(&self, input: &CanonicalInput) -> Result<Vec<u8>>;
+    /// `config` is the configuration the input was ingested with; a
+    /// vocabulary stores it, so decoding uses the same field names and options.
+    fn reconstruct(&self, input: &CanonicalInput, config: &AdapterConfig) -> Result<Vec<u8>>;
 
     /// Must state whether reconstruction is lossless.
     fn capabilities(&self) -> AdapterCapabilities;

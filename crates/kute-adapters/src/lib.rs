@@ -77,7 +77,7 @@ impl ModalityAdapter for BinaryAdapter {
     fn ingest(&self, input: &[u8], _: &AdapterConfig) -> Result<CanonicalInput> {
         Ok(CanonicalInput::bytes(Modality::Binary, input))
     }
-    fn reconstruct(&self, input: &CanonicalInput) -> Result<Vec<u8>> {
+    fn reconstruct(&self, input: &CanonicalInput, _config: &AdapterConfig) -> Result<Vec<u8>> {
         bytes_of(input, BINARY)
     }
     fn capabilities(&self) -> AdapterCapabilities {
@@ -95,7 +95,7 @@ impl ModalityAdapter for TextAdapter {
         std::str::from_utf8(input).map_err(|e| KuteError::InvalidInput(format!("text adapter: not valid UTF-8 ({e}); use the binary adapter")))?;
         Ok(CanonicalInput::bytes(Modality::Text, input))
     }
-    fn reconstruct(&self, input: &CanonicalInput) -> Result<Vec<u8>> {
+    fn reconstruct(&self, input: &CanonicalInput, _config: &AdapterConfig) -> Result<Vec<u8>> {
         bytes_of(input, TEXT)
     }
     fn capabilities(&self) -> AdapterCapabilities {
@@ -112,11 +112,11 @@ impl ModalityAdapter for JsonAdapter {
     fn ingest(&self, input: &[u8], _: &AdapterConfig) -> Result<CanonicalInput> {
         Ok(CanonicalInput::bytes(Modality::Structured, canonical(&parse(input, "json adapter")?)?))
     }
-    fn reconstruct(&self, input: &CanonicalInput) -> Result<Vec<u8>> {
+    fn reconstruct(&self, input: &CanonicalInput, _config: &AdapterConfig) -> Result<Vec<u8>> {
         bytes_of(input, JSON)
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        caps(JSON, Modality::Structured, false, "One JSON document, re-serialized with sorted keys and no extra whitespace. Values survive; original formatting does not.")
+        caps(JSON, Modality::Structured, false, "One JSON document, re-serialized with sorted keys and no extra whitespace. Original formatting does not survive. Numbers that fit a 64-bit integer or a double survive; larger or more precise ones are rounded to a double. When an object repeats a key, the last value is kept.")
     }
 }
 
@@ -138,11 +138,11 @@ impl ModalityAdapter for JsonlAdapter {
         }
         Ok(CanonicalInput::bytes(Modality::Structured, out))
     }
-    fn reconstruct(&self, input: &CanonicalInput) -> Result<Vec<u8>> {
+    fn reconstruct(&self, input: &CanonicalInput, _config: &AdapterConfig) -> Result<Vec<u8>> {
         bytes_of(input, JSONL)
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        caps(JSONL, Modality::Structured, false, "One JSON value per line, each canonicalized; blank lines dropped. Values survive; original formatting does not.")
+        caps(JSONL, Modality::Structured, false, "One JSON value per line, each canonicalized; blank lines dropped. Original formatting does not survive. Numbers that fit a 64-bit integer or a double survive; larger or more precise ones are rounded to a double. When an object repeats a key, the last value is kept.")
     }
 }
 
@@ -185,13 +185,14 @@ impl ModalityAdapter for JsonlEventsAdapter {
         }
         Ok(CanonicalInput { modality: Modality::Events, payload: Payload::Symbols(symbols) })
     }
-    fn reconstruct(&self, input: &CanonicalInput) -> Result<Vec<u8>> {
+    fn reconstruct(&self, input: &CanonicalInput, config: &AdapterConfig) -> Result<Vec<u8>> {
+        let field = config.get("field").unwrap_or(DEFAULT_FIELD);
         let Payload::Symbols(symbols) = &input.payload else {
             return Err(KuteError::InvalidInput("the jsonl-events adapter reconstructs symbol payloads".into()));
         };
         let mut out = Vec::new();
         for s in symbols {
-            out.extend_from_slice(&serde_json::to_vec(&serde_json::json!({ DEFAULT_FIELD: s }))?);
+            out.extend_from_slice(&serde_json::to_vec(&serde_json::json!({ field: s }))?);
             out.push(b'\n');
         }
         Ok(out)
@@ -220,11 +221,11 @@ mod tests {
         let cfg = AdapterConfig::default();
         let data: Vec<u8> = (0u16..=255).map(|b| b as u8).collect();
         let c = BinaryAdapter.ingest(&data, &cfg).unwrap();
-        assert_eq!(BinaryAdapter.reconstruct(&c).unwrap(), data);
+        assert_eq!(BinaryAdapter.reconstruct(&c, &AdapterConfig::default()).unwrap(), data);
         assert!(BinaryAdapter.capabilities().lossless);
         let text = "naïve café — 日本語\r\n";
         let c = TextAdapter.ingest(text.as_bytes(), &cfg).unwrap();
-        assert_eq!(TextAdapter.reconstruct(&c).unwrap(), text.as_bytes());
+        assert_eq!(TextAdapter.reconstruct(&c, &AdapterConfig::default()).unwrap(), text.as_bytes());
         assert!(TextAdapter.ingest(&[0xff, 0xfe], &cfg).is_err());
     }
 
@@ -234,7 +235,7 @@ mod tests {
         let a = JsonAdapter.ingest(br#"{ "b": [1, 2.50, {"z":null,"a":true}], "a": "x" }"#, &cfg).unwrap();
         let b = JsonAdapter.ingest(br#"{"a":"x","b":[1,2.50,{"a":true,"z":null}]}"#, &cfg).unwrap();
         assert_eq!(a, b);
-        assert_eq!(JsonAdapter.reconstruct(&a).unwrap(), br#"{"a":"x","b":[1,2.5,{"a":true,"z":null}]}"#);
+        assert_eq!(JsonAdapter.reconstruct(&a, &AdapterConfig::default()).unwrap(), br#"{"a":"x","b":[1,2.5,{"a":true,"z":null}]}"#);
         assert!(!JsonAdapter.capabilities().lossless);
         assert!(JsonAdapter.ingest(b"{not json", &cfg).is_err());
     }
@@ -243,7 +244,7 @@ mod tests {
     fn jsonl_canonicalizes_each_line() {
         let cfg = AdapterConfig::default();
         let c = JsonlAdapter.ingest(b"{\"b\":1, \"a\":2}\r\n\n  {\"x\": [ ]}\n", &cfg).unwrap();
-        assert_eq!(JsonlAdapter.reconstruct(&c).unwrap(), b"{\"a\":2,\"b\":1}\n{\"x\":[]}\n");
+        assert_eq!(JsonlAdapter.reconstruct(&c, &AdapterConfig::default()).unwrap(), b"{\"a\":2,\"b\":1}\n{\"x\":[]}\n");
         let err = JsonlAdapter.ingest(b"{\"ok\":1}\n{broken\n", &cfg).unwrap_err().to_string();
         assert!(err.contains("line 2"), "{err}");
     }
@@ -255,5 +256,20 @@ mod tests {
         assert_eq!(c.payload, Payload::Symbols(vec!["MOTOR_START".into(), "MOTOR_TRIP".into()]));
         assert!(JsonlEventsAdapter.ingest(b"{\"other\":1}\n", &cfg).is_err());
         assert!(!JsonlEventsAdapter.capabilities().lossless);
+    }
+
+    #[test]
+    fn events_come_back_under_the_field_they_were_read_from() {
+        let config = AdapterConfig::default().with("field", "tag");
+        let raw = b"{\"tag\":\"A\",\"other\":1}
+{\"tag\":\"B\"}
+";
+        let c = JsonlEventsAdapter.ingest(raw, &config).unwrap();
+        let out = JsonlEventsAdapter.reconstruct(&c, &config).unwrap();
+        assert_eq!(out, b"{\"tag\":\"A\"}
+{\"tag\":\"B\"}
+");
+        // The adapter can read its own output.
+        assert_eq!(JsonlEventsAdapter.ingest(&out, &config).unwrap(), c);
     }
 }

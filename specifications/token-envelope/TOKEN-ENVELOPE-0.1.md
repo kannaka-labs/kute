@@ -76,6 +76,11 @@ offset  size  content
 9+H     ...   token ids, each an unsigned LEB128 varint of at most 5 bytes
 ```
 
+Each id is written in its shortest form. Readers MUST refuse a padded
+encoding (for example `85 00` for 5), so that equal sequences have equal
+bytes. Readers before KUTE v0.4.0 accepted padded forms; no KUTE writer
+has produced them.
+
 Header:
 
 | key                  | type    | meaning |

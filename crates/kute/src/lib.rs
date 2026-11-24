@@ -215,8 +215,8 @@ impl Engine {
     /// Tokens back to raw bytes, through the vocabulary's adapter.
     pub fn decode_raw(&self, tokenizer: &dyn Tokenizer, tokens: &TokenSequence) -> Result<Vec<u8>> {
         let vocabulary = tokenizer.vocabulary().ok_or_else(|| KuteError::NotTrained("tokenizer has no vocabulary".into()))?;
-        let (adapter, _) = self.adapter_of(vocabulary)?;
-        adapter.reconstruct(&tokenizer.decode(tokens)?)
+        let (adapter, config) = self.adapter_of(vocabulary)?;
+        adapter.reconstruct(&tokenizer.decode(tokens)?, &config)
     }
 
     /// Encode many documents in parallel. Output order matches input order.
