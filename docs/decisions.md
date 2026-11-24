@@ -369,6 +369,11 @@ No separate checkpoint format was added. The vocabulary already records its
 merges, corpus fingerprint and settings, and a resumed run is refused when
 the fingerprint or a setting that affects merging differs.
 
+A resumed run trusts the merges it is given. The checks establish that the
+earlier vocabulary claims the same corpus and settings, not that its merges
+are what training on that corpus produces; a file edited to pass them would
+steer the result. Resume only from a vocabulary you trained or trust.
+
 What this does not give: a run does not write intermediate files by itself,
 so to survive an interruption it has to be run in stages. Each stage reads
 the corpus again; on 90 MB of text that was about 7 of the 17 seconds a

@@ -85,6 +85,8 @@ pub struct TrainingConfig {
     /// goes on from where it stopped. The result is the vocabulary a single
     /// run to the new size would have produced. Not part of the recorded
     /// configuration: it changes how the result is reached, not the result.
+    /// Its merges are taken as given, so resume only from a vocabulary you
+    /// trained or trust.
     #[serde(skip)]
     pub resume_from: Option<Box<crate::Vocabulary>>,
 }
