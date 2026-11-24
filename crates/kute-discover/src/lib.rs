@@ -697,6 +697,12 @@ impl Reservoir {
     }
 }
 
+/// Time from `first` to `last`. Timestamps are any 64-bit integers, so the
+/// difference of two of them need not fit in one.
+fn span(first: i64, last: i64) -> Result<i64> {
+    last.checked_sub(first).ok_or_else(|| KuteError::InvalidInput(format!("the time from {first} to {last} does not fit in 64 bits")))
+}
+
 /// Measure every discovered pattern on a timed stream, in the stream's own
 /// time unit.
 ///
@@ -743,13 +749,13 @@ pub fn timing(discovery: &Discovery, stream: &kute_types::event::EventStream) ->
                 match discovery.patterns[i].kind {
                     PatternKind::Contiguous => {
                         if encoded.len() - start >= p.len() && encoded[start..start + p.len()] == p[..] {
-                            reservoirs[i].push(record.times[start + p.len() - 1] - record.times[start]);
+                            reservoirs[i].push(span(record.times[start], record.times[start + p.len() - 1])?);
                         }
                     }
                     PatternKind::Gapped => {
                         let end = (start + 1 + window).min(encoded.len());
                         if let Some(offset) = encoded[start + 1..end].iter().position(|&s| s == p[1]) {
-                            reservoirs[i].push(record.times[start + 1 + offset] - record.times[start]);
+                            reservoirs[i].push(span(record.times[start], record.times[start + 1 + offset])?);
                         }
                     }
                 }

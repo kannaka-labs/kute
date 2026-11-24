@@ -128,3 +128,29 @@ fn timing_needs_timestamps() {
     let found = discover(&s.symbol_records(), &Params::default()).unwrap();
     assert!(timing(&found, &s).is_err());
 }
+
+#[test]
+fn a_duration_that_does_not_fit_is_an_error_not_a_panic() {
+    let mut text = String::new();
+    for machine in 0..60 {
+        for _ in 0..3 {
+            text.push_str(&format!("{{\"machine\":\"m{machine}\",\"event\":\"START\",\"t\":{}}}\n", i64::MIN));
+            text.push_str(&format!("{{\"machine\":\"m{machine}\",\"event\":\"DONE\",\"t\":{}}}\n", i64::MAX));
+        }
+    }
+    let s = stream(&text);
+    let d = discover(&s.symbol_records(), &Params::default()).unwrap();
+    assert!(!d.patterns.is_empty());
+    assert!(timing(&d, &s).is_err());
+}
+
+#[test]
+fn split_last_keeps_a_record_on_each_side() {
+    assert!(EventStream::new(schema()).unwrap().split_last(0.5).is_err());
+    assert!(stream(r#"{"machine":"a","event":"START","t":1}"#).split_last(0.5).is_err());
+    let two = stream("{\"machine\":\"a\",\"event\":\"START\",\"t\":1}\n{\"machine\":\"b\",\"event\":\"START\",\"t\":2}");
+    for fraction in [0.01, 0.5, 0.99] {
+        let (head, tail) = two.clone().split_last(fraction).unwrap();
+        assert_eq!((head.records.len(), tail.records.len()), (1, 1));
+    }
+}
