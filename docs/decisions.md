@@ -245,6 +245,15 @@ digest, than under v0.5.0 and earlier. Two parties must run the same side of
 this change to agree on an evolved vocabulary; they find out by comparing
 digests, as before.
 
+The reviewer then found that a new merge has to be applied to the whole
+addition before the next is chosen, since the encoder applies it that way
+(an addition such as `A A A A` otherwise leaves unused tokens), and that the
+child carried `kute <release>` as its generator. The generator is part of
+the digest, so two releases could never agree on an evolved vocabulary even
+when they ran the same step. An evolved vocabulary now carries
+`kute evolve-2`: the name of the rule, which changes only when the rule
+does. Releases up to v0.5.0 implement rule 1 and do not agree with rule 2.
+
 ## ADR-0022: A small request-reply protocol, with the peer logic free of I/O
 
 `kute-protocol` implements the message set of the directive for two peers

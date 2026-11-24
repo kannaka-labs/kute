@@ -721,6 +721,9 @@ fn an_evolved_sequence_is_used_where_the_parent_merges_inside_it() {
     let additions = vec![pattern.iter().map(|s| s.to_string()).collect::<Vec<_>>()];
     let child = kute::bpe::sequence::evolve(&parent, &additions, Version::parse("0.2.0").unwrap()).unwrap();
     assert_eq!(child.tokens.len(), parent.tokens.len() + 1);
+    // the digest must not depend on which release ran the step
+    assert_eq!(child.manifest.generator, kute::bpe::sequence::EVOLVE_GENERATOR);
+    assert_eq!(kute::bpe::sequence::EVOLVE_GENERATOR, "kute evolve-2");
     assert_eq!(&child.tokens[..parent.tokens.len()], &parent.tokens[..]);
     let tokenizer = engine.tokenizer(child).unwrap();
     let after = tokenizer.encode(&CanonicalInput::symbols(pattern)).unwrap();

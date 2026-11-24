@@ -367,6 +367,13 @@ impl Tokenizer for SequenceBpeTokenizer {
     }
 }
 
+/// The `generator` an evolved vocabulary carries. The generator is part of
+/// the digest, so it names the rule of the evolution step and not the
+/// release that ran it: two releases that implement the same rule give the
+/// same child and the same digest. It changes only when the rule does.
+/// Rule 1 (v0.3.0 to v0.5.0) wrote `kute <release>` here.
+pub const EVOLVE_GENERATOR: &str = "kute evolve-2";
+
 /// Most additions one evolution step accepts.
 pub const MAX_ADDITIONS: usize = 65_536;
 
@@ -399,7 +406,7 @@ pub fn evolve(parent: &Vocabulary, additions: &[Vec<String>], version: kute_type
     let mut child = parent.clone();
     child.integrity = None;
     child.manifest.version = version;
-    child.manifest.generator = format!("kute {KUTE_VERSION}");
+    child.manifest.generator = EVOLVE_GENERATOR.to_string();
     let mut by_symbol: FxHashMap<String, u32> = FxHashMap::default();
     let mut by_pair: FxHashMap<Pair, u32> = FxHashMap::default();
     for t in &child.tokens {
