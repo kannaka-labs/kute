@@ -728,3 +728,65 @@ fn an_evolved_sequence_is_used_where_the_parent_merges_inside_it() {
     let back = tokenizer.decode(&after).unwrap();
     assert_eq!(back.payload, Payload::Symbols(pattern.iter().map(|s| s.to_string()).collect()));
 }
+
+/// An added sequence that repeats inside itself must still come out as one
+/// token: each new merge is applied to the rest of the sequence before the
+/// next one is chosen, as the encoder will apply it.
+#[test]
+fn an_evolved_sequence_that_repeats_is_one_token() {
+    let engine = Engine::new();
+    let mut text = String::new();
+    for name in ["A", "B", "C", "D"] {
+        text.push_str(&format!("{{\"event\":\"{name}\"}}\n"));
+    }
+    let docs = vec![text.into_bytes()];
+    let mut c = config("test:evolve-repeat", 4);
+    c.pretokenizer = Pretokenizer::None;
+    let parent = engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &docs, &c).unwrap();
+    for pattern in [vec!["A", "A", "A", "A"], vec!["A", "B", "A", "B"], vec!["A", "B", "A", "B", "A"], vec!["C", "C", "C", "D", "C", "C", "C"]] {
+        let additions = vec![pattern.iter().map(|s| s.to_string()).collect::<Vec<_>>()];
+        let child = kute::bpe::sequence::evolve(&parent, &additions, Version::parse("0.2.0").unwrap()).unwrap();
+        let tokenizer = engine.tokenizer(child).unwrap();
+        let ids = tokenizer.encode(&CanonicalInput::symbols(pattern.clone())).unwrap();
+        assert_eq!(ids.ids.len(), 1, "{pattern:?} encoded as {:?}", ids.ids);
+        let back = tokenizer.decode(&ids).unwrap();
+        assert_eq!(back.payload, Payload::Symbols(pattern.iter().map(|s| s.to_string()).collect()));
+    }
+}
+
+/// Whatever the parent has merged and however an addition repeats, every
+/// addition encodes as one token under the child, the parent's table is a
+/// prefix of the child's, and the step gives the same digest twice.
+#[test]
+fn every_evolved_sequence_is_one_token_over_many_parents() {
+    let engine = Engine::new();
+    let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut next = |n: u64| {
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (state >> 33) % n
+    };
+    for round in 0..200 {
+        let alphabet = 2 + next(4);
+        let mut text = String::new();
+        for _ in 0..(40 + next(200)) {
+            text.push_str(&format!("{{\"event\":\"S{}\"}}\n", next(alphabet)));
+        }
+        let mut c = config("test:evolve-many", (alphabet + next(12)) as u32);
+        c.pretokenizer = Pretokenizer::None;
+        let parent = engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &[text.into_bytes()], &c).unwrap();
+        // Two more names than the corpus has, so some additions bring new symbols.
+        let additions: Vec<Vec<String>> = (0..1 + next(6)).map(|_| (0..2 + next(14)).map(|_| format!("S{}", next(alphabet + 2))).collect()).collect();
+        let Ok(child) = kute::bpe::sequence::evolve(&parent, &additions, Version::parse("0.2.0").unwrap()) else {
+            continue; // every addition was already a token
+        };
+        let again = kute::bpe::sequence::evolve(&parent, &additions, Version::parse("0.2.0").unwrap()).unwrap();
+        assert_eq!(child.digest().unwrap(), again.digest().unwrap(), "round {round}");
+        assert_eq!(&child.tokens[..parent.tokens.len()], &parent.tokens[..], "round {round}");
+        let tokenizer = engine.tokenizer(child).unwrap();
+        for addition in &additions {
+            let ids = tokenizer.encode(&CanonicalInput::symbols(addition.iter().map(String::as_str))).unwrap();
+            assert_eq!(ids.ids.len(), 1, "round {round}: {addition:?} encoded as {:?}", ids.ids);
+            assert_eq!(tokenizer.decode(&ids).unwrap().payload, Payload::Symbols(addition.clone()), "round {round}");
+        }
+    }
+}
