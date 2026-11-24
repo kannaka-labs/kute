@@ -290,6 +290,7 @@ impl Engine {
             modality: v.manifest.modality,
             adapter: v.adapter.as_ref().map(|a| a.name.clone()),
             ids: tokens,
+            escapes: Vec::new(),
         };
         py.detach(|| self.inner.decode_raw(tokenizer.as_ref().as_ref(), &sequence)).map_err(err)
     }

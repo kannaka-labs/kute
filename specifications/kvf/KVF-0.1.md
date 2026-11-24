@@ -189,14 +189,46 @@ envelope specification).
 
 `integrity` is `{"algorithm": "sha256", "digest": "sha256:<hex>", "signatures": [...]}`.
 
-The digest is SHA-256 over the canonical serialization of the document without
-the `integrity` key. Canonical serialization in 0.1 is the reference
-implementation's compact JSON: keys in the order of the tables in this
-document, optional keys with no value left out, no insignificant whitespace,
-strings escaped as `serde_json` escapes them, integers in decimal. Because
-that definition leans on one implementation, a byte-level canonical form
-(RFC 8785 or CBOR) is planned before 1.0; until then, treat the digest as
-verifiable by the reference implementation.
+The digest is SHA-256 over the canonical serialization of the document
+without the `integrity` key. The layout of a `.kvf` file on disk carries no
+meaning; the canonical form is built from the parsed content:
+
+1. UTF-8 JSON with no whitespace between tokens.
+2. Objects defined by this document have their keys in this order, and an
+   optional key with no value is left out (never written as `null`):
+   * document: `manifest`, `pretokenizer`?, `adapter`?, `tokens`, `merges`,
+     `statistics`, `provenance`, `test_vectors`, `representations`? (left
+     out when empty). `merges`, `statistics`, `provenance` and
+     `test_vectors` are always written, empty if need be;
+   * manifest: `kvf_version`, `id`, `version`, `algorithm`, `modality`,
+     `payload_kind`, `lossless`, `description`?, `created`?, `generator`;
+   * adapter: `name`, `options`? (left out when empty), `lossless`;
+   * token: `id`, `kind`, then `bytes` or `symbols`, `frequency`?;
+   * merge rule: `left`, `right`, `id`;
+   * provenance: `corpus_fingerprints`, `license`?, `training`?;
+   * test vector: `bytes` or `symbols`, then `ids`;
+   * representation: `mapping_id`, `mapping_version`, `kind`, `uri`?.
+3. Maps with free keys (`statistics`, adapter `options`, and every object
+   inside `provenance.training`) have their keys sorted by Unicode code
+   point.
+4. Integers are written in decimal with no sign, leading zeros or exponent.
+   Numbers with a fraction have no canonical form and must not appear.
+5. Strings are written in double quotes. `"` and `\` are escaped with a
+   backslash; U+0008, U+000C, U+000A, U+000D and U+0009 as `\b`, `\f`,
+   `\n`, `\r`, `\t`; other characters below U+0020 as `\u00xx` with
+   lower-case hex digits; everything else, including U+007F and all
+   non-ASCII characters, as itself in UTF-8.
+6. `bytes` values are standard base64 with padding.
+
+This definition is checked by a second implementation:
+`conformance/kvf_digest.py` computes the digest from this section with the
+Python standard library and no KUTE code, and CI runs it against the files
+in `specifications/kvf/vectors` and against freshly trained vocabularies.
+The same directory holds token sequences with the bytes they must decode to;
+the files under `v0.2.0` were written by that release and must stay readable.
+
+The canonical form is specific to KVF. Adopting a general scheme (RFC 8785
+or CBOR) would change every digest and is not planned for 0.x.
 
 A reader MUST verify the digest when present and reject the file on mismatch.
 

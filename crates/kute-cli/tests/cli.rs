@@ -118,6 +118,84 @@ fn use_case_4_industrial_events() {
     let ids = ok(&dir, &["encode", "--vocab", "industrial.kvf", "--input", "data/alarms-eval.jsonl"]);
     assert_eq!(ids["vocabulary_id"], "kute:industrial:events");
     assert!(ids["ids"].as_array().unwrap().len() > 100);
+    // A frozen vocabulary meets an event it has never seen.
+    let mut novel = read(&dir, "data/alarms-eval.jsonl");
+    novel.extend_from_slice(b"{\"tag\":\"VALVE_7_STUCK\"}\n");
+    std::fs::write(dir.join("novel.jsonl"), &novel).unwrap();
+    let refused = fails(&dir, &["encode", "--vocab", "industrial.kvf", "--input", "novel.jsonl", "--output", "novel.kute"]);
+    assert!(refused.contains("VALVE_7_STUCK"), "{refused}");
+    let escaped = ok(&dir, &["encode", "--vocab", "industrial.kvf", "--input", "novel.jsonl", "--output", "novel.kute", "--unknown", "escape", "--compress"]);
+    assert_eq!(escaped["escaped_symbols"], 1);
+    let over = fails(&dir, &["decode", "--vocab", "industrial.kvf", "--input", "novel.kute", "--output", "novel.out", "--max-units", "5"]);
+    assert!(over.contains("limit exceeded"), "{over}");
+    ok(&dir, &["decode", "--vocab", "industrial.kvf", "--input", "novel.kute", "--output", "novel.out"]);
+    let decoded = String::from_utf8(read(&dir, "novel.out")).unwrap();
+    assert!(decoded.trim_end().ends_with("VALVE_7_STUCK\"}"), "the unseen event must come back");
+    // A private corpus: no excerpts in the published file.
+    ok(&dir, &[
+        "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:private", "--algorithm", "sequence-bpe",
+        "--adapter", "jsonl-events", "--adapter-option", "field=tag", "--vocab-size", "64", "--no-test-vectors", "--output", "private.kvf",
+    ]);
+    let private: serde_json::Value = serde_json::from_slice(&read(&dir, "private.kvf")).unwrap();
+    assert_eq!(private["test_vectors"].as_array().unwrap().len(), 0);
+    // Discovery needs no vocabulary: patterns with evidence, checked on the
+    // evaluation file and against a shuffled control.
+    let found = ok(&dir, &[
+        "discover", "--input", "data/alarms-train.jsonl", "--adapter-option", "field=tag",
+        "--holdout", "data/alarms-eval.jsonl", "--control", "--top", "10", "--output", "patterns.json",
+    ]);
+    let patterns = found["discovery"]["patterns"].as_array().unwrap();
+    assert!(!patterns.is_empty());
+    assert!(patterns[0]["support"].as_u64().unwrap() >= 5);
+    assert!(patterns[0]["examples"].as_array().is_some_and(|e| !e.is_empty()));
+    assert!(found["discovery"]["observation"]["fingerprint"].as_str().unwrap().starts_with("sha256:"));
+    assert!(found["held_out"]["confirmed"].as_u64().unwrap() >= 1);
+    assert!(found["control"]["coverage"].as_f64().unwrap() < found["discovery"]["coverage"].as_f64().unwrap());
+    assert!(dir.join("patterns.json").exists());
+    // Evolution: the unseen event becomes a token of the next version, and
+    // every old id keeps its meaning.
+    let evolved = ok(&dir, &[
+        "evolve", "--vocab", "industrial.kvf", "--add", "VALVE_7_STUCK", "--new-version", "0.2.0", "--output", "industrial-0.2.kvf",
+    ]);
+    assert_eq!(evolved["summary"]["tokens"].as_u64().unwrap(), evolved["parent"]["tokens"].as_u64().unwrap() + 1);
+    ok(&dir, &["validate", "industrial-0.2.kvf"]);
+    ok(&dir, &["encode", "--vocab", "industrial-0.2.kvf", "--input", "novel.jsonl", "--output", "novel-0.2.kute"]);
+    assert!(fails(&dir, &["evolve", "--vocab", "industrial.kvf", "--add", "X", "--new-version", "0.0.1", "--output", "bad.kvf"]).contains("greater"));
+    // Two processes: one serves with no vocabulary, the other shares its
+    // vocabulary, proposes the new event and sends a file.
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let address = format!("127.0.0.1:{port}");
+    let server = std::process::Command::new(env!("CARGO_BIN_EXE_kute"))
+        .current_dir(&dir)
+        .args(["peer", "serve", "--listen", &address, "--accept-proposals", "--output-dir", "received"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut sent = None;
+    for _ in 0..100 {
+        let out = kute(&dir, &[
+            "peer", "send", "--connect", &address, "--vocab", "industrial.kvf", "--input", "novel.jsonl",
+            "--propose", "VALVE_7_STUCK", "--new-version", "0.2.0",
+        ]);
+        if out.status.success() {
+            sent = Some(serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap());
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let sent = sent.expect("the sender never connected");
+    assert_eq!(sent["vocabulary_transferred"], true);
+    assert_eq!(sent["sent"][0]["receipt_matches"], true);
+    let served = server.wait_with_output().unwrap();
+    assert!(served.status.success(), "{}", String::from_utf8_lossy(&served.stderr));
+    let served: serde_json::Value = serde_json::from_slice(&served.stdout).unwrap();
+    assert_eq!(served["vocabularies_received"].as_array().unwrap().len(), 2);
+    assert_eq!(served["received"][0]["escaped_symbols"], 0);
+    // Both processes derived the same evolved vocabulary as `kute evolve` did.
+    assert_eq!(sent["vocabulary_after_proposal"], evolved["summary"]["digest"]);
+    let received = String::from_utf8(read(&dir, "received/message-1.bin")).unwrap();
+    assert!(received.trim_end().ends_with("VALVE_7_STUCK\"}"));
     // Dictionary baseline over the same events, then compare the two.
     ok(&dir, &[
         "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:event-names", "--algorithm", "dictionary",

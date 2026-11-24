@@ -33,6 +33,11 @@ enum Command {
         /// Write the compressed container (format 2) instead of plain varint ids.
         #[arg(long, requires = "output")]
         compress: bool,
+        /// What to do with a symbol the vocabulary does not contain:
+        /// `strict` refuses the input, `escape` carries the symbol literally
+        /// in the sequence so it still decodes exactly.
+        #[arg(long, default_value = "strict")]
+        unknown: String,
     },
     /// Decode a .kute token sequence back to bytes.
     Decode {
@@ -43,6 +48,10 @@ enum Command {
         /// Where to write the decoded bytes. Without it, they go to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Refuse a sequence that would decode to more than this many bytes
+        /// or symbols. Use it for sequences from an untrusted source.
+        #[arg(long)]
+        max_units: Option<u64>,
     },
     /// Summarize a vocabulary, or show tokens from it.
     Inspect {
@@ -92,6 +101,30 @@ enum Command {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Find recurring patterns in symbol streams, without training a tokenizer.
+    Discover(Box<DiscoverArgs>),
+    /// Derive the next version of an event vocabulary by adding symbols or
+    /// symbol sequences. Existing token ids do not change.
+    Evolve {
+        #[arg(long)]
+        vocab: PathBuf,
+        /// A symbol, or several separated by spaces for a sequence. Repeatable.
+        #[arg(long = "add", required = true, value_name = "SYMBOLS")]
+        additions: Vec<String>,
+        /// Version of the new vocabulary; must be greater than the current one.
+        #[arg(long)]
+        new_version: String,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Exchange vocabularies and encoded messages with another kute process.
+    /// No encryption or authentication: use a trusted network.
+    Peer {
+        #[command(subcommand)]
+        action: PeerAction,
+    },
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
     /// Write the seeded example datasets used by the documentation.
@@ -105,6 +138,254 @@ enum Command {
 #[derive(Clone, Copy, ValueEnum)]
 enum ExportFormat {
     Tiktoken,
+}
+
+#[derive(Subcommand)]
+enum PeerAction {
+    /// Wait for one connection and answer it until it closes.
+    Serve {
+        /// Address to listen on, e.g. 127.0.0.1:7411.
+        #[arg(long)]
+        listen: String,
+        /// Vocabularies this side already holds. Repeatable.
+        #[arg(long)]
+        vocab: Vec<PathBuf>,
+        /// Refuse vocabularies this side does not already hold.
+        #[arg(long)]
+        no_new_vocabularies: bool,
+        /// Let the other side extend vocabularies held here.
+        #[arg(long)]
+        accept_proposals: bool,
+        /// Refuse a message that decodes to more than this many units.
+        #[arg(long, default_value_t = 268_435_456)]
+        max_units: u64,
+        /// Write each decoded message and each vocabulary received here.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+    },
+    /// Connect, make sure the other side holds the vocabulary, and send files.
+    Send {
+        /// Address to connect to.
+        #[arg(long)]
+        connect: String,
+        #[arg(long)]
+        vocab: PathBuf,
+        /// Files to encode and send. Repeatable.
+        #[arg(long, num_args = 0..)]
+        input: Vec<PathBuf>,
+        /// strict or escape; see `kute encode --unknown`.
+        #[arg(long, default_value = "strict")]
+        unknown: String,
+        /// Before sending, propose these additions (as in `kute evolve --add`).
+        #[arg(long = "propose", value_name = "SYMBOLS", requires = "new_version")]
+        additions: Vec<String>,
+        #[arg(long)]
+        new_version: Option<String>,
+    },
+}
+
+fn split_additions(additions: &[String]) -> Vec<Vec<String>> {
+    additions.iter().map(|a| a.split_whitespace().map(str::to_string).collect()).collect()
+}
+
+fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
+    use kute_protocol::{Framed, Peer, Policy, Session, DEFAULT_MAX_FRAME};
+    match action {
+        PeerAction::Serve { listen, vocab: held, no_new_vocabularies, accept_proposals, max_units, output_dir } => {
+            let policy = Policy { accept_vocabularies: !no_new_vocabularies, accept_proposals, max_decoded_units: max_units, ..Policy::default() };
+            let mut peer = Peer::new("kute", engine, policy);
+            for path in &held {
+                peer.add_vocabulary(vocab::load(path)?)?;
+            }
+            let before = peer.digests();
+            let listener = std::net::TcpListener::bind(&listen)?;
+            eprintln!("listening on {}", listener.local_addr()?);
+            let (stream, from) = listener.accept()?;
+            let mut session = Session::new(peer, Framed::new(stream, DEFAULT_MAX_FRAME));
+            let handled = session.serve()?;
+            let inbox = session.peer.take_inbox();
+            let new: Vec<String> = session.peer.digests().into_iter().filter(|d| !before.contains(d)).collect();
+            if let Some(dir) = &output_dir {
+                std::fs::create_dir_all(dir)?;
+                for message in &inbox {
+                    std::fs::write(dir.join(format!("message-{}.bin", message.id)), &message.bytes)?;
+                }
+                for digest in &new {
+                    if let Some(v) = session.peer.vocabulary(digest) {
+                        let name = format!("{}-{}.kvf", v.id().as_str().replace(':', "_"), v.version());
+                        vocab::save(v, dir.join(name), true)?;
+                    }
+                }
+            }
+            print(&json!({
+                "from": from.to_string(),
+                "messages_handled": handled,
+                "vocabularies_received": new,
+                "received": inbox.iter().map(|m| json!({
+                    "id": m.id,
+                    "bytes": m.bytes.len(),
+                    "tokens": m.sequence.ids.len(),
+                    "escaped_symbols": m.sequence.escapes.len(),
+                    "vocabulary": format!("{} {}", m.sequence.vocabulary_id, m.sequence.vocabulary_version),
+                })).collect::<Vec<_>>(),
+            }))
+        }
+        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version } => {
+            let policy = kute::UnknownPolicy::parse(&unknown)?;
+            let mut peer = Peer::new("kute", engine, Policy::default());
+            let mut digest = peer.add_vocabulary(vocab::load(&vocab_path)?)?;
+            let mut session = Session::new(peer, Framed::new(std::net::TcpStream::connect(&connect)?, DEFAULT_MAX_FRAME));
+            let remote = session.connect()?;
+            let transferred = session.share(&digest)?;
+            let mut proposed = None;
+            if let Some(version) = &new_version {
+                digest = session.propose(&digest, &split_additions(&additions), version)?;
+                proposed = Some(digest.clone());
+            }
+            let mut sent = Vec::new();
+            for path in &input {
+                let raw = std::fs::read(path)?;
+                let units = session.send(&digest, &raw, policy)?;
+                sent.push(json!({ "input": path, "bytes": raw.len(), "units_decoded_by_peer": units, "receipt_matches": true }));
+            }
+            print(&json!({
+                "peer": remote.peer,
+                "peer_software": remote.software,
+                "vocabulary_transferred": transferred,
+                "vocabulary_after_proposal": proposed,
+                "sent": sent,
+            }))
+        }
+    }
+}
+
+#[derive(clap::Args)]
+struct DiscoverArgs {
+    /// Files or directories to look for patterns in.
+    #[arg(long, required = true, num_args = 1..)]
+    input: Vec<PathBuf>,
+    /// Adapter that turns each file into one record of symbols.
+    #[arg(long, default_value = "jsonl-events")]
+    adapter: String,
+    /// Adapter option as key=value. Repeatable.
+    #[arg(long = "adapter-option", value_name = "KEY=VALUE")]
+    adapter_options: Vec<String>,
+    /// Read plain text instead of using an adapter: every line is one
+    /// record, symbols separated by whitespace.
+    #[arg(long, conflicts_with_all = ["adapter", "adapter_options"])]
+    lines: bool,
+    /// Files with held-out data to check the patterns against.
+    #[arg(long, num_args = 1.., conflicts_with = "holdout_fraction")]
+    holdout: Vec<PathBuf>,
+    /// Hold out this share of the input instead. With --lines the last
+    /// records are held out; otherwise the end of each record.
+    #[arg(long)]
+    holdout_fraction: Option<f64>,
+    #[arg(long, default_value_t = 5)]
+    min_support: u64,
+    /// Longest contiguous pattern, in symbols.
+    #[arg(long, default_value_t = 8)]
+    max_length: usize,
+    /// Minimum cohesion in bits: how much more often than chance.
+    #[arg(long, default_value_t = 1.0)]
+    min_cohesion: f64,
+    /// Gapped pairs look this many symbols ahead; 0 turns them off.
+    #[arg(long, default_value_t = 8)]
+    window: usize,
+    /// Report at most this many patterns of each kind.
+    #[arg(long, default_value_t = 50)]
+    top: usize,
+    /// Also run on a shuffled copy of the input (same symbol counts, no
+    /// order) and report how much the method finds there.
+    #[arg(long)]
+    control: bool,
+    /// Also write the JSON report to this file.
+    #[arg(long)]
+    output: Option<PathBuf>,
+}
+
+fn read_records(engine: &Engine, args: &DiscoverArgs, paths: &[PathBuf]) -> kute::Result<Vec<Vec<String>>> {
+    let mut adapter_config = AdapterConfig::default();
+    for option in &args.adapter_options {
+        let (key, value) = option
+            .split_once('=')
+            .ok_or_else(|| KuteError::InvalidConfig(format!("adapter option {option:?}: expected key=value")))?;
+        adapter_config = adapter_config.with(key, value);
+    }
+    let mut records = Vec::new();
+    for path in paths {
+        for file in kute::collect_files(path)? {
+            let raw = std::fs::read(&file)?;
+            if args.lines {
+                let text = String::from_utf8(raw).map_err(|_| KuteError::InvalidInput(format!("{}: not UTF-8", file.display())))?;
+                records.extend(text.lines().map(|l| l.split_whitespace().map(str::to_string).collect::<Vec<_>>()).filter(|r| !r.is_empty()));
+            } else {
+                let input = engine.registry().adapter(&args.adapter)?.ingest(&raw, &adapter_config)?;
+                records.extend(kute_discover::records_of(&[input])?);
+            }
+        }
+    }
+    if records.is_empty() {
+        return Err(KuteError::InvalidInput("no records found in the input".into()));
+    }
+    Ok(records)
+}
+
+fn discover(engine: &Engine, args: DiscoverArgs) -> kute::Result<()> {
+    use kute_discover as kd;
+    let params = kd::Params {
+        min_support: args.min_support,
+        max_length: args.max_length,
+        min_cohesion_bits: args.min_cohesion,
+        window: args.window,
+        max_patterns: args.top,
+        ..kd::Params::default()
+    };
+    let mut records = read_records(engine, &args, &args.input)?;
+    let mut held_out = if args.holdout.is_empty() { None } else { Some(read_records(engine, &args, &args.holdout)?) };
+    if let Some(fraction) = args.holdout_fraction {
+        if args.lines {
+            if !(fraction > 0.0 && fraction < 1.0) {
+                return Err(KuteError::InvalidConfig("the held-out fraction must be between 0 and 1".into()));
+            }
+            let cut = ((records.len() as f64) * (1.0 - fraction)).round() as usize;
+            held_out = Some(records.split_off(cut.clamp(1, records.len())));
+        } else {
+            let (head, tail) = kd::split_holdout(&records, fraction)?;
+            records = head;
+            held_out = Some(tail);
+        }
+    }
+    let start = std::time::Instant::now();
+    let found = kd::discover(&records, &params)?;
+    let seconds = start.elapsed().as_secs_f64();
+    let evaluation = held_out.as_ref().map(|h| kd::evaluate(&found, h)).transpose()?;
+    let control = if args.control {
+        let found = kd::discover(&kd::shuffled(&records, 0), &params)?;
+        let evaluation = held_out.as_ref().map(|h| kd::evaluate(&found, h)).transpose()?;
+        Some(json!({
+            "what": "the same run on a shuffled copy of the input: same symbol counts, no order",
+            "patterns": found.patterns.len(),
+            "strongest_evidence_bits": found.patterns.iter().map(|p| p.evidence_bits).fold(0.0, f64::max),
+            "coverage": found.coverage,
+            "held_out_confirmed": evaluation.as_ref().map(|e| e.confirmed),
+            "held_out_coverage": evaluation.as_ref().map(|e| e.coverage),
+        }))
+    } else {
+        None
+    };
+    let report = json!({
+        "kute_version": kute::KUTE_VERSION,
+        "discover_seconds": seconds,
+        "peak_memory_bytes": kute_bench::peak_memory_bytes(),
+        "discovery": found,
+        "held_out": evaluation,
+        "control": control,
+    });
+    if let Some(path) = &args.output {
+        std::fs::write(path, serde_json::to_vec_pretty(&report)?)?;
+    }
+    print(&report)
 }
 
 #[derive(clap::Args)]
@@ -145,6 +426,15 @@ struct TrainArgs {
     /// License of the vocabulary, e.g. an SPDX identifier.
     #[arg(long)]
     license: Option<String>,
+    /// Read input files in pieces of about this many bytes, cut at line
+    /// breaks, so memory does not grow with file size. Recorded in the
+    /// vocabulary, because it decides where records end.
+    #[arg(long, value_name = "BYTES")]
+    stream_bytes: Option<usize>,
+    /// Do not store excerpts of the training data in the vocabulary as
+    /// self-test vectors. Use it when the corpus is private.
+    #[arg(long)]
+    no_test_vectors: bool,
     #[arg(long)]
     output: PathBuf,
     /// Replace an existing output file even if its content differs.
@@ -186,6 +476,8 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     config.reserved_tokens = args.reserved;
     config.description = args.description;
     config.license = args.license;
+    config.embed_test_vectors = !args.no_test_vectors;
+    config.stream_bytes = args.stream_bytes;
     if let Some(path) = &args.dictionary_file {
         let text = std::fs::read_to_string(path)?;
         config.dictionary = text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.is_empty()).map(str::to_string).collect();
@@ -205,6 +497,7 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     print(&json!({
         "output": args.output,
         "train_seconds": seconds,
+        "peak_memory_bytes": kute_bench::peak_memory_bytes(),
         "summary": vocab::summarize(&vocabulary)?,
     }))
 }
@@ -212,10 +505,11 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
 fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
     match cli.command {
         Command::Train(args) => train(&engine, *args),
-        Command::Encode { vocab: vocab_path, input, output, compress } => {
+        Command::Encode { vocab: vocab_path, input, output, compress, unknown } => {
+            let policy = kute::UnknownPolicy::parse(&unknown)?;
             let tokenizer = engine.tokenizer(vocab::load(&vocab_path)?)?;
             let raw = std::fs::read(&input)?;
-            let sequence = engine.encode_raw(tokenizer.as_ref(), &raw)?;
+            let sequence = engine.encode_raw_open(tokenizer.as_ref(), &raw, policy)?;
             match output {
                 Some(path) => {
                     let bytes = if compress { sequence.to_bytes_compressed()? } else { sequence.to_bytes()? };
@@ -224,6 +518,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                         "output": path,
                         "input_bytes": raw.len(),
                         "tokens": sequence.ids.len(),
+                        "escaped_symbols": sequence.escapes.len(),
                         "serialized_bytes": bytes.len(),
                         "vocabulary": format!("{} {}", sequence.vocabulary_id, sequence.vocabulary_version),
                     }))
@@ -231,10 +526,10 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 None => print(&sequence),
             }
         }
-        Command::Decode { vocab: vocab_path, input, output } => {
+        Command::Decode { vocab: vocab_path, input, output, max_units } => {
             let tokenizer = engine.tokenizer(vocab::load(&vocab_path)?)?;
             let sequence = TokenSequence::from_bytes(&std::fs::read(&input)?)?;
-            let bytes = engine.decode_raw(tokenizer.as_ref(), &sequence)?;
+            let bytes = engine.decode_raw_bounded(tokenizer.as_ref(), &sequence, max_units.unwrap_or(u64::MAX))?;
             match output {
                 Some(path) => {
                     std::fs::write(&path, &bytes)?;
@@ -334,6 +629,23 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
             print(&json!({ "output": output, "synthetic": true, "files": written }))
         }
+        Command::Discover(args) => discover(&engine, *args),
+        Command::Evolve { vocab: vocab_path, additions, new_version, output, force } => {
+            let version = Version::parse(&new_version).map_err(|e| KuteError::InvalidIdentifier(format!("version {new_version:?}: {e}")))?;
+            let parent = vocab::load(&vocab_path)?;
+            let child = kute::bpe::sequence::evolve(&parent, &split_additions(&additions), version)?;
+            let report = engine.verify(&child)?;
+            if !report.ok() {
+                return Err(KuteError::Backend(format!("the evolved vocabulary fails its test vectors: {}", report.failures.join("; "))));
+            }
+            vocab::save(&child, &output, force)?;
+            print(&json!({
+                "output": output,
+                "parent": { "version": parent.version().to_string(), "digest": parent.digest()?, "tokens": parent.len() },
+                "summary": vocab::summarize(&child)?,
+            }))
+        }
+        Command::Peer { action } => peer(engine, action),
         Command::Capabilities => {
             let registry = engine.registry();
             let algorithms: Vec<kute::TokenizerCapabilities> =

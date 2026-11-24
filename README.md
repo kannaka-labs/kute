@@ -4,9 +4,9 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.2, experimental. Formats and APIs may change before 1.0.
+Status: v0.3, experimental. Formats and APIs may change before 1.0.
 
-## What works in v0.2
+## What works in v0.3
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -27,6 +27,29 @@ Status: v0.2, experimental. Formats and APIs may change before 1.0.
   runs faster than it on the same machine; long texts use every core.
 * An experimental adapter contract for Holographic Resonance Medium (HRM)
   research. It is an interface only. See "What KUTE does not claim".
+
+New in v0.3:
+
+* `kute discover`: recurring patterns in event streams, with support,
+  evidence and a held-out check, no tokenizer needed. Measured on a public
+  log dataset in `benchmarks/README.md`.
+* `kute encode --unknown escape`: a frozen event vocabulary carries symbols
+  it has never seen and still decodes exactly; `strict` refuses them.
+* `kute evolve`: the next version of an event vocabulary, with new symbols
+  or sequences appended and every existing token id unchanged.
+* `kute peer serve` / `kute peer send`: two processes agree on a vocabulary
+  by digest, transfer it if needed, extend it together and exchange encoded
+  messages with a receipt. No encryption or authentication. See
+  `specifications/protocol`.
+* `kute train --stream-bytes`: training memory that does not grow with
+  file size (227 MiB against 959 MiB on a 500 MB input), and a peak-memory
+  figure in every training report.
+* Vocabulary identity specified rule by rule and checked by a second
+  implementation in Python (`conformance/`), with recorded vectors that
+  include files written by v0.2.0.
+* `kute train --no-test-vectors` for private corpora, `kute decode
+  --max-units` for untrusted sequences, and a registry that refuses a second
+  registration of a name.
 
 ## Quick start
 
@@ -72,14 +95,17 @@ crates/kute-bpe         byte BPE, sequence BPE
 crates/kute-algorithms  bytes, char, dictionary
 crates/kute-adapters    binary, text, json, jsonl, jsonl-events
 crates/kute-vocab       KVF read/write/validate, compare, tiktoken export
+crates/kute-discover    pattern discovery over symbol streams, held-out evaluation
+crates/kute-protocol    vocabulary exchange between two peers
 crates/kute             the engine (crate kute-engine): one entry point over all of the above
 crates/kute-bench       evaluation harness and the benchmark suite
 crates/kute-cli         the kute command
 plugins/hrm             experimental HRM representation plugin
 backends/rustbpe        rustbpe reference backend and the kute-ref command (not published)
 bindings/python         Python package (PyO3, built with maturin)
-specifications/         KVF 0.1, token envelope and .kute container
+specifications/         KVF 0.1, token envelope and .kute container, exchange protocol
 docs/                   use cases, HRM contract, decision records
+conformance/            independent implementation of the vocabulary digest
 benchmarks/             how to run the suite, and recorded results
 ```
 

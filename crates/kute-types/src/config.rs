@@ -64,6 +64,25 @@ pub struct TrainingConfig {
     pub description: Option<String>,
     #[serde(default)]
     pub license: Option<String>,
+    /// Store short samples of the training corpus in the vocabulary as
+    /// self-test vectors. Turn off when the corpus must not be disclosed:
+    /// the vectors are verbatim excerpts.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub embed_test_vectors: bool,
+    /// When training from files, read them in pieces of about this many
+    /// bytes, cut at a line break, instead of whole. Each piece is one
+    /// record, so memory no longer grows with file size. The value is part
+    /// of the configuration because it decides where records end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream_bytes: Option<usize>,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 fn one() -> u64 {
@@ -90,6 +109,8 @@ impl TrainingConfig {
             seed: 0,
             description: None,
             license: None,
+            embed_test_vectors: true,
+            stream_bytes: None,
         }
     }
 
@@ -103,6 +124,9 @@ impl TrainingConfig {
         }
         if self.train_window < 2 || self.train_window > 1 << 20 {
             return Err(KuteError::InvalidConfig("train_window must be between 2 and 1048576".into()));
+        }
+        if self.stream_bytes.is_some_and(|n| !(4096..=1 << 30).contains(&n)) {
+            return Err(KuteError::InvalidConfig("stream_bytes must be between 4096 and 1073741824".into()));
         }
         if self.max_token_length == Some(0) {
             return Err(KuteError::InvalidConfig("max_token_length must be at least 1".into()));

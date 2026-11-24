@@ -148,8 +148,140 @@ MIT or Apache-2.0 at the user's option, the common choice for Rust libraries.
 This was chosen to make the repository complete and is the maintainers' to
 confirm or change before first publication.
 
+## Records from the development directive v0.2
+
+The directive proposes ADR numbers 0016 to 0030 for its own topics. Numbers
+are assigned here in the order decisions are actually taken, starting at
+0016, so they will not match the directive's list one for one.
+
+## ADR-0016: Unknown symbols are refused or escaped, never approximated
+
+A frozen symbol vocabulary used to refuse any input holding a symbol outside
+its alphabet. That is correct but makes a vocabulary unusable on a live
+stream, where new names appear. Encoding now takes a policy. `strict` keeps
+the old behavior and is the default. `escape` carries the unknown symbol
+literally in the sequence's own escape table and gives it an id past the end
+of the token table.
+
+The vocabulary is not modified, so its digest and every earlier sequence
+stay valid, and nothing is learned silently. Proposing escaped symbols as
+vocabulary candidates is a separate, explicit step (vocabulary evolution).
+An unknown-token placeholder was rejected because it loses the input.
+
+## ADR-0017: Registry names are taken once
+
+`register_algorithm` and `register_adapter` return an error when the name is
+already registered; `replace_algorithm` and `replace_adapter` override on
+purpose. A vocabulary names its algorithm, so a plugin that silently took
+over the name `bpe` would change what existing files mean. This changes the
+signature of the `register` functions, which now return `Result`.
+
+## ADR-0018: Test vectors are optional, because they are excerpts
+
+ADR-0010 stores samples of the training input in the vocabulary. For a
+private corpus that publishes the data. `embed_test_vectors` (CLI:
+`--no-test-vectors`) turns it off. The default stays on, since a vocabulary
+that can check itself is worth more, and the choice is recorded in the
+training provenance. Learned tokens are frequent fragments of the corpus and
+remain visible in any vocabulary; that is inherent and is not hidden by this
+switch.
+
+## ADR-0019: Decoders can bound output before producing it
+
+`decoded_units` computes the decoded length from the token table alone, and
+`decode_raw_bounded` refuses a sequence over a caller's budget. Container
+parsing was already bounded; this closes the remaining amplification, from
+ids to output. The HRM plugin's `inner_product` now returns an error for
+vectors of different dimensions instead of truncating to the shorter one.
+
+## ADR-0020: Discovery is its own subsystem, not a tokenizer
+
+`kute-discover` finds contiguous sequences and gapped pairs in symbol
+records and depends on no algorithm crate. A tokenizer answers "how do I
+encode this"; discovery answers "what recurs here", and its output is
+evidence: support, the records a pattern occurs in, its first occurrences,
+and cohesion, the factor by which it beats the frequency of its parts, in
+bits. Patterns carry the same content hash a vocabulary token with that
+payload has, so a discovered pattern can later be proposed as a token.
+
+Two checks ship with it because a pattern miner always returns something:
+`evaluate` re-measures every pattern on held-out data, and `shuffled` builds
+a control with the same symbol counts and no order. Candidate counts are
+capped so hostile input cannot exhaust memory. Timestamps and typed fields
+are not used yet; a pattern is defined on order alone.
+
+## ADR-0021: Vocabularies evolve by appending; versions are immutable
+
+A new version of an event vocabulary is derived from its parent by a
+deterministic step that appends tokens and never renumbers or changes an
+existing one. The parent stays valid and keeps its digest. Because the step
+is a pure function of parent, additions and version, two parties can each
+apply it and compare digests instead of shipping the result.
+
+Rejected: mutating a vocabulary in place when an unknown symbol appears
+(nothing could then be decoded reliably later), and automatic adoption of
+escaped or discovered symbols (a vocabulary would drift without anyone
+deciding). Discovery and escaping produce candidates; a person or a policy
+proposes them. Evolution is defined for `sequence-bpe` only for now.
+
+## ADR-0022: A small request-reply protocol, with the peer logic free of I/O
+
+`kute-protocol` implements the message set of the directive for two peers
+over length-prefixed JSON. `Peer::handle` maps one message to replies and
+touches no socket, so it is tested directly with hostile input; `Session`
+and `Framed` add the transport. `VOCAB_DATA` was added to the list as the
+answer to `VOCAB_REQUEST`, and `SYMBOL_INFO` as the answer to
+`SYMBOL_QUERY`.
+
+A receiver recomputes the digest of a vocabulary from its content, runs its
+test vectors, and refuses a vocabulary that collides with one it holds. An
+`ACK` carries a hash of the decoded bytes so that the sender learns whether
+both sides read the vocabulary the same way. Security of the channel is out
+of scope and stated as such. See `specifications/protocol`.
+
+## ADR-0023: Vocabulary identity is specified and checked twice
+
+ADR-0006 left the digest defined by what the Rust serializer happened to
+write. The canonical form is now written out rule by rule in KVF section 4,
+and `conformance/kvf_digest.py` implements it from that text with the Python
+standard library alone. CI runs it on recorded vectors, including files
+written by the v0.2.0 release, and on vocabularies trained in the same job.
+
+The existing form was specified as it is instead of moving to RFC 8785 or
+CBOR, because a new form would change the digest of every published
+vocabulary and invalidate every sequence that names one. Numbers with a
+fraction are excluded from the canonical form; nothing in KVF needs them.
+
+The review item "cache the verified digest" was checked before changing
+anything: a loaded vocabulary carries its digest, `digest()` returns the
+stored value, and the content hash is computed once at load. No change was
+needed.
+
+## ADR-0024: Training reads the corpus as a stream
+
+Trainers already kept only counts, but the engine read every input file
+into memory before training started, and the event trainer kept every
+record. Now files are read one at a time, the event trainer keeps window
+counts only, and `stream_bytes` reads a file in pieces cut after a line
+feed, so one very large file is no different from many small ones.
+
+Memory budget: one piece (or one file without `stream_bytes`), plus the
+table of distinct chunks or windows, plus the merge trainer's working set.
+The last two depend on how varied the data is, not on how much there is.
+Measured figures are in `benchmarks/README.md`.
+
+`stream_bytes` is part of the training configuration and is stored with the
+vocabulary, because a piece is a record: it changes the corpus fingerprint,
+and for training without a pre-tokenizer, where input is counted in fixed
+windows that restart at each record, it can change what is learned. With a
+pre-tokenizer on text, chunks do not cross line feeds and the learned tokens
+come out the same. Checkpointing a training run and resuming it is not
+implemented.
+
 ## Deferred
 
-Registry service and signing, streaming, import from other tokenizer formats,
-memory measurement in benchmarks, and adapters for DNA, telemetry,
-mathematics and quantum circuits.
+Registry service and signing, import from other tokenizer formats, training
+checkpoints, typed fields and timestamps in events, a compact binary
+vocabulary file, entropy-coded containers, comparison with Zstandard and
+with binary record formats, and adapters for DNA, telemetry, mathematics and
+quantum circuits.

@@ -18,8 +18,8 @@ pub const CHAR: &str = "char";
 pub const DICTIONARY: &str = "dictionary";
 
 /// Register this crate's algorithms.
-pub fn register(registry: &mut kute_core::Registry) {
-    registry.register_algorithm(BYTES, || Box::new(ByteTokenizer::default()));
-    registry.register_algorithm(CHAR, || Box::new(CharTokenizer::default()));
-    registry.register_algorithm(DICTIONARY, || Box::new(DictionaryTokenizer::default()));
+pub fn register(registry: &mut kute_core::Registry) -> kute_types::Result<()> {
+    registry.register_algorithm(BYTES, || Box::new(ByteTokenizer::default()))?;
+    registry.register_algorithm(CHAR, || Box::new(CharTokenizer::default()))?;
+    registry.register_algorithm(DICTIONARY, || Box::new(DictionaryTokenizer::default()))
 }

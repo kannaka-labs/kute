@@ -93,7 +93,37 @@ pub struct TokenSequence {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adapter: Option<String>,
     pub ids: Vec<u32>,
+    /// Symbols the vocabulary does not contain, carried literally. An id of
+    /// `vocabulary length + i` stands for `escapes[i]`. Empty unless the
+    /// sequence was encoded with [`UnknownPolicy::Escape`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub escapes: Vec<String>,
 }
+
+/// What an encoder does with a symbol its frozen vocabulary does not contain.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnknownPolicy {
+    /// Refuse the input.
+    #[default]
+    Strict,
+    /// Carry the symbol literally in the sequence's escape table. The
+    /// vocabulary is not changed and decoding returns the input exactly.
+    Escape,
+}
+
+impl UnknownPolicy {
+    pub fn parse(name: &str) -> Result<Self> {
+        match name {
+            "strict" => Ok(Self::Strict),
+            "escape" => Ok(Self::Escape),
+            other => Err(KuteError::InvalidConfig(format!("unknown-symbol policy {other:?}; expected strict or escape"))),
+        }
+    }
+}
+
+/// Most escaped symbols one sequence may carry.
+pub const MAX_ESCAPES: usize = 65_536;
 
 #[derive(Serialize, Deserialize)]
 struct ContainerHeader {
@@ -104,6 +134,8 @@ struct ContainerHeader {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     adapter: Option<String>,
     count: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    escapes: Vec<String>,
     /// Format 2 only: width of each id in the compressed body, 1 to 4 bytes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     id_bytes: Option<u8>,
@@ -112,7 +144,9 @@ struct ContainerHeader {
 const MAGIC: &[u8; 5] = b"KUTE\x01";
 /// Format 2: the ids are fixed-width little-endian integers in a zlib stream.
 const MAGIC_COMPRESSED: &[u8; 5] = b"KUTE\x02";
-const MAX_HEADER: usize = 64 * 1024;
+/// Headers without escaped symbols stay far below this; the room is for the
+/// escape table.
+const MAX_HEADER: usize = 4 * 1024 * 1024;
 /// DEFLATE cannot expand by more than about 1032 to 1, so a body that claims
 /// more output than this for its size is rejected before any is produced.
 const MAX_INFLATE_RATIO: u64 = 1040;
@@ -147,10 +181,11 @@ impl TokenSequence {
             modality: self.modality,
             adapter: self.adapter.clone(),
             count: self.ids.len() as u64,
+            escapes: self.escapes.clone(),
             id_bytes,
         })?;
-        if header.len() > MAX_HEADER {
-            return Err(KuteError::LimitExceeded("token sequence header exceeds 64 KiB".into()));
+        if header.len() > MAX_HEADER || self.escapes.len() > MAX_ESCAPES {
+            return Err(KuteError::LimitExceeded("token sequence header exceeds 4 MiB or carries more than 65,536 escaped symbols".into()));
         }
         let mut out = Vec::with_capacity(magic.len() + 4 + header.len() + body_hint);
         out.extend_from_slice(magic);
@@ -197,11 +232,14 @@ impl TokenSequence {
         let header_len = u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]]) as usize;
         pos += 4;
         if header_len > MAX_HEADER {
-            return Err(bad("header longer than 64 KiB"));
+            return Err(bad("header longer than 4 MiB"));
         }
         let header_end = pos.checked_add(header_len).filter(|&e| e <= bytes.len()).ok_or_else(|| bad("truncated header"))?;
         let header: ContainerHeader = serde_json::from_slice(&bytes[pos..header_end]).map_err(|e| bad(&format!("header: {e}")))?;
         pos = header_end;
+        if header.escapes.len() > MAX_ESCAPES || header.escapes.iter().any(|s| s.is_empty() || s.len() > crate::vocab::MAX_SYMBOL_BYTES) {
+            return Err(bad("escape table too large, or an escaped symbol is empty or oversized"));
+        }
         let remaining = bytes.len() - pos;
         let ids = if compressed {
             let width = match header.id_bytes {
@@ -248,6 +286,7 @@ impl TokenSequence {
             modality: header.modality,
             adapter: header.adapter,
             ids,
+            escapes: header.escapes,
         })
     }
 
@@ -298,6 +337,7 @@ mod tests {
             modality: Modality::Text,
             adapter: Some("text".into()),
             ids,
+            escapes: Vec::new(),
         }
     }
 
@@ -363,6 +403,51 @@ mod tests {
         let last = flipped.len() - 6;
         flipped[last] ^= 0x40;
         assert!(TokenSequence::from_bytes(&flipped).is_err());
+    }
+
+    #[test]
+    fn escapes_survive_both_containers() {
+        let mut s = seq(vec![3, 9, 10, 4]);
+        s.escapes = vec!["VALVE_7_OPEN".into(), "naïve symbol".into()];
+        assert_eq!(TokenSequence::from_bytes(&s.to_bytes().unwrap()).unwrap(), s);
+        assert_eq!(TokenSequence::from_bytes(&s.to_bytes_compressed().unwrap()).unwrap(), s);
+        s.escapes = vec![String::new()];
+        assert!(TokenSequence::from_bytes(&s.to_bytes().unwrap()).is_err());
+    }
+
+    /// Malformed containers must be refused, never panic and never allocate
+    /// by a forged count. Deterministic mutations stand in for a fuzzer.
+    #[test]
+    fn mutated_containers_never_panic() {
+        let mut base = seq((0..300).map(|i| (i * 37) % 5000).collect());
+        base.escapes = vec!["X".into()];
+        let mut state = 0x243f6a8885a308d3u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for original in [base.to_bytes().unwrap(), base.to_bytes_compressed().unwrap()] {
+            for _ in 0..6000 {
+                let mut bytes = original.clone();
+                for _ in 0..(1 + next() % 4) {
+                    let at = (next() % bytes.len() as u64) as usize;
+                    match next() % 4 {
+                        0 => bytes[at] ^= 1 << (next() % 8),
+                        1 => bytes[at] = next() as u8,
+                        2 => bytes.truncate(at),
+                        _ => bytes.insert(at, next() as u8),
+                    }
+                    if bytes.is_empty() {
+                        break;
+                    }
+                }
+                if let Ok(parsed) = TokenSequence::from_bytes(&bytes) {
+                    assert!(parsed.ids.len() <= 400_000 && parsed.escapes.len() <= MAX_ESCAPES);
+                }
+            }
+        }
     }
 
     #[test]

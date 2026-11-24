@@ -97,9 +97,18 @@ impl RepresentationBackend for HrmPhaseMapping {
     }
 }
 
-/// Hermitian inner product `<a, b>` of two complex vectors.
-pub fn inner_product(a: &[(f32, f32)], b: &[(f32, f32)]) -> (f32, f32) {
-    a.iter().zip(b).fold((0.0, 0.0), |(re, im), (&(ar, ai), &(br, bi))| {
+/// Hermitian inner product `<a, b>` of two complex vectors of the same
+/// dimension. Vectors of different dimensions come from different mappings
+/// and have no inner product; that is an error, not a truncation.
+///
+/// Sums are taken in index order in `f32`. Results agree across platforms to
+/// within a few units in the last place per term; compare with a tolerance
+/// of `1e-5 * dimension`, never for equality.
+pub fn inner_product(a: &[(f32, f32)], b: &[(f32, f32)]) -> Result<(f32, f32)> {
+    if a.len() != b.len() {
+        return Err(KuteError::InvalidInput(format!("inner product of vectors with dimensions {} and {}", a.len(), b.len())));
+    }
+    Ok(a.iter().zip(b).fold((0.0, 0.0), |(re, im), (&(ar, ai), &(br, bi))| {
         (re + ar * br + ai * bi, im + ai * br - ar * bi)
-    })
+    }))
 }

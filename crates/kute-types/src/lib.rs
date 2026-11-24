@@ -13,7 +13,7 @@ pub mod vocab;
 pub use config::{AdapterConfig, Pretokenizer, TokenizerCapabilities, TrainingConfig};
 pub use error::{KuteError, Result};
 pub use id::VocabularyId;
-pub use input::{CanonicalInput, Modality, Payload, PayloadKind, TokenSequence};
+pub use input::{CanonicalInput, Modality, Payload, PayloadKind, TokenSequence, UnknownPolicy, MAX_ESCAPES};
 pub use semver::Version;
 pub use vocab::{
     AdapterSpec, Integrity, Manifest, MergeRule, Provenance, RepresentationRef, Signature,

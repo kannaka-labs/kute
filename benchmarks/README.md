@@ -35,6 +35,36 @@ kute benchmark --vocab my.kvf --dataset path/to/held-out-data
 * Cases marked `synthetic` come from seeded template generators. They show the
   machinery works. They do not predict results on real data.
 
+## Recorded run: v0.3.0
+
+File: `results/suite-v0.3.0-windows-x86_64.json`, same machine, command and
+enwik8 file as the v0.2.0 run below, run with `kute-ref`.
+
+* **Sizes are unchanged on the large case and the synthetic cases.** Every
+  ratio for B01-large, B03, B04 and B05 equals the v0.2.0 figure to the
+  digits shown: v0.3.0 did not touch the encoders or the containers. The
+  two cases built from this repository's own files moved slightly because
+  the files changed (B01 compressed 2.12 against gzip 2.15; B02 3.24
+  against 3.30).
+* All 14 evaluations reconstructed their inputs exactly, retraining
+  reproduced the same digest, and on B01 and B02 the native backend and
+  rustbpe again learned identical merges and produced identical encodings.
+* **The timings in this file are slow and should not be compared with the
+  v0.2.0 file.** The machine was busy with other work during the run: the
+  large case encoded at 14 MB/s and trained in 50 s, against 51 MB/s and
+  22 s recorded for v0.2.0. To check that this is the machine and not the
+  release, the v0.2.0 and v0.3.0 binaries were run alternately on the same
+  10 MB evaluation file right afterwards: 10.8 and 8.6 MB/s for v0.2.0, 9.4
+  and 9.5 MB/s for v0.3.0, with identical token counts. The two builds
+  encode at the same speed; a clean timing run has not been made.
+* 1 KB encode latency: P95 0.28 ms, median 0.24 ms. 32K vocabulary to a
+  ready tokenizer: 170 ms.
+* The suite itself still reports peak memory as not measured. Training
+  memory is measured separately; see "Training memory with streaming".
+
+The table and discussion below are the v0.2.0 run and still describe the
+sizes correctly.
+
 ## Recorded run: v0.2.0
 
 File: `results/suite-v0.2.0-windows-x86_64.json`. Windows 11, 8 logical CPUs
@@ -127,3 +157,82 @@ real dataset, no compressed container, and encoded text at 2 to 3 MB/s.
 * The compressed container (format 2) was added.
 * The large text case was added, so there is now one measurement where the
   dataset is big enough for a 32K vocabulary to make sense.
+
+## Discovery on real event data (v0.3.0)
+
+`kute discover` looks for recurring patterns in symbol streams without
+training a tokenizer. This run uses a public, non-text dataset: HDFS_v1 from
+Loghub (https://zenodo.org/records/8196385, `HDFS_v1.zip`, SHA-256
+`04f919f2…e289b01`), 11,175,629 log events from a Hadoop cluster grouped
+into 575,061 per-block sequences over 29 event types.
+
+```
+python benchmarks/hdfs_traces.py HDFS_v1.zip data
+kute discover --lines --input data/hdfs-traces.txt --holdout-fraction 0.2 --control --top 25
+```
+
+The first 80% of the blocks (460,049 records, 9.4 million events) were
+searched; the last 20% (115,012 records, 1.8 million events) were held out.
+Report: `results/discovery-hdfs-v1.json`. Discovery took 5.6 s on this
+machine; the whole command, with reading, evaluation and the control, 28 s.
+
+| | searched part | held-out part |
+|---|---|---|
+| share of events inside a discovered contiguous pattern | 92.7% | 97.6% |
+| same, patterns found in the shuffled control | 4.5% | 0.07% |
+| contiguous patterns that recur with positive cohesion | | 23 of 25 |
+| gapped pairs that recur with positive cohesion | | 20 of 25 |
+
+The strongest pattern, `E11 E9`, occurs 1,345,545 times in 454,871 of the
+460,049 searched blocks, 6.8 times as often as the two events' frequencies
+predict, and 338,100 times in the held-out blocks. Every pattern in the
+report lists the first three places it was seen (record and offset).
+
+What this does and does not show:
+
+* It shows that the method recovers order that is really in the data: the
+  same patterns hold on blocks it never saw, and almost none of it survives
+  when order is removed.
+* The control shuffles events within each block. Blocks differ in which
+  events they contain, so some co-occurrence survives the shuffle: the
+  control still reports 50 weak patterns, 25 of which recur in the held-out
+  part. Read the coverage row, not the pattern count.
+* The held-out blocks are the end of the file, and they differ from the
+  rest: 22 event types instead of 29, shorter sequences. Three of the top
+  gapped pairs involve events that never occur there.
+* Long runs of one event produce a family of nested patterns (`E23 E23`,
+  `E23 E23 E23`, ...) that each count separately in the ranking.
+* Nothing here says what the patterns mean. `E11 E9` is a regularity in a
+  log, not a diagnosis.
+* A unit test plants a known four-event motif and a delayed pair in random
+  noise and checks that both are found with exact counts and that the
+  shuffled control comes back nearly empty. That data is synthetic.
+
+## Training memory with streaming (v0.3.0)
+
+`kute train --stream-bytes N` reads input in pieces of about N bytes, cut
+after a line feed. `train` now reports the peak resident memory of the
+process (Windows and Linux). Both runs below train a 32,768-token text
+vocabulary on this machine; one process per run.
+
+| input | read as | peak memory | tokens learned |
+|-------|---------|-------------|----------------|
+| enwik8, 100 MB | whole file | 226 MiB | reference |
+| enwik8, 100 MB | 4 MiB pieces | 226 MiB | the same 32,768 tokens, same ids |
+| enwik8 repeated five times, 500 MB | whole file | 959 MiB | |
+| enwik8 repeated five times, 500 MB | 4 MiB pieces | 227 MiB | |
+
+* At 100 MB the file is not what fills memory; the chunk table and the
+  merge trainer are. Streaming changes nothing there.
+* At 500 MB the whole-file run grows with the file and the streamed run
+  does not. The 500 MB input is the same text five times over, which keeps
+  the chunk table the same size by construction: it isolates the effect of
+  file size and says nothing about a corpus with five times the variety.
+* The streamed vocabulary has a different digest from the whole-file one,
+  since the piece size is recorded and the corpus fingerprint covers
+  records. `kute compare` shows the token tables are identical.
+* Run times are not reported: the machine was under other load and they
+  varied by more than the difference between the two modes.
+* Peak memory of encoding, of discovery and of the benchmark suite's cases
+  is not measured yet.
+

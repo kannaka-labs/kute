@@ -1,7 +1,7 @@
 # KUTE token envelope and token sequence container 0.1
 
 Status: published with KUTE v0.1.0; container format 2 (section 2.1) added in
-v0.2.0. Experimental.
+v0.2.0; escaped symbols (section 2.2) in v0.3.0. Experimental.
 
 Two small formats for tokens that leave their vocabulary file:
 
@@ -86,6 +86,7 @@ Header:
 | `modality`           | string  | modality of the encoded input |
 | `adapter`            | string  | optional: adapter the input went through |
 | `count`              | integer | number of token ids that follow |
+| `escapes`            | array   | optional: symbols carried literally (section 2.2) |
 
 Rules for readers:
 
@@ -97,6 +98,9 @@ Rules for readers:
 * Decode only with a vocabulary whose id, version and digest all match the
   header. A vocabulary with the same id and version but a different digest is
   a different vocabulary.
+
+The header may be up to 4 MiB; without an escape table it is a few hundred
+bytes.
 
 Size: ids below 128 take one byte, below 16,384 two, below 2,097,152 three.
 The header is typically 150 to 250 bytes, which matters for short inputs;
@@ -134,3 +138,40 @@ repeated token runs more easily when every id has the same length.
 
 Neither format is encrypted, and neither is a privacy mechanism: anyone with
 the vocabulary can decode it.
+
+### 2.2 Escaped symbols
+
+A vocabulary is fixed when it is published, and symbol streams keep
+producing names it has never seen. An encoder has two policies:
+
+* **strict**: refuse the input. This is the default.
+* **escape**: carry each unknown symbol literally. The header gains an
+  `escapes` array of strings. With a vocabulary of N tokens, the id N + i
+  stands for `escapes[i]`. Each distinct unknown symbol appears once in the
+  array, in order of first use. Merges are applied to the known runs on each
+  side of an escaped symbol and never across it.
+
+The vocabulary, its version and its digest are unchanged by escaping: the
+sequence still names the vocabulary it was encoded with, and a reader with
+that vocabulary decodes the input exactly.
+
+Rules for readers:
+
+* Reject a header with more than 65,536 escaped symbols, or with an escaped
+  symbol that is empty or longer than 1,024 bytes.
+* Reject an id of N + i where i is not an index into `escapes`.
+* Files without `escapes` are read exactly as before; every 0.1 file remains
+  valid.
+
+Escaping is defined for symbol vocabularies. Byte vocabularies contain all
+256 byte values and cannot meet an unknown symbol. An algorithm with no
+escape support must report that instead of approximating.
+
+### 2.3 Decode budget
+
+A token id of a few bytes can stand for a token of up to 64 KiB, so a small
+file can decode to a very large output. A reader that handles sequences from
+an untrusted source should sum the lengths of the tokens named by the ids,
+which needs only the token table, and refuse the sequence when the total
+exceeds its budget, before producing any output. The reference
+implementation exposes this as `decode_raw_bounded` and `decode --max-units`.
