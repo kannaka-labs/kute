@@ -285,6 +285,25 @@ struct DiscoverArgs {
     /// record, symbols separated by whitespace.
     #[arg(long, conflicts_with_all = ["adapter", "adapter_options"])]
     lines: bool,
+    /// Read typed events instead: JSON Lines with one event per line, the
+    /// event name in this field. Keeps time and grouping; see the other
+    /// --*-field options.
+    #[arg(long, value_name = "FIELD", conflicts_with_all = ["adapter", "adapter_options", "lines"])]
+    symbol_field: Option<String>,
+    /// Field with the event time, a whole number of --time-unit. With it,
+    /// the report says how long each pattern takes.
+    #[arg(long, value_name = "FIELD", requires = "symbol_field")]
+    time_field: Option<String>,
+    /// Unit of the time field: s, ms, us or ns.
+    #[arg(long, default_value = "s", requires = "time_field")]
+    time_unit: String,
+    /// Field naming what an event belongs to (a device, a block, a session).
+    /// Events with the same value form one record.
+    #[arg(long, value_name = "FIELD", requires = "symbol_field")]
+    group_field: Option<String>,
+    /// Name recorded for this way of reading the events.
+    #[arg(long, default_value = "kute:events:unnamed", requires = "symbol_field")]
+    schema_id: String,
     /// Files with held-out data to check the patterns against.
     #[arg(long, num_args = 1.., conflicts_with = "holdout_fraction")]
     holdout: Vec<PathBuf>,
@@ -342,6 +361,43 @@ fn read_records(engine: &Engine, args: &DiscoverArgs, paths: &[PathBuf]) -> kute
     Ok(records)
 }
 
+fn read_events(args: &DiscoverArgs, symbol_field: &str, paths: &[PathBuf]) -> kute::Result<kute::EventStream> {
+    let schema = kute::EventSchema {
+        id: args.schema_id.clone(),
+        version: 1,
+        symbol_field: symbol_field.to_string(),
+        time_unit: args.time_field.as_ref().map(|_| kute::TimeUnit::parse(&args.time_unit)).transpose()?,
+        time_field: args.time_field.clone(),
+        group_field: args.group_field.clone(),
+    };
+    let mut stream = kute::EventStream::new(schema)?;
+    for path in paths {
+        for file in kute::collect_files(path)? {
+            let reader = std::io::BufReader::with_capacity(1 << 20, std::fs::File::open(&file)?);
+            stream.read_jsonl(reader, &file.display().to_string())?;
+        }
+    }
+    if stream.records.is_empty() {
+        return Err(KuteError::InvalidInput("no events found in the input".into()));
+    }
+    Ok(stream)
+}
+
+/// Lend a stream's symbols out as plain records, and give them back.
+fn take_symbols(stream: &mut kute::EventStream) -> Vec<Vec<String>> {
+    stream.records.iter_mut().map(|r| std::mem::take(&mut r.symbols)).collect()
+}
+
+fn give_symbols(stream: &mut kute::EventStream, records: Vec<Vec<String>>) {
+    for (r, symbols) in stream.records.iter_mut().zip(records) {
+        r.symbols = symbols;
+    }
+}
+
+fn describe(stream: &kute::EventStream) -> kute::Result<serde_json::Value> {
+    Ok(json!({ "records": stream.records.len(), "events": stream.events(), "fingerprint": stream.fingerprint()? }))
+}
+
 fn discover(engine: &Engine, args: DiscoverArgs) -> kute::Result<()> {
     use kute_discover as kd;
     let params = kd::Params {
@@ -352,9 +408,33 @@ fn discover(engine: &Engine, args: DiscoverArgs) -> kute::Result<()> {
         max_patterns: args.top,
         ..kd::Params::default()
     };
-    let mut records = read_records(engine, &args, &args.input)?;
-    let mut held_out = if args.holdout.is_empty() { None } else { Some(read_records(engine, &args, &args.holdout)?) };
-    if let Some(fraction) = args.holdout_fraction {
+    // Typed events: the symbols go through discovery like any others, and
+    // the streams keep their times for the timing pass afterwards.
+    let mut streams: Option<(kute::EventStream, Option<kute::EventStream>)> = match &args.symbol_field {
+        None => None,
+        Some(field) => {
+            let stream = read_events(&args, field, &args.input)?;
+            Some(if !args.holdout.is_empty() {
+                (stream, Some(read_events(&args, field, &args.holdout)?))
+            } else if let Some(fraction) = args.holdout_fraction {
+                let (head, tail) = stream.split_last(fraction)?;
+                (head, Some(tail))
+            } else {
+                (stream, None)
+            })
+        }
+    };
+    let typed = streams.is_some();
+    let mut records = match &mut streams {
+        Some((stream, _)) => take_symbols(stream),
+        None => read_records(engine, &args, &args.input)?,
+    };
+    let mut held_out = match &mut streams {
+        Some((_, held)) => held.as_mut().map(take_symbols),
+        None if args.holdout.is_empty() => None,
+        None => Some(read_records(engine, &args, &args.holdout)?),
+    };
+    if let Some(fraction) = args.holdout_fraction.filter(|_| !typed) {
         if args.lines {
             if !(fraction > 0.0 && fraction < 1.0) {
                 return Err(KuteError::InvalidConfig("the held-out fraction must be between 0 and 1".into()));
@@ -385,6 +465,28 @@ fn discover(engine: &Engine, args: DiscoverArgs) -> kute::Result<()> {
     } else {
         None
     };
+    let events = match streams {
+        None => None,
+        Some((mut stream, mut held)) => {
+            give_symbols(&mut stream, records);
+            if let (Some(h), Some(symbols)) = (held.as_mut(), held_out) {
+                give_symbols(h, symbols);
+            }
+            let timing = if stream.timed() { Some(kd::timing(&found, &stream)?) } else { None };
+            let held_timing = match &held {
+                Some(h) if h.timed() => Some(kd::timing(&found, h)?),
+                _ => None,
+            };
+            Some(json!({
+                "schema": stream.schema,
+                "searched": describe(&stream)?,
+                "held_out": held.as_ref().map(describe).transpose()?,
+                "timing_what": "per pattern, in the schema's time unit: time from the first event of an occurrence to its last; for a gapped pair, from the first symbol to the nearest second symbol within the window",
+                "timing": timing,
+                "held_out_timing": held_timing,
+            }))
+        }
+    };
     let report = json!({
         "kute_version": kute::KUTE_VERSION,
         "discover_seconds": seconds,
@@ -392,6 +494,7 @@ fn discover(engine: &Engine, args: DiscoverArgs) -> kute::Result<()> {
         "discovery": found,
         "held_out": evaluation,
         "control": control,
+        "events": events,
     });
     if let Some(path) = &args.output {
         std::fs::write(path, serde_json::to_vec_pretty(&report)?)?;

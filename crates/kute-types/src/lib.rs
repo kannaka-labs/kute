@@ -6,12 +6,14 @@
 
 pub mod config;
 pub mod error;
+pub mod event;
 pub mod id;
 pub mod input;
 pub mod vocab;
 
 pub use config::{AdapterConfig, Pretokenizer, TokenizerCapabilities, TrainingConfig};
 pub use error::{KuteError, Result};
+pub use event::{EventRecord, EventSchema, EventStream, TimeUnit};
 pub use id::VocabularyId;
 pub use input::{CanonicalInput, Modality, Payload, PayloadKind, TokenSequence, UnknownPolicy, MAX_ESCAPES};
 pub use semver::Version;

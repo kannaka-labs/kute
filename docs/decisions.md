@@ -302,9 +302,34 @@ parsing. Measured figures are in `benchmarks/README.md`. A form that can be
 used without rebuilding, for example memory-mapped, was not attempted. The
 exchange protocol still sends JSON.
 
+## ADR-0026: Typed events keep time and grouping beside the symbols
+
+Until now an event was a name. The `jsonl-events` adapter kept one field
+per line and dropped the rest, so a file in which two machines' events are
+interleaved was read as one sequence, and nothing downstream could ask how
+long anything took.
+
+`EventStream` (in `kute-types`) holds, per entity, the event names and a
+timestamp for each, with the `EventSchema` that says which fields they came
+from, what a tick means, and under what name and version that reading is
+known. The schema is hashed into the stream's fingerprint: the same file
+read two ways is two streams.
+
+The model is deliberately small. It adds two things, grouping and time,
+because there is a consumer for each: discovery runs per entity, and
+`kute_discover::timing` reports how long each discovered pattern takes.
+Tokenizers and discovery still take plain symbols; the times stay aligned
+with them by position. Numeric values, units of measurement and
+relationships between entities are not modelled, and timestamps are not
+carried in token containers or vocabularies. Timestamps are whole numbers
+of a declared unit; a fractional or textual time is an error, not a
+conversion.
+
+Measured on real data in `benchmarks/README.md`.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats, training
-checkpoints, typed fields and timestamps in events, entropy-coded
-containers, comparison with Zstandard and with binary record formats, and
+checkpoints, event values, units and relationships, timestamps in token
+containers, entropy-coded containers, comparison with Zstandard and with binary record formats, and
 adapters for DNA, telemetry, mathematics and quantum circuits.

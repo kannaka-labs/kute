@@ -236,6 +236,54 @@ vocabulary on this machine; one process per run.
 * Peak memory of encoding, of discovery and of the benchmark suite's cases
   is not measured yet.
 
+## Pattern timing on real event data (development branch, after v0.3.0)
+
+File: `results/discovery-hdfs-v1-timed.json`. The same HDFS_v1 dataset as
+above, this time as one event per line with its block and its time in whole
+seconds since the block's first event (`hdfs_traces.py ... --events`,
+11,175,629 lines, sha256
+`9fdfebf6a58a5881a349463b426338f4323e1182d2c60ae2be7c120523c4b527`):
+
+```sh
+kute discover --input hdfs-events.jsonl --symbol-field event --group-field block \
+  --time-field t --time-unit s --schema-id kute:loghub:hdfs-v1-traces \
+  --holdout-fraction 0.2 --top 25
+```
+
+Grouping by block rebuilt the 575,061 sequences, and the 50 patterns found
+are the same 50, with the same coverage, as in the run on the pre-grouped
+file. What the times add, in seconds, searched part then held-out part:
+
+| pattern | occurrences | p10 | median | p90 | held-out median |
+|---------|------------:|----:|-------:|----:|----------------:|
+| `E11 E9` | 1,345,545 | 0 | 0 | 0 | 0 |
+| `E9 E11 E9 E26 E26` | 330,354 | 0 | 0 | 0 | 0 |
+| `E21 E21` | 835,228 | 3 | 19 | 81 | 13 |
+| `E23 E23 E23 E21` | 418,809 | 56 | 159 | 290 | 56 |
+| `E23 ... E28` (gapped) | 3,733 | 887 | 924 | 956 | 2 occurrences |
+| `E6 ... E18` (gapped) | 1,744 | 3,792 | 3,879 | 11,372 | 9 occurrences |
+| `E25 ... E25` (gapped) | 1,467 | 3,885 | 3,903 | 11,399 | 1 occurrence |
+
+* **Patterns that look alike as sequences differ by orders of magnitude in
+  time.** Some complete within the same second more than nine times in ten;
+  `E23 E23 E23 E21` takes minutes. Sequence statistics alone do not show
+  this.
+* **Some pairs recur at a steady interval.** Eight of the gapped pairs among
+  `E6`, `E16`, `E18` and `E25` have a tenth percentile and a median both
+  between 3,790 and 3,920 seconds, about 65 minutes; `E23 ... E28` sits
+  between 887 and 956 seconds for the middle 80 percent. These are
+  regularities in the data. What produces them was not investigated.
+* **The held-out part does not confirm the long intervals.** It is the end
+  of the file, where blocks are shorter: the 65-minute pairs occur between
+  1 and 24 times there, too few to say anything. Where a pattern is common
+  in both parts the timing has the same order of magnitude but is not equal
+  (`E23 E23 E23 E21`: median 159 s against 56 s).
+* Time resolution is one second, so zero means under a second.
+* Quantiles come from all occurrences up to 100,000 and from a uniform
+  sample of that size beyond; minimum, maximum and the count are exact.
+* Reading the 644 MB event file and holding it with its timestamps peaked
+  at 1.1 GiB. The whole file is held in memory; this path is not streamed.
+
 ## Compact vocabulary file (development branch, after v0.3.0)
 
 `kute convert --input enwik8-32k.kvf --output enwik8-32k.kvfb` on the

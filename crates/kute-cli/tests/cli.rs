@@ -210,6 +210,27 @@ fn use_case_4_industrial_events() {
     assert_eq!(sent["vocabulary_after_proposal"], evolved["summary"]["digest"]);
     let received = String::from_utf8(read(&dir, "received/message-1.bin")).unwrap();
     assert!(received.trim_end().ends_with("VALVE_7_STUCK\"}"));
+    // Typed events: two valves interleaved in one file, with times. Grouped,
+    // each valve shows OPEN then CLOSE; the report says how long that takes.
+    let mut lines = String::new();
+    for i in 0..20 {
+        for (valve, held) in [("v1", 5), ("v2", 9)] {
+            lines.push_str(&format!("{{\"valve\":\"{valve}\",\"tag\":\"OPEN\",\"ms\":{}}}\n", i * 100));
+            lines.push_str(&format!("{{\"valve\":\"{valve}\",\"tag\":\"CLOSE\",\"ms\":{}}}\n", i * 100 + held));
+        }
+    }
+    std::fs::write(dir.join("valves.jsonl"), lines).unwrap();
+    let timed = ok(&dir, &[
+        "discover", "--input", "valves.jsonl", "--symbol-field", "tag", "--group-field", "valve", "--time-field", "ms",
+        "--time-unit", "ms", "--schema-id", "kute:test:valves",
+    ]);
+    assert_eq!(timed["events"]["searched"]["records"], 2);
+    assert_eq!(timed["events"]["schema"]["time_unit"], "milliseconds");
+    let patterns = timed["discovery"]["patterns"].as_array().unwrap();
+    let open_close = patterns.iter().position(|p| p["kind"] == "contiguous" && p["symbols"] == serde_json::json!(["OPEN", "CLOSE"])).unwrap();
+    let duration = &timed["events"]["timing"][open_close]["duration"];
+    assert_eq!((duration["occurrences"].as_u64(), duration["min"].as_i64(), duration["max"].as_i64()), (Some(40), Some(5), Some(9)));
+    assert!(fails(&dir, &["discover", "--input", "valves.jsonl", "--symbol-field", "tag", "--time-field", "nope"]).contains("nope"));
     // Dictionary baseline over the same events, then compare the two.
     ok(&dir, &[
         "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:event-names", "--algorithm", "dictionary",

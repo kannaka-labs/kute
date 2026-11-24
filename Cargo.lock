@@ -341,6 +341,7 @@ dependencies = [
  "kute-types",
  "rustc-hash",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

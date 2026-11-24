@@ -56,6 +56,9 @@ On the development branch, after v0.3.0 (not yet released):
 * A compact vocabulary file: name the output `.kvfb`, or run `kute convert`.
   Same digest, about a twentieth of the size on a 32K text vocabulary
   (155 KB against 3.3 MB). Every command reads either form.
+* Typed events: `kute discover --symbol-field event --group-field device
+  --time-field t` reads one event per line, separates the entities a file
+  interleaves, and reports how long each discovered pattern takes.
 
 ## Quick start
 
