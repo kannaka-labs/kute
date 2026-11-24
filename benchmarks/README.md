@@ -406,8 +406,32 @@ Lake, Windows 11, Python 3.14), not idle. Report:
 
 So on this text and this machine KUTE trained 1.8 times faster, produced
 5.6% fewer tokens, and encoded the held-out text about 10 times faster than
-`tokenizers` did in its faster form. All ten KUTE runs gave the same
+`tokenizers` did as a batch of lines. All ten KUTE runs gave the same
 vocabulary digest.
+
+The same script, wheels and split on a second machine (24 threads, Intel
+Raptor Lake desktop, Windows 11, Python 3.15, not idle; report
+`results/tokenizers-enwik8-10runs-desktop.json`):
+
+| | KUTE 0.5.0 | tokenizers 0.23.2 |
+|---|---:|---:|
+| train, median of 10 (range) | 9.7 s (7.0 to 10.0) | 10.8 s (10.2 to 11.8) |
+| tokens for the held-out text | 2,551,171 | 2,703,872 |
+| encode as one document, median (range) | 0.23 s (0.22 to 0.24) | 6.99 s (6.86 to 7.29) |
+| encode as a batch of lines, median (range) | not run | 0.89 s (0.76 to 0.93) |
+| the same with `encode_batch_fast`, median (range) | not run | 0.89 s (0.85 to 0.92) |
+| decodes back to the input exactly | yes, all runs | yes, all runs |
+
+The token counts and the digest are the same on both machines. The times are
+not in the same proportion: here KUTE trained 1.1 times faster and encoded
+about 4 times faster. With more threads `tokenizers` closes most of the
+training gap and part of the encode gap. Its `encode_batch_fast`, which
+skips token offsets and returns ids as KUTE does, made no difference to the
+time on this machine. The first KUTE training run of the ten was the
+fastest (7.0 s; the other nine took 9.7 to 10.0 s), which was not looked
+into. So read the speed figures as "faster on both machines measured, by
+between 1.1 and 1.8 times to train and 4 and 10 times to encode", not as
+one ratio.
 
 How to read it:
 
