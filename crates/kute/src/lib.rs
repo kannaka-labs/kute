@@ -26,7 +26,7 @@ pub use kute_adapters as adapters;
 pub use kute_algorithms as algorithms;
 pub use kute_bpe as bpe;
 pub use kute_core::{
-    check_sequence, AdapterCapabilities, CorpusSource, FnCorpus, ModalityAdapter, Registry, Representation,
+    check_sequence, decoded_units, AdapterCapabilities, CorpusSource, FnCorpus, ModalityAdapter, Registry, Representation,
     RepresentationBackend, Tokenizer, VecCorpus,
 };
 pub use kute_types::*;
@@ -64,9 +64,10 @@ impl Engine {
     /// An engine with every built-in algorithm and adapter registered.
     pub fn new() -> Self {
         let mut registry = Registry::new();
-        kute_bpe::register(&mut registry);
-        kute_algorithms::register(&mut registry);
-        kute_adapters::register(&mut registry);
+        // The built-in names are distinct, so these cannot collide.
+        kute_bpe::register(&mut registry).expect("built-in algorithm names are unique");
+        kute_algorithms::register(&mut registry).expect("built-in algorithm names are unique");
+        kute_adapters::register(&mut registry).expect("built-in adapter names are unique");
         Self { registry }
     }
 
@@ -158,6 +159,24 @@ impl Engine {
         let vocabulary = tokenizer.vocabulary().ok_or_else(|| KuteError::NotTrained("tokenizer has no vocabulary".into()))?;
         let (adapter, config) = self.adapter_of(vocabulary)?;
         tokenizer.encode(&adapter.ingest(raw, &config)?)
+    }
+
+    /// Raw bytes to tokens under an explicit policy for unknown symbols.
+    pub fn encode_raw_open(&self, tokenizer: &dyn Tokenizer, raw: &[u8], policy: UnknownPolicy) -> Result<TokenSequence> {
+        let vocabulary = tokenizer.vocabulary().ok_or_else(|| KuteError::NotTrained("tokenizer has no vocabulary".into()))?;
+        let (adapter, config) = self.adapter_of(vocabulary)?;
+        tokenizer.encode_open(&adapter.ingest(raw, &config)?, policy)
+    }
+
+    /// Like [`Engine::decode_raw`], but refuses before decoding when the
+    /// sequence would expand to more than `max_units` bytes or symbols.
+    pub fn decode_raw_bounded(&self, tokenizer: &dyn Tokenizer, tokens: &TokenSequence, max_units: u64) -> Result<Vec<u8>> {
+        let vocabulary = tokenizer.vocabulary().ok_or_else(|| KuteError::NotTrained("tokenizer has no vocabulary".into()))?;
+        let units = kute_core::decoded_units(vocabulary, tokens)?;
+        if units > max_units {
+            return Err(KuteError::LimitExceeded(format!("the sequence decodes to {units} units; the budget is {max_units}")));
+        }
+        self.decode_raw(tokenizer, tokens)
     }
 
     /// Tokens back to raw bytes, through the vocabulary's adapter.

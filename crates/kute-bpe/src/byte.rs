@@ -333,7 +333,7 @@ impl Tokenizer for BpeTokenizer {
         statistics.insert("requested_vocab_size".to_string(), config.vocab_size as u64);
         let merges: Vec<(u32, u32, u32, Option<u64>)> = learned.iter().map(|m| (m.left, m.right, m.id, Some(m.count))).collect();
         let vocabulary = build_vocabulary(ALGORITHM, config, &merges, statistics, fingerprint.finish())?;
-        self.finish_training(vocabulary, samples)
+        self.finish_training(vocabulary, samples, config.embed_test_vectors)
     }
 
     fn load(&mut self, mut vocabulary: Vocabulary) -> Result<()> {
@@ -406,11 +406,12 @@ impl Tokenizer for BpeTokenizer {
 
 impl BpeTokenizer {
     /// Install the trained vocabulary, record self-test vectors, and seal it.
-    fn finish_training(&mut self, vocabulary: Vocabulary, samples: Vec<Vec<u8>>) -> Result<Vocabulary> {
+    fn finish_training(&mut self, vocabulary: Vocabulary, samples: Vec<Vec<u8>>, embed: bool) -> Result<Vocabulary> {
         self.load(vocabulary)?;
         let loaded = self.loaded.as_mut().ok_or_else(|| KuteError::NotTrained("load failed".into()))?;
         let vectors: Vec<TestVector> = samples
             .into_iter()
+            .filter(|_| embed)
             .map(|s| {
                 let ids = encode_bytes(loaded, &s);
                 TestVector { input: TokenPayload::Bytes(s), ids }

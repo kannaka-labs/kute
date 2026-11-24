@@ -118,6 +118,26 @@ fn use_case_4_industrial_events() {
     let ids = ok(&dir, &["encode", "--vocab", "industrial.kvf", "--input", "data/alarms-eval.jsonl"]);
     assert_eq!(ids["vocabulary_id"], "kute:industrial:events");
     assert!(ids["ids"].as_array().unwrap().len() > 100);
+    // A frozen vocabulary meets an event it has never seen.
+    let mut novel = read(&dir, "data/alarms-eval.jsonl");
+    novel.extend_from_slice(b"{\"tag\":\"VALVE_7_STUCK\"}\n");
+    std::fs::write(dir.join("novel.jsonl"), &novel).unwrap();
+    let refused = fails(&dir, &["encode", "--vocab", "industrial.kvf", "--input", "novel.jsonl", "--output", "novel.kute"]);
+    assert!(refused.contains("VALVE_7_STUCK"), "{refused}");
+    let escaped = ok(&dir, &["encode", "--vocab", "industrial.kvf", "--input", "novel.jsonl", "--output", "novel.kute", "--unknown", "escape", "--compress"]);
+    assert_eq!(escaped["escaped_symbols"], 1);
+    let over = fails(&dir, &["decode", "--vocab", "industrial.kvf", "--input", "novel.kute", "--output", "novel.out", "--max-units", "5"]);
+    assert!(over.contains("limit exceeded"), "{over}");
+    ok(&dir, &["decode", "--vocab", "industrial.kvf", "--input", "novel.kute", "--output", "novel.out"]);
+    let decoded = String::from_utf8(read(&dir, "novel.out")).unwrap();
+    assert!(decoded.trim_end().ends_with("VALVE_7_STUCK\"}"), "the unseen event must come back");
+    // A private corpus: no excerpts in the published file.
+    ok(&dir, &[
+        "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:private", "--algorithm", "sequence-bpe",
+        "--adapter", "jsonl-events", "--adapter-option", "field=tag", "--vocab-size", "64", "--no-test-vectors", "--output", "private.kvf",
+    ]);
+    let private: serde_json::Value = serde_json::from_slice(&read(&dir, "private.kvf")).unwrap();
+    assert_eq!(private["test_vectors"].as_array().unwrap().len(), 0);
     // Dictionary baseline over the same events, then compare the two.
     ok(&dir, &[
         "train", "--input", "data/alarms-train.jsonl", "--id", "kute:industrial:event-names", "--algorithm", "dictionary",

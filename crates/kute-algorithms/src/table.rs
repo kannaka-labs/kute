@@ -190,7 +190,7 @@ fn finish(draft: Draft, config: &TrainingConfig) -> Result<Table> {
     };
     let mut table = Table::build(vocabulary, draft.algorithm)?;
     let mut vectors = Vec::new();
-    for sample in draft.samples {
+    for sample in draft.samples.into_iter().filter(|_| config.embed_test_vectors) {
         let input = CanonicalInput { modality: draft.modality, payload: sample };
         let ids = table.encode(&input)?;
         let input = match input.payload {

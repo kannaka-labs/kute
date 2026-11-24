@@ -148,6 +148,52 @@ MIT or Apache-2.0 at the user's option, the common choice for Rust libraries.
 This was chosen to make the repository complete and is the maintainers' to
 confirm or change before first publication.
 
+## Records from the development directive v0.2
+
+The directive proposes ADR numbers 0016 to 0030 for its own topics. Numbers
+are assigned here in the order decisions are actually taken, starting at
+0016, so they will not match the directive's list one for one.
+
+## ADR-0016: Unknown symbols are refused or escaped, never approximated
+
+A frozen symbol vocabulary used to refuse any input holding a symbol outside
+its alphabet. That is correct but makes a vocabulary unusable on a live
+stream, where new names appear. Encoding now takes a policy. `strict` keeps
+the old behavior and is the default. `escape` carries the unknown symbol
+literally in the sequence's own escape table and gives it an id past the end
+of the token table.
+
+The vocabulary is not modified, so its digest and every earlier sequence
+stay valid, and nothing is learned silently. Proposing escaped symbols as
+vocabulary candidates is a separate, explicit step (vocabulary evolution).
+An unknown-token placeholder was rejected because it loses the input.
+
+## ADR-0017: Registry names are taken once
+
+`register_algorithm` and `register_adapter` return an error when the name is
+already registered; `replace_algorithm` and `replace_adapter` override on
+purpose. A vocabulary names its algorithm, so a plugin that silently took
+over the name `bpe` would change what existing files mean. This changes the
+signature of the `register` functions, which now return `Result`.
+
+## ADR-0018: Test vectors are optional, because they are excerpts
+
+ADR-0010 stores samples of the training input in the vocabulary. For a
+private corpus that publishes the data. `embed_test_vectors` (CLI:
+`--no-test-vectors`) turns it off. The default stays on, since a vocabulary
+that can check itself is worth more, and the choice is recorded in the
+training provenance. Learned tokens are frequent fragments of the corpus and
+remain visible in any vocabulary; that is inherent and is not hidden by this
+switch.
+
+## ADR-0019: Decoders can bound output before producing it
+
+`decoded_units` computes the decoded length from the token table alone, and
+`decode_raw_bounded` refuses a sequence over a caller's budget. Container
+parsing was already bounded; this closes the remaining amplification, from
+ids to output. The HRM plugin's `inner_product` now returns an error for
+vectors of different dimensions instead of truncating to the shorter one.
+
 ## Deferred
 
 Registry service and signing, streaming, import from other tokenizer formats,

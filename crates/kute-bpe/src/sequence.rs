@@ -2,16 +2,20 @@
 //! gates. The base alphabet is whatever symbols the corpus contains; merges
 //! become composite tokens such as `[MOTOR_START, CURRENT_HIGH, MOTOR_TRIP]`.
 //!
-//! This is KUTE's own capability, not a rustbpe feature. A symbol that is not
-//! in the alphabet is refused rather than approximated, because there is no
-//! lossless way to represent it.
+//! This is KUTE's own capability, not a rustbpe feature.
+//!
+//! A vocabulary is frozen, but the world is not: new event names appear. A
+//! symbol outside the alphabet is never approximated. Under the strict
+//! policy it is refused; under the escape policy it travels literally in
+//! the sequence's escape table, the vocabulary stays as it was, and decoding
+//! returns the input exactly. Merges never span an escaped symbol.
 
 use crate::merge::{apply_merges, train_merges, Pair};
 use kute_core::{check_sequence, sequence_for, CorpusFingerprint, CorpusSource, Tokenizer};
 use kute_types::{
     CanonicalInput, KuteError, Manifest, MergeRule, Modality, Payload, PayloadKind, Provenance, Result,
     TestVector, TokenEntry, TokenKind, TokenPayload, TokenSequence, TokenizerCapabilities, TrainingConfig,
-    Vocabulary, KUTE_VERSION, KVF_VERSION,
+    UnknownPolicy, Vocabulary, KUTE_VERSION, KVF_VERSION, MAX_ESCAPES,
 };
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, BTreeSet};
@@ -50,6 +54,44 @@ fn encode_symbols(loaded: &Loaded, symbols: &[String]) -> Result<Vec<u32>> {
     }
     apply_merges(&mut ids, &loaded.ranks);
     Ok(ids)
+}
+
+/// Encode with unknown symbols escaped. Returns the ids and the escape
+/// table; an escaped symbol gets the id `table length + its index`, and the
+/// same symbol always reuses one entry.
+fn encode_symbols_open(loaded: &Loaded, symbols: &[String]) -> Result<(Vec<u32>, Vec<String>)> {
+    let table = loaded.vocabulary.tokens.len() as u32;
+    let mut out = Vec::with_capacity(symbols.len());
+    let mut run: Vec<u32> = Vec::new();
+    let mut escapes: Vec<String> = Vec::new();
+    let mut escape_index: FxHashMap<&str, u32> = FxHashMap::default();
+    for s in symbols {
+        match loaded.alphabet.get(s) {
+            Some(&id) => run.push(id),
+            None => {
+                if s.is_empty() || s.len() > kute_types::vocab::MAX_SYMBOL_BYTES {
+                    return Err(KuteError::InvalidInput("symbols must be 1 to 1024 bytes".into()));
+                }
+                apply_merges(&mut run, &loaded.ranks);
+                out.append(&mut run);
+                let index = match escape_index.get(s.as_str()) {
+                    Some(&i) => i,
+                    None => {
+                        if escapes.len() >= MAX_ESCAPES {
+                            return Err(KuteError::LimitExceeded(format!("more than {MAX_ESCAPES} distinct unknown symbols in one sequence")));
+                        }
+                        escapes.push(s.clone());
+                        escape_index.insert(s.as_str(), escapes.len() as u32 - 1);
+                        escapes.len() as u32 - 1
+                    }
+                };
+                out.push(table + index);
+            }
+        }
+    }
+    apply_merges(&mut run, &loaded.ranks);
+    out.append(&mut run);
+    Ok((out, escapes))
 }
 
 impl Tokenizer for SequenceBpeTokenizer {
@@ -177,7 +219,7 @@ impl Tokenizer for SequenceBpeTokenizer {
         self.load(vocabulary)?;
         let loaded = self.loaded.as_mut().ok_or_else(|| KuteError::NotTrained("load failed".into()))?;
         let mut vectors = Vec::new();
-        for record in records.iter().filter(|r| !r.is_empty()).take(4) {
+        for record in records.iter().filter(|r| !r.is_empty() && config.embed_test_vectors).take(4) {
             let sample: Vec<String> = record.iter().take(32).cloned().collect();
             let ids = encode_symbols(loaded, &sample)?;
             vectors.push(TestVector { input: TokenPayload::Symbols(sample), ids });
@@ -227,11 +269,31 @@ impl Tokenizer for SequenceBpeTokenizer {
         sequence_for(&loaded.vocabulary, input.modality, encode_symbols(loaded, symbols)?)
     }
 
+    fn encode_open(&self, input: &CanonicalInput, policy: UnknownPolicy) -> Result<TokenSequence> {
+        if policy == UnknownPolicy::Strict {
+            return self.encode(input);
+        }
+        let loaded = self.loaded()?;
+        let Payload::Symbols(symbols) = &input.payload else {
+            return Err(KuteError::InvalidInput("sequence-bpe takes symbol payloads".into()));
+        };
+        let (ids, escapes) = encode_symbols_open(loaded, symbols)?;
+        let mut sequence = sequence_for(&loaded.vocabulary, input.modality, ids)?;
+        sequence.escapes = escapes;
+        Ok(sequence)
+    }
+
     fn decode(&self, tokens: &TokenSequence) -> Result<CanonicalInput> {
         let loaded = self.loaded()?;
         check_sequence(&loaded.vocabulary, tokens)?;
         let mut out = Vec::with_capacity(tokens.ids.len() * 2);
+        let table = loaded.vocabulary.tokens.len();
         for &id in &tokens.ids {
+            if id as usize >= table {
+                let escaped = tokens.escapes.get(id as usize - table).ok_or(KuteError::UnknownToken(id))?;
+                out.push(escaped.clone());
+                continue;
+            }
             match &loaded.vocabulary.token(id)?.payload {
                 TokenPayload::Symbols(s) => out.extend(s.iter().cloned()),
                 TokenPayload::Bytes(_) => return Err(KuteError::InvalidVocabulary("byte token in a symbol vocabulary".into())),
@@ -251,8 +313,8 @@ impl Tokenizer for SequenceBpeTokenizer {
             trainable: true,
             deterministic: true,
             accepts: vec![PayloadKind::Symbols],
-            rejects_unknown: true,
-            notes: "BPE over named symbols. Lossless for sequences drawn from the trained alphabet; any other symbol is refused.".to_string(),
+            rejects_unknown: false,
+            notes: "BPE over named symbols. Lossless for the trained alphabet. A symbol outside it is refused under the strict policy and carried literally, without changing the vocabulary, under the escape policy.".to_string(),
         }
     }
 }

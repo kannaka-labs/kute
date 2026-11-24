@@ -64,6 +64,19 @@ pub struct TrainingConfig {
     pub description: Option<String>,
     #[serde(default)]
     pub license: Option<String>,
+    /// Store short samples of the training corpus in the vocabulary as
+    /// self-test vectors. Turn off when the corpus must not be disclosed:
+    /// the vectors are verbatim excerpts.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub embed_test_vectors: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 fn one() -> u64 {
@@ -90,6 +103,7 @@ impl TrainingConfig {
             seed: 0,
             description: None,
             license: None,
+            embed_test_vectors: true,
         }
     }
 

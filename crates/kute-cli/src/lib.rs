@@ -33,6 +33,11 @@ enum Command {
         /// Write the compressed container (format 2) instead of plain varint ids.
         #[arg(long, requires = "output")]
         compress: bool,
+        /// What to do with a symbol the vocabulary does not contain:
+        /// `strict` refuses the input, `escape` carries the symbol literally
+        /// in the sequence so it still decodes exactly.
+        #[arg(long, default_value = "strict")]
+        unknown: String,
     },
     /// Decode a .kute token sequence back to bytes.
     Decode {
@@ -43,6 +48,10 @@ enum Command {
         /// Where to write the decoded bytes. Without it, they go to stdout.
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Refuse a sequence that would decode to more than this many bytes
+        /// or symbols. Use it for sequences from an untrusted source.
+        #[arg(long)]
+        max_units: Option<u64>,
     },
     /// Summarize a vocabulary, or show tokens from it.
     Inspect {
@@ -145,6 +154,10 @@ struct TrainArgs {
     /// License of the vocabulary, e.g. an SPDX identifier.
     #[arg(long)]
     license: Option<String>,
+    /// Do not store excerpts of the training data in the vocabulary as
+    /// self-test vectors. Use it when the corpus is private.
+    #[arg(long)]
+    no_test_vectors: bool,
     #[arg(long)]
     output: PathBuf,
     /// Replace an existing output file even if its content differs.
@@ -186,6 +199,7 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     config.reserved_tokens = args.reserved;
     config.description = args.description;
     config.license = args.license;
+    config.embed_test_vectors = !args.no_test_vectors;
     if let Some(path) = &args.dictionary_file {
         let text = std::fs::read_to_string(path)?;
         config.dictionary = text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.is_empty()).map(str::to_string).collect();
@@ -212,10 +226,11 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
 fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
     match cli.command {
         Command::Train(args) => train(&engine, *args),
-        Command::Encode { vocab: vocab_path, input, output, compress } => {
+        Command::Encode { vocab: vocab_path, input, output, compress, unknown } => {
+            let policy = kute::UnknownPolicy::parse(&unknown)?;
             let tokenizer = engine.tokenizer(vocab::load(&vocab_path)?)?;
             let raw = std::fs::read(&input)?;
-            let sequence = engine.encode_raw(tokenizer.as_ref(), &raw)?;
+            let sequence = engine.encode_raw_open(tokenizer.as_ref(), &raw, policy)?;
             match output {
                 Some(path) => {
                     let bytes = if compress { sequence.to_bytes_compressed()? } else { sequence.to_bytes()? };
@@ -224,6 +239,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                         "output": path,
                         "input_bytes": raw.len(),
                         "tokens": sequence.ids.len(),
+                        "escaped_symbols": sequence.escapes.len(),
                         "serialized_bytes": bytes.len(),
                         "vocabulary": format!("{} {}", sequence.vocabulary_id, sequence.vocabulary_version),
                     }))
@@ -231,10 +247,10 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 None => print(&sequence),
             }
         }
-        Command::Decode { vocab: vocab_path, input, output } => {
+        Command::Decode { vocab: vocab_path, input, output, max_units } => {
             let tokenizer = engine.tokenizer(vocab::load(&vocab_path)?)?;
             let sequence = TokenSequence::from_bytes(&std::fs::read(&input)?)?;
-            let bytes = engine.decode_raw(tokenizer.as_ref(), &sequence)?;
+            let bytes = engine.decode_raw_bounded(tokenizer.as_ref(), &sequence, max_units.unwrap_or(u64::MAX))?;
             match output {
                 Some(path) => {
                     std::fs::write(&path, &bytes)?;

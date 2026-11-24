@@ -496,7 +496,11 @@ fn third_party_algorithm_registers_without_core_changes() {
     }
 
     let mut engine = Engine::new();
-    engine.registry_mut().register_algorithm("reverse-bytes", || Box::new(Reverse::default()));
+    engine.registry_mut().register_algorithm("reverse-bytes", || Box::new(Reverse::default())).unwrap();
+    // A name can be taken once; replacing is a separate, explicit call.
+    assert!(engine.registry_mut().register_algorithm("reverse-bytes", || Box::new(Reverse::default())).is_err());
+    assert!(engine.registry_mut().register_algorithm("bpe", || Box::new(Reverse::default())).is_err());
+    engine.registry_mut().replace_algorithm("reverse-bytes", || Box::new(Reverse::default()));
     assert!(engine.registry().algorithm_names().contains(&"reverse-bytes".to_string()));
     let mut tokenizer = engine.registry().tokenizer("reverse-bytes").unwrap();
     tokenizer.train(&mut kute::VecCorpus::new(vec![]), &config("thirdparty:reverse", 256)).unwrap();
@@ -524,9 +528,11 @@ fn hrm_adapter_contract() {
     // Repeatable.
     assert_eq!(a, vector(&vocab, 300));
     // Unit energy; distinct tokens are close to orthogonal.
-    let (norm, _) = inner_product(&a, &a);
+    let (norm, _) = inner_product(&a, &a).unwrap();
     assert!((norm - 1.0).abs() < 1e-4, "norm {norm}");
-    let (re, im) = inner_product(&a, &vector(&vocab, 301));
+    let (re, im) = inner_product(&a, &vector(&vocab, 301)).unwrap();
+    // Vectors from mappings of different dimensions have no inner product.
+    assert!(inner_product(&a, &a[..255]).is_err());
     assert!((re * re + im * im).sqrt() < 0.3);
     // Content-addressed: the same payload maps to the same vector in another
     // vocabulary, whatever id it has there.
