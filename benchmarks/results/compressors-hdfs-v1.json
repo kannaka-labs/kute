@@ -46,12 +46,60 @@
       "note": "one byte per event, zero byte per record end; ratio is against the text file"
     },
     {
+      "method": "CBOR, integers + zstd -19",
+      "bytes": 98072,
+      "ratio": 64.999,
+      "shared_bytes": 0,
+      "ratio_with_shared": 64.999,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "MessagePack, integers + zstd -19",
+      "bytes": 98868,
+      "ratio": 64.476,
+      "shared_bytes": 0,
+      "ratio_with_shared": 64.476,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "Protocol Buffers, packed uint32 + zstd -19",
+      "bytes": 99926,
+      "ratio": 63.793,
+      "shared_bytes": 0,
+      "ratio_with_shared": 63.793,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
       "method": "xz -9 on event bytes",
       "bytes": 106896,
       "ratio": 59.633,
       "shared_bytes": 0,
       "ratio_with_shared": 59.633,
       "note": "one byte per event, zero byte per record end; ratio is against the text file"
+    },
+    {
+      "method": "CBOR, integers + xz -9",
+      "bytes": 109564,
+      "ratio": 58.181,
+      "shared_bytes": 0,
+      "ratio_with_shared": 58.181,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "MessagePack, integers + xz -9",
+      "bytes": 110548,
+      "ratio": 57.663,
+      "shared_bytes": 0,
+      "ratio_with_shared": 57.663,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "Protocol Buffers, packed uint32 + xz -9",
+      "bytes": 112788,
+      "ratio": 56.518,
+      "shared_bytes": 0,
+      "ratio_with_shared": 56.518,
+      "note": "binary record form of the same traces; ratio is against the text file"
     },
     {
       "method": "gzip -9 on event bytes",
@@ -74,6 +122,30 @@
       "ratio": 49.835,
       "shared_bytes": 0,
       "ratio_with_shared": 49.835
+    },
+    {
+      "method": "MessagePack, names + zstd -19",
+      "bytes": 133851,
+      "ratio": 47.624,
+      "shared_bytes": 0,
+      "ratio_with_shared": 47.624,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "CBOR, names + zstd -19",
+      "bytes": 133918,
+      "ratio": 47.601,
+      "shared_bytes": 0,
+      "ratio_with_shared": 47.601,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "Protocol Buffers, repeated string + zstd -19",
+      "bytes": 145026,
+      "ratio": 43.955,
+      "shared_bytes": 0,
+      "ratio_with_shared": 43.955,
+      "note": "binary record form of the same traces; ratio is against the text file"
     },
     {
       "method": "gzip -9",
@@ -104,6 +176,30 @@
       "ratio_with_shared": 38.764
     },
     {
+      "method": "CBOR, names + xz -9",
+      "bytes": 166176,
+      "ratio": 38.36,
+      "shared_bytes": 0,
+      "ratio_with_shared": 38.36,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "MessagePack, names + xz -9",
+      "bytes": 166720,
+      "ratio": 38.235,
+      "shared_bytes": 0,
+      "ratio_with_shared": 38.235,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "Protocol Buffers, repeated string + xz -9",
+      "bytes": 174628,
+      "ratio": 36.504,
+      "shared_bytes": 0,
+      "ratio_with_shared": 36.504,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
       "method": "lz4 (level 12)",
       "bytes": 177820,
       "ratio": 35.848,
@@ -123,6 +219,54 @@
       "ratio": 6.653,
       "shared_bytes": 0,
       "ratio_with_shared": 6.653
+    },
+    {
+      "method": "CBOR, integers",
+      "bytes": 1881602,
+      "ratio": 3.388,
+      "shared_bytes": 0,
+      "ratio_with_shared": 3.388,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "MessagePack, integers",
+      "bytes": 1973223,
+      "ratio": 3.231,
+      "shared_bytes": 0,
+      "ratio_with_shared": 3.231,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "Protocol Buffers, packed uint32",
+      "bytes": 2111484,
+      "ratio": 3.019,
+      "shared_bytes": 0,
+      "ratio_with_shared": 3.019,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "CBOR, names",
+      "bytes": 6489746,
+      "ratio": 0.982,
+      "shared_bytes": 0,
+      "ratio_with_shared": 0.982,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "MessagePack, names",
+      "bytes": 6581367,
+      "ratio": 0.969,
+      "shared_bytes": 0,
+      "ratio_with_shared": 0.969,
+      "note": "binary record form of the same traces; ratio is against the text file"
+    },
+    {
+      "method": "Protocol Buffers, repeated string",
+      "bytes": 8256108,
+      "ratio": 0.772,
+      "shared_bytes": 0,
+      "ratio_with_shared": 0.772,
+      "note": "binary record form of the same traces; ratio is against the text file"
     }
   ]
 }

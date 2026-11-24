@@ -343,8 +343,29 @@ line (`E5 E22 E5 ...`, 6,374,580 bytes), and ratios are against that.
   longer tokens left the entropy coder less to work with.
 * This is one dataset with 22 to 29 event types and long runs of one event.
   Nothing here says how it goes on events with many types or little
-  repetition, and the binary record formats in the directive's matrix
-  (CBOR, MessagePack, Protobuf) were not compared.
+  repetition.
+
+**The same events in binary record formats** (after v0.4.0; `--record-formats`,
+same report file). One record per block. "Integers" replaces each event name
+with a small number; the name table that needs is not counted.
+
+| form | raw bytes | + zstd -19 | + xz -9 |
+|------|----------:|-----------:|--------:|
+| **KUTE container** | 182,020 (plain) | 80,789 (its own zlib) | |
+| CBOR, integers | 1,881,602 | 98,072 | 109,564 |
+| MessagePack, integers | 1,973,223 | 98,868 | 110,548 |
+| Protocol Buffers, packed uint32 | 2,111,484 | 99,926 | 112,788 |
+| MessagePack, names | 6,581,367 | 133,851 | 166,720 |
+| CBOR, names | 6,489,746 | 133,918 | 166,176 |
+| Protocol Buffers, repeated string | 8,256,108 | 145,026 | 174,628 |
+
+* Uncompressed, the KUTE container is a tenth the size of the tightest
+  binary record form: learned sequences replace runs of events with one id.
+* Compressed, it is 18 percent smaller than the best of them. A strong
+  compressor recovers most of what the vocabulary learned.
+* The Protocol Buffers bytes are the wire format written by the script, not
+  by `protoc`. Records here hold event names only; timestamps and other
+  fields, which these formats are built to carry, are not in the comparison.
 
 ## Compact vocabulary file (v0.4.0)
 
