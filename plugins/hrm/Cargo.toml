@@ -1,0 +1,13 @@
+[package]
+name = "kute-hrm"
+description = "Experimental HRM representation adapter for KUTE: token ids to complex-valued vectors"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+kute-types.workspace = true
+kute-core.workspace = true
+sha2.workspace = true

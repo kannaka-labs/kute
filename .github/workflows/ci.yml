@@ -1,0 +1,95 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  rust:
+    name: rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --all-targets --locked
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked
+      - name: Test
+        run: cargo test --workspace --locked
+
+  rustbpe-backend:
+    name: rustbpe reference backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rustbpe
+      - name: Test kute-bpe with the rustbpe feature
+        run: |
+          export LD_LIBRARY_PATH="$(python -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))'):$LD_LIBRARY_PATH"
+          cargo test -p kute-bpe --features rustbpe --locked
+
+  python:
+    name: python bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bindings/python
+      - name: Build and test
+        working-directory: bindings/python
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install maturin pytest tiktoken
+          maturin develop --release
+          pytest tests -q
+
+  benchmark-smoke:
+    name: benchmark suite runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bench
+      - name: Run the suite once
+        run: cargo run --release -p kute-cli -- benchmark --suite --repo-root . --iterations 1 --output suite.json > /dev/null
+      - name: Every case must reconstruct exactly
+        run: |
+          python - <<'EOF'
+          import json
+          report = json.load(open("suite.json"))
+          assert report["cases"], "no cases ran"
+          for case in report["cases"]:
+              assert case["trained"]["round_trip_canonical_exact"], case["id"]
+              assert case["baseline"]["round_trip_canonical_exact"], case["id"]
+          print(len(report["cases"]), "cases, all exact")
+          EOF

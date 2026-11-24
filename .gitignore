@@ -1,0 +1,9 @@
+/target/
+/bindings/python/target/
+**/__pycache__/
+.pytest_cache/
+*.pyd
+*.so
+/examples/data/
+/benchmarks/results/*scratch*
+.venv/

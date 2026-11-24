@@ -1,0 +1,13 @@
+[package]
+name = "kute-vocab"
+description = "KUTE Vocabulary Format (KVF) reading, writing, validation, comparison and tiktoken export"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+kute-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true

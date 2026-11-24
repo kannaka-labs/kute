@@ -1,0 +1,13 @@
+[package]
+name = "kute-adapters"
+description = "KUTE modality adapters: text, binary, JSON, JSONL and JSONL event streams"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+kute-types.workspace = true
+kute-core.workspace = true
+serde_json.workspace = true

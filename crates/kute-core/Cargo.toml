@@ -1,0 +1,12 @@
+[package]
+name = "kute-core"
+description = "KUTE core interfaces: Tokenizer, ModalityAdapter, CorpusSource, RepresentationBackend and the plugin registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+kute-types.workspace = true
+sha2.workspace = true

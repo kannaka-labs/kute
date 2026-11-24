@@ -1,0 +1,20 @@
+[package]
+name = "kute-bench"
+description = "Reproducible evaluation and benchmarking for KUTE vocabularies"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+build = "build.rs"
+
+[features]
+default = []
+rustbpe = ["kute/rustbpe"]
+
+[dependencies]
+kute.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+flate2.workspace = true
+sha2.workspace = true

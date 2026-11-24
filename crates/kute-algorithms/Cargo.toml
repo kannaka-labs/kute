@@ -1,0 +1,14 @@
+[package]
+name = "kute-algorithms"
+description = "Baseline KUTE tokenization algorithms: raw bytes, characters and fixed dictionaries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+kute-types.workspace = true
+kute-core.workspace = true
+rustc-hash.workspace = true
+serde_json.workspace = true

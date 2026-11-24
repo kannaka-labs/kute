@@ -1,0 +1,27 @@
+[package]
+name = "kute-cli"
+description = "Command line interface for the Kannaka Universal Tokenization Engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "kute"
+path = "src/main.rs"
+
+[features]
+default = []
+# Adds the rustbpe reference backend. Needs Python; see kute-bpe.
+rustbpe = ["kute/rustbpe", "kute-bench/rustbpe"]
+
+[dependencies]
+kute.workspace = true
+kute-bench.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

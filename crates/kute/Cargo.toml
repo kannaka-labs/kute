@@ -1,0 +1,27 @@
+[package]
+name = "kute"
+description = "Kannaka Universal Tokenization Engine: the engine facade with all built-in algorithms and adapters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[features]
+default = []
+# Adds the rustbpe reference backend. Needs Python; see kute-bpe.
+rustbpe = ["kute-bpe/rustbpe"]
+
+[dependencies]
+kute-types.workspace = true
+kute-core.workspace = true
+kute-vocab.workspace = true
+kute-bpe.workspace = true
+kute-algorithms.workspace = true
+kute-adapters.workspace = true
+serde.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+kute-hrm.workspace = true
+serde_json.workspace = true
