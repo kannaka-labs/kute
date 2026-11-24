@@ -32,7 +32,7 @@ After 0.4.0 (not yet released):
 ```python
 small = engine.train("corpus/", vocabulary_id="example:text", vocab_size=8192)
 large = engine.train("corpus/", vocabulary_id="example:text", vocab_size=32768, resume_from=small)
-# large is the vocabulary one run to 32768 would give; bpe only
+# large is the vocabulary one run to 32768 would give (bpe, sequence-bpe)
 
 found = kute.discover([["START", "HEAT", "DONE"], ...], min_support=5)
 found["patterns"]   # recurring runs and gapped pairs, strongest first

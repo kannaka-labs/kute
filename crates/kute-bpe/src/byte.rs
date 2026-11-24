@@ -1,7 +1,7 @@
 //! Native byte-level BPE. Ids 0..=255 are the byte values, learned merges
 //! follow, reserved tokens come last. Lossless for arbitrary bytes.
 
-use crate::merge::{apply_merges, train_merges, LearnedMerge, Pair};
+use crate::merge::{apply_merges, resumable_merges, train_merges, LearnedMerge, Pair};
 use fancy_regex::Regex;
 use rayon::prelude::*;
 use kute_core::{check_sequence, sequence_for, CorpusFingerprint, CorpusSource, Tokenizer};
@@ -203,42 +203,6 @@ fn encode_piece(loaded: &Loaded, bytes: &[u8]) -> Vec<u32> {
     out
 }
 
-/// The merges of `prior`, if a run under `config` on the corpus with this
-/// fingerprint may continue from them.
-fn resumable_merges(prior: &Vocabulary, config: &TrainingConfig, corpus_fingerprint: &str, max_merges: u32) -> Result<Vec<LearnedMerge>> {
-    let refuse = |why: String| Err(KuteError::VocabularyMismatch(format!("cannot resume from {} {}: {why}", prior.id(), prior.version())));
-    if prior.manifest.algorithm != ALGORITHM {
-        return refuse(format!("it was trained by {:?}, not {ALGORITHM:?}", prior.manifest.algorithm));
-    }
-    if prior.provenance.corpus_fingerprints != [corpus_fingerprint.to_string()] {
-        return refuse("it was trained on a different corpus".into());
-    }
-    let Some(recorded) = &prior.provenance.training else {
-        return refuse("it does not record its training settings".into());
-    };
-    let now = serde_json::to_value(config)?;
-    // The settings that decide which pair is merged next. A setting absent
-    // from both records is the same in both.
-    for key in ["min_frequency", "pretokenizer", "max_token_length", "train_window", "stream_bytes"] {
-        if recorded.get(key) != now.get(key) {
-            return refuse(format!("{key} differs"));
-        }
-    }
-    if prior.merges.len() as u64 > max_merges as u64 {
-        return refuse(format!("it already has {} merges and this run asks for {max_merges}", prior.merges.len()));
-    }
-    let mut out = Vec::with_capacity(prior.merges.len());
-    for (i, m) in prior.merges.iter().enumerate() {
-        let id = 256 + i as u32;
-        if m.id != id || m.left >= id || m.right >= id {
-            return refuse(format!("merge {i} is out of order"));
-        }
-        let count = prior.tokens.get(id as usize).and_then(|t| t.frequency).unwrap_or(0);
-        out.push(LearnedMerge { left: m.left, right: m.right, id, count });
-    }
-    Ok(out)
-}
-
 /// Assemble a byte-BPE vocabulary from learned merges. Shared with the
 /// rustbpe backend so both write identical tables.
 #[doc(hidden)]
@@ -360,7 +324,7 @@ impl Tokenizer for BpeTokenizer {
         // learning continues exactly as it would have.
         let mut kept: Vec<LearnedMerge> = Vec::new();
         if let Some(prior) = &config.resume_from {
-            kept = resumable_merges(prior, config, &corpus_fingerprint, max_merges)?;
+            kept = resumable_merges(prior, ALGORITHM, config, &corpus_fingerprint, 256, max_merges)?;
             let mut ranks: FxHashMap<Pair, u32> = FxHashMap::default();
             for m in &kept {
                 ranks.insert((m.left, m.right), m.id);

@@ -5,6 +5,7 @@
 //! on a tie, the numerically smallest pair. The result depends only on the
 //! multiset of input sequences, never on hash or thread order.
 
+use kute_types::{KuteError, Result, TrainingConfig, Vocabulary};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -123,6 +124,50 @@ pub fn train_merges(
         }
     }
     merges
+}
+
+/// The merges of `prior`, if a run of `algorithm` under `config` on the
+/// corpus with this fingerprint may continue from them. `first_id` is the
+/// size of the base alphabet, which the caller has checked is the same.
+pub(crate) fn resumable_merges(
+    prior: &Vocabulary,
+    algorithm: &str,
+    config: &TrainingConfig,
+    corpus_fingerprint: &str,
+    first_id: u32,
+    max_merges: u32,
+) -> Result<Vec<LearnedMerge>> {
+    let refuse = |why: String| Err(KuteError::VocabularyMismatch(format!("cannot resume from {} {}: {why}", prior.id(), prior.version())));
+    if prior.manifest.algorithm != algorithm {
+        return refuse(format!("it was trained by {:?}, not {algorithm:?}", prior.manifest.algorithm));
+    }
+    if prior.provenance.corpus_fingerprints != [corpus_fingerprint.to_string()] {
+        return refuse("it was trained on a different corpus".into());
+    }
+    let Some(recorded) = &prior.provenance.training else {
+        return refuse("it does not record its training settings".into());
+    };
+    let now = serde_json::to_value(config)?;
+    // The settings that decide which pair is merged next. A setting absent
+    // from both records is the same in both.
+    for key in ["min_frequency", "pretokenizer", "max_token_length", "train_window", "stream_bytes"] {
+        if recorded.get(key) != now.get(key) {
+            return refuse(format!("{key} differs"));
+        }
+    }
+    if prior.merges.len() as u64 > max_merges as u64 {
+        return refuse(format!("it already has {} merges and this run asks for {max_merges}", prior.merges.len()));
+    }
+    let mut out = Vec::with_capacity(prior.merges.len());
+    for (i, m) in prior.merges.iter().enumerate() {
+        let id = first_id + i as u32;
+        if m.id != id || m.left >= id || m.right >= id {
+            return refuse(format!("merge {i} is out of order"));
+        }
+        let count = prior.tokens.get(id as usize).and_then(|t| t.frequency).unwrap_or(0);
+        out.push(LearnedMerge { left: m.left, right: m.right, id, count });
+    }
+    Ok(out)
 }
 
 /// Apply learned merges to one sequence.

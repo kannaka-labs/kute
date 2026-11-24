@@ -351,7 +351,7 @@ padded forms are refused (issue #4).
 
 ## ADR-0028: A vocabulary is its own training checkpoint
 
-A byte-BPE run can continue from a vocabulary trained earlier on the same
+A `bpe` or `sequence-bpe` run can continue from a vocabulary trained earlier on the same
 corpus with the same settings and a smaller size (`TrainingConfig::
 resume_from`, `kute train --resume-from`). The corpus is read again, the
 earlier merges are applied to it, and learning goes on. Which pair is merged
@@ -367,7 +367,8 @@ the fingerprint or a setting that affects merging differs.
 What this does not give: a run does not write intermediate files by itself,
 so to survive an interruption it has to be run in stages. Each stage reads
 the corpus again; on 90 MB of text that was about 7 of the 17 seconds a
-whole run takes. `sequence-bpe` and the baseline algorithms cannot resume.
+whole run takes. `sequence-bpe` resumes the same way; the baseline
+algorithms cannot resume.
 
 ## Deferred
 

@@ -547,7 +547,7 @@ struct TrainArgs {
     stream_bytes: Option<usize>,
     /// Continue from a vocabulary trained earlier on the same input with the
     /// same settings and a smaller --vocab-size. The result is the same as
-    /// one run to the new size. bpe only.
+    /// one run to the new size. bpe and sequence-bpe.
     #[arg(long, value_name = "VOCAB")]
     resume_from: Option<PathBuf>,
     /// Store the start of the first training records in the vocabulary as

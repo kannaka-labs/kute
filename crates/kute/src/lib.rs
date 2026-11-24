@@ -114,8 +114,8 @@ impl Engine {
     ) -> Result<Vocabulary> {
         let adapter_impl = self.registry.adapter(adapter)?;
         let mut tokenizer = self.registry.tokenizer(algorithm)?;
-        if config.resume_from.is_some() && algorithm != "bpe" {
-            return Err(KuteError::Unsupported(format!("resuming a training run is implemented for the bpe algorithm, not {algorithm:?}")));
+        if config.resume_from.is_some() && algorithm != "bpe" && algorithm != "sequence-bpe" {
+            return Err(KuteError::Unsupported(format!("resuming a training run is implemented for bpe and sequence-bpe, not {algorithm:?}")));
         }
         let mut corpus = FnCorpus(|| match documents()? {
             Some(doc) => adapter_impl.ingest(&doc, adapter_config).map(Some),

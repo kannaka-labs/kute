@@ -68,7 +68,8 @@ Added in v0.4:
 On the development branch, after v0.4.0 (not yet released):
 
 * `kute train --resume-from small.kvf --vocab-size N` continues an earlier
-  byte-BPE run to a larger size and gives the same file one run would.
+  `bpe` or `sequence-bpe` run to a larger size and gives the same file one
+  run would.
 * The comparison extended to CBOR, MessagePack and Protocol Buffers.
 * Per-document latency percentiles in every benchmark evaluation.
 * Python: `Engine.train(..., resume_from=, embed_test_vectors=)` and
