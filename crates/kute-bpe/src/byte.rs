@@ -1,7 +1,7 @@
 //! Native byte-level BPE. Ids 0..=255 are the byte values, learned merges
 //! follow, reserved tokens come last. Lossless for arbitrary bytes.
 
-use crate::merge::{apply_merges, train_merges, Pair};
+use crate::merge::{apply_merges, resumable_merges, train_merges, LearnedMerge, Pair};
 use fancy_regex::Regex;
 use rayon::prelude::*;
 use kute_core::{check_sequence, sequence_for, CorpusFingerprint, CorpusSource, Tokenizer};
@@ -310,12 +310,30 @@ impl Tokenizer for BpeTokenizer {
         chunks.sort_unstable();
         let unique_chunks = chunks.len() as u64;
         let counts: Vec<u64> = chunks.iter().map(|(_, c)| *c).collect();
-        let words: Vec<Vec<u32>> = chunks.into_iter().map(|(c, _)| c.into_iter().map(u32::from).collect()).collect();
+        let mut words: Vec<Vec<u32>> = chunks.into_iter().map(|(c, _)| c.into_iter().map(u32::from).collect()).collect();
 
         let max_merges = config.vocab_size - 256 - reserved;
         let mut lengths: Vec<usize> = vec![1; 256];
         let limit = config.max_token_length;
-        let learned = train_merges(words, &counts, 256, max_merges, config.min_frequency, |l, r| {
+        let corpus_records = fingerprint.records();
+        let corpus_units = fingerprint.units();
+        let corpus_fingerprint = fingerprint.finish();
+
+        // Resuming: bring the words to the state the earlier run left them
+        // in. Which pair is merged next depends only on that state, so
+        // learning continues exactly as it would have.
+        let mut kept: Vec<LearnedMerge> = Vec::new();
+        if let Some(prior) = &config.resume_from {
+            kept = resumable_merges(prior, ALGORITHM, config, &corpus_fingerprint, 256, max_merges)?;
+            let mut ranks: FxHashMap<Pair, u32> = FxHashMap::default();
+            for m in &kept {
+                ranks.insert((m.left, m.right), m.id);
+                lengths.push(lengths[m.left as usize] + lengths[m.right as usize]);
+            }
+            words.par_iter_mut().for_each(|w| apply_merges(w, &ranks));
+        }
+        let resumed = kept.len() as u32;
+        let more = train_merges(words, &counts, 256 + resumed, max_merges - resumed, config.min_frequency, |l, r| {
             let len = lengths[l as usize] + lengths[r as usize];
             if limit.is_none_or(|m| len <= m) && len <= kute_types::vocab::MAX_TOKEN_BYTES {
                 lengths.push(len);
@@ -325,14 +343,17 @@ impl Tokenizer for BpeTokenizer {
             }
         });
 
+        let mut learned = kept;
+        learned.extend(more);
+
         let mut statistics = BTreeMap::new();
-        statistics.insert("corpus_records".to_string(), fingerprint.records());
-        statistics.insert("corpus_bytes".to_string(), fingerprint.units());
+        statistics.insert("corpus_records".to_string(), corpus_records);
+        statistics.insert("corpus_bytes".to_string(), corpus_units);
         statistics.insert("unique_chunks".to_string(), unique_chunks);
         statistics.insert("merges_learned".to_string(), learned.len() as u64);
         statistics.insert("requested_vocab_size".to_string(), config.vocab_size as u64);
         let merges: Vec<(u32, u32, u32, Option<u64>)> = learned.iter().map(|m| (m.left, m.right, m.id, Some(m.count))).collect();
-        let vocabulary = build_vocabulary(ALGORITHM, config, &merges, statistics, fingerprint.finish())?;
+        let vocabulary = build_vocabulary(ALGORITHM, config, &merges, statistics, corpus_fingerprint)?;
         self.finish_training(vocabulary, samples, config.embed_test_vectors)
     }
 

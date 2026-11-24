@@ -568,3 +568,135 @@ fn tempdir(name: &str) -> std::path::PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
+
+#[test]
+fn a_resumed_run_gives_the_vocabulary_of_one_run() {
+    let engine = Engine::new();
+    let mut docs: Vec<Vec<u8>> = Vec::new();
+    for i in 0..400u32 {
+        docs.push(format!("{TEXT} record {i} of the resumed run, {} and {}", i * 7 % 13, i * 31 % 17).into_bytes());
+    }
+    let train = |size: u32, from: Option<&Vocabulary>, limit: Option<usize>| {
+        let mut c = config("test:resume", size);
+        c.max_token_length = limit;
+        c.resume_from = from.map(|v| Box::new(v.clone()));
+        engine.train("bpe", "text", &AdapterConfig::default(), &docs, &c)
+    };
+    for limit in [None, Some(6)] {
+        let whole = train(700, None, limit).unwrap();
+        let first = train(400, None, limit).unwrap();
+        assert!(first.merges.len() < whole.merges.len());
+        let resumed = train(700, Some(&first), limit).unwrap();
+        assert_eq!(resumed, whole);
+        assert_eq!(resumed.digest().unwrap(), whole.digest().unwrap());
+        // in two more steps, and from a vocabulary that is already complete
+        let second = train(550, Some(&first), limit).unwrap();
+        assert_eq!(train(700, Some(&second), limit).unwrap(), whole);
+        assert_eq!(train(700, Some(&whole), limit).unwrap(), whole);
+    }
+
+    let first = train(400, None, None).unwrap();
+    // a different corpus, different settings, a smaller target, another algorithm
+    let mut c = config("test:resume", 700);
+    c.resume_from = Some(Box::new(first.clone()));
+    let other: Vec<Vec<u8>> = docs.iter().skip(1).cloned().collect();
+    let err = engine.train("bpe", "text", &AdapterConfig::default(), &other, &c).unwrap_err();
+    assert!(err.to_string().contains("different corpus"), "{err}");
+    c.min_frequency = 3;
+    let err = engine.train("bpe", "text", &AdapterConfig::default(), &docs, &c).unwrap_err();
+    assert!(err.to_string().contains("min_frequency differs"), "{err}");
+    assert!(train(300, Some(&first), None).is_err());
+    let mut c = config("test:resume", 700);
+    c.resume_from = Some(Box::new(first));
+    assert!(engine.train("unigram", "text", &AdapterConfig::default(), &docs, &c).is_err());
+}
+
+#[test]
+fn a_resumed_event_run_gives_the_vocabulary_of_one_run() {
+    let engine = Engine::new();
+    let names = ["START", "HEAT", "HOLD", "COOL", "DONE", "FAULT", "RESET"];
+    let mut docs: Vec<Vec<u8>> = Vec::new();
+    let mut state = 7u32;
+    for _ in 0..120 {
+        let mut text = String::new();
+        for _ in 0..40 {
+            state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            let pick = (state >> 16) as usize % 10;
+            let run: &[usize] = match pick {
+                0..=3 => &[0, 1, 2, 3, 4],
+                4..=5 => &[0, 1, 5, 6],
+                6 => &[5, 6, 6],
+                _ => &[pick % 7],
+            };
+            for &n in run {
+                text.push_str(&format!("{{\"event\":\"{}\"}}\n", names[n]));
+            }
+        }
+        docs.push(text.into_bytes());
+    }
+    let train = |size: u32, from: Option<&Vocabulary>| {
+        let mut c = config("test:resume-events", size);
+        c.pretokenizer = Pretokenizer::None;
+        c.resume_from = from.map(|v| Box::new(v.clone()));
+        engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &docs, &c)
+    };
+    let whole = train(60, None).unwrap();
+    let first = train(20, None).unwrap();
+    assert!(first.merges.len() < whole.merges.len(), "{} {}", first.merges.len(), whole.merges.len());
+    let resumed = train(60, Some(&first)).unwrap();
+    assert_eq!(resumed, whole);
+    assert_eq!(resumed.digest().unwrap(), whole.digest().unwrap());
+    // a byte vocabulary is not a place to resume an event run from
+    let mut c = config("test:resume-events", 300);
+    let bytes = engine.train("bpe", "text", &AdapterConfig::default(), &docs, &c).unwrap();
+    c.pretokenizer = Pretokenizer::None;
+    c.resume_from = Some(Box::new(bytes));
+    assert!(engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &docs, &c).is_err());
+}
+
+/// Issue #2: a run checks its result even when no test vectors are stored.
+#[test]
+fn training_checks_its_result_without_storing_vectors() {
+    /// The `bytes` baseline, except that decoding drops the last token.
+    #[derive(Default)]
+    struct Lossy(Option<Box<dyn Tokenizer>>);
+
+    impl Tokenizer for Lossy {
+        fn train(&mut self, corpus: &mut dyn CorpusSource, config: &TrainingConfig) -> kute::Result<Vocabulary> {
+            let mut inner = Engine::new().registry().tokenizer("bytes")?;
+            let v = inner.train(corpus, config)?;
+            self.0 = Some(inner);
+            Ok(v)
+        }
+        fn load(&mut self, vocabulary: Vocabulary) -> kute::Result<()> {
+            self.0 = Some(Engine::new().tokenizer(vocabulary)?);
+            Ok(())
+        }
+        fn encode(&self, input: &CanonicalInput) -> kute::Result<TokenSequence> {
+            self.0.as_ref().unwrap().encode(input)
+        }
+        fn decode(&self, tokens: &TokenSequence) -> kute::Result<CanonicalInput> {
+            let mut t = tokens.clone();
+            t.ids.pop();
+            self.0.as_ref().unwrap().decode(&t)
+        }
+        fn vocabulary(&self) -> Option<&Vocabulary> {
+            self.0.as_ref().and_then(|t| t.vocabulary())
+        }
+        fn capabilities(&self) -> TokenizerCapabilities {
+            Engine::new().registry().tokenizer("bytes").unwrap().capabilities()
+        }
+    }
+
+    let mut engine = Engine::new();
+    engine.registry_mut().register_algorithm("lossy", || Box::new(Lossy::default())).unwrap();
+    let mut c = TrainingConfig::new(VocabularyId::parse("test:lossy").unwrap(), 256);
+    assert!(!c.embed_test_vectors);
+    c.pretokenizer = Pretokenizer::None;
+    let docs = vec![TEXT.as_bytes().to_vec()];
+    let err = engine.train("lossy", "binary", &AdapterConfig::default(), &docs, &c).unwrap_err();
+    assert!(err.to_string().contains("does not reproduce the start of training record 1"), "{err}");
+    // the honest algorithm passes, and nothing of the corpus is kept
+    let v = engine.train("bytes", "binary", &AdapterConfig::default(), &docs, &c).unwrap();
+    assert!(v.test_vectors.is_empty());
+}

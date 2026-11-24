@@ -60,6 +60,11 @@ impl VerifyReport {
     }
 }
 
+/// How much of the corpus a training run re-encodes to check its result.
+const SELF_CHECK_RECORDS: usize = 4;
+const SELF_CHECK_BYTES: usize = 64 * 1024;
+const SELF_CHECK_SYMBOLS: usize = 4096;
+
 impl Engine {
     /// An engine with every built-in algorithm and adapter registered.
     pub fn new() -> Self {
@@ -114,11 +119,36 @@ impl Engine {
     ) -> Result<Vocabulary> {
         let adapter_impl = self.registry.adapter(adapter)?;
         let mut tokenizer = self.registry.tokenizer(algorithm)?;
+        if config.resume_from.is_some() && algorithm != "bpe" && algorithm != "sequence-bpe" {
+            return Err(KuteError::Unsupported(format!("resuming a training run is implemented for bpe and sequence-bpe, not {algorithm:?}")));
+        }
+        // The start of the first few records is kept and, after training,
+        // encoded and decoded again. This happens whether or not test
+        // vectors are stored in the vocabulary, and nothing of it is kept.
+        let mut held: Vec<CanonicalInput> = Vec::new();
         let mut corpus = FnCorpus(|| match documents()? {
-            Some(doc) => adapter_impl.ingest(&doc, adapter_config).map(Some),
+            Some(doc) => {
+                let input = adapter_impl.ingest(&doc, adapter_config)?;
+                if held.len() < SELF_CHECK_RECORDS && !input.payload.is_empty() {
+                    held.push(CanonicalInput {
+                        modality: input.modality,
+                        payload: match &input.payload {
+                            Payload::Bytes(b) => Payload::Bytes(b[..b.len().min(SELF_CHECK_BYTES)].to_vec()),
+                            Payload::Symbols(v) => Payload::Symbols(v[..v.len().min(SELF_CHECK_SYMBOLS)].to_vec()),
+                        },
+                    });
+                }
+                Ok(Some(input))
+            }
             None => Ok(None),
         });
         let mut vocabulary = tokenizer.train(&mut corpus, config)?;
+        for (n, input) in held.iter().enumerate() {
+            let back = tokenizer.decode(&tokenizer.encode(input)?)?;
+            if back.payload != input.payload {
+                return Err(KuteError::Backend(format!("trained vocabulary does not reproduce the start of training record {}", n + 1)));
+            }
+        }
         vocabulary.adapter = Some(adapter_impl.spec(adapter_config));
         vocabulary.manifest.modality = adapter_impl.modality();
         vocabulary.seal()?;

@@ -10,7 +10,7 @@
 //! the sequence's escape table, the vocabulary stays as it was, and decoding
 //! returns the input exactly. Merges never span an escaped symbol.
 
-use crate::merge::{apply_merges, train_merges, Pair};
+use crate::merge::{apply_merges, resumable_merges, train_merges, LearnedMerge, Pair};
 use kute_core::{check_sequence, sequence_for, CorpusFingerprint, CorpusSource, Tokenizer};
 use kute_types::{
     CanonicalInput, KuteError, Manifest, MergeRule, Modality, Payload, PayloadKind, Provenance, Result,
@@ -160,12 +160,42 @@ impl Tokenizer for SequenceBpeTokenizer {
             provisional.into_iter().map(|(w, c)| (w.into_iter().map(|id| renumber[id as usize]).collect(), c)).collect();
         windows.sort_unstable();
         let counts: Vec<u64> = windows.iter().map(|(_, c)| *c).collect();
-        let words: Vec<Vec<u32>> = windows.into_iter().map(|(w, _)| w).collect();
+        let mut words: Vec<Vec<u32>> = windows.into_iter().map(|(w, _)| w).collect();
         let unique_windows = words.len() as u64;
 
         let mut lengths: Vec<usize> = vec![1; base as usize];
         let limit = config.max_token_length;
-        let learned = train_merges(words, &counts, base, config.vocab_size - base - reserved, config.min_frequency, |l, r| {
+        let max_merges = config.vocab_size - base - reserved;
+        let corpus_records = fingerprint.records();
+        let corpus_units = fingerprint.units();
+        let corpus_fingerprint = fingerprint.finish();
+
+        // Resuming, as in byte BPE: replay the earlier merges, then go on.
+        let mut kept: Vec<LearnedMerge> = Vec::new();
+        if let Some(prior) = &config.resume_from {
+            // An evolved vocabulary keeps its parent's fingerprint but may
+            // have symbols after its merges; its ids would not line up.
+            let same_alphabet = prior.tokens.len() >= base as usize
+                && alphabet_set.iter().zip(&prior.tokens).all(|(s, t)| t.kind == TokenKind::Symbol && t.payload == TokenPayload::Symbols(vec![s.to_string()]));
+            if !same_alphabet {
+                return Err(KuteError::VocabularyMismatch(format!(
+                    "cannot resume from {} {}: its base symbols are not this corpus's",
+                    prior.id(),
+                    prior.version()
+                )));
+            }
+            kept = resumable_merges(prior, ALGORITHM, config, &corpus_fingerprint, base, max_merges)?;
+            let mut ranks: FxHashMap<Pair, u32> = FxHashMap::default();
+            for m in &kept {
+                ranks.insert((m.left, m.right), m.id);
+                lengths.push(lengths[m.left as usize] + lengths[m.right as usize]);
+            }
+            for w in &mut words {
+                apply_merges(w, &ranks);
+            }
+        }
+        let resumed = kept.len() as u32;
+        let more = train_merges(words, &counts, base + resumed, max_merges - resumed, config.min_frequency, |l, r| {
             let len = lengths[l as usize] + lengths[r as usize];
             if limit.is_none_or(|m| len <= m) && len <= kute_types::vocab::MAX_TOKEN_SYMBOLS {
                 lengths.push(len);
@@ -174,6 +204,9 @@ impl Tokenizer for SequenceBpeTokenizer {
                 false
             }
         });
+
+        let mut learned = kept;
+        learned.extend(more);
 
         let mut tokens: Vec<TokenEntry> = alphabet_set
             .iter()
@@ -198,8 +231,8 @@ impl Tokenizer for SequenceBpeTokenizer {
         }
 
         let mut statistics = BTreeMap::new();
-        statistics.insert("corpus_records".to_string(), fingerprint.records());
-        statistics.insert("corpus_symbols".to_string(), fingerprint.units());
+        statistics.insert("corpus_records".to_string(), corpus_records);
+        statistics.insert("corpus_symbols".to_string(), corpus_units);
         statistics.insert("alphabet_size".to_string(), base as u64);
         statistics.insert("unique_windows".to_string(), unique_windows);
         statistics.insert("merges_learned".to_string(), learned.len() as u64);
@@ -224,7 +257,7 @@ impl Tokenizer for SequenceBpeTokenizer {
             merges: rules,
             statistics,
             provenance: Provenance {
-                corpus_fingerprints: vec![fingerprint.finish()],
+                corpus_fingerprints: vec![corpus_fingerprint],
                 license: config.license.clone(),
                 training: Some(serde_json::to_value(config)?),
             },

@@ -27,6 +27,20 @@ vocabulary that produced them, so `decode` takes the same vocabulary.
 `decode` returns `str` for vocabularies trained through the `text` adapter and
 `bytes` for everything else. `decode_bytes` always returns `bytes`.
 
+Since 0.5.0:
+
+```python
+small = engine.train("corpus/", vocabulary_id="example:text", vocab_size=8192)
+large = engine.train("corpus/", vocabulary_id="example:text", vocab_size=32768, resume_from=small)
+# large is the vocabulary one run to 32768 would give (bpe, sequence-bpe)
+
+found = kute.discover([["START", "HEAT", "DONE"], ...], min_support=5)
+found["patterns"]   # recurring runs and gapped pairs, strongest first
+```
+
+`embed_test_vectors=True` stores short excerpts of the training data in the
+vocabulary for `verify` to check. It is off unless asked.
+
 ## Build
 
 ```

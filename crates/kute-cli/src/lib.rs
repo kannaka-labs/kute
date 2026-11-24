@@ -545,6 +545,12 @@ struct TrainArgs {
     /// vocabulary, because it decides where records end.
     #[arg(long, value_name = "BYTES")]
     stream_bytes: Option<usize>,
+    /// Continue from a vocabulary trained earlier on the same input with the
+    /// same settings and a smaller --vocab-size. The result is the same as
+    /// one run to the new size. bpe and sequence-bpe. Its merges are taken
+    /// as given: resume only from a vocabulary you trained or trust.
+    #[arg(long, value_name = "VOCAB")]
+    resume_from: Option<PathBuf>,
     /// Store the start of the first training records in the vocabulary as
     /// self-test vectors, so anyone holding the file can check it. They are
     /// verbatim excerpts: leave this off when the corpus is private.
@@ -596,6 +602,9 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     config.license = args.license;
     config.embed_test_vectors = args.embed_test_vectors;
     config.stream_bytes = args.stream_bytes;
+    if let Some(path) = &args.resume_from {
+        config.resume_from = Some(Box::new(vocab::load(path)?));
+    }
     if let Some(path) = &args.dictionary_file {
         let text = std::fs::read_to_string(path)?;
         config.dictionary = text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.is_empty()).map(str::to_string).collect();
@@ -616,6 +625,7 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
         "output": args.output,
         "train_seconds": seconds,
         "peak_memory_bytes": kute_bench::peak_memory_bytes(),
+        "resumed_from": args.resume_from,
         "summary": vocab::summarize(&vocabulary)?,
     }))
 }

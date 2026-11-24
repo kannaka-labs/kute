@@ -35,6 +35,25 @@ kute benchmark --vocab my.kvf --dataset path/to/held-out-data
 * Cases marked `synthetic` come from seeded template generators. They show the
   machinery works. They do not predict results on real data.
 
+## Latency per document (v0.5.0)
+
+File: `results/suite-after-v0.4.0-windows-x86_64.json`. Each evaluation now
+records how long one document takes to encode and to decode, as p50, p90,
+p99 and maximum over every document in every timing pass. Five passes; the
+machine was not idle (about a quarter of its CPU was in use when the run
+started), so read these as an upper bound on this machine, not a clean
+measurement.
+
+| case | documents | samples | encode p50 | encode max | decode p50 | decode max |
+|------|----------:|--------:|-----------:|-----------:|-----------:|-----------:|
+| B01-large, 10 MB of enwik8 | 1 | 5 | 150 ms | 173 ms | 47 ms | 92 ms |
+| B02, this repository's source files | 13 | 65 | 341 µs | 1.49 ms | 33 µs | 208 µs |
+| B01, two small text files | 2 | 10 | 276 µs | 895 µs | 36 µs | 79 µs |
+
+With 5 to 65 samples a p99 is the slowest sample; the file says how many
+samples each figure rests on. The large case encoded at 67 MB/s and decoded
+at 214 MB/s in this run, and its sizes equal the earlier records.
+
 ## Recorded run: v0.3.0
 
 File: `results/suite-v0.3.0-windows-x86_64.json`, same machine, command and
@@ -334,7 +353,7 @@ line (`E5 E22 E5 ...`, 6,374,580 bytes), and ratios are against that.
   the best general compressor on the text form.**
 * The text form flatters KUTE, so the compressors were also given a form
   that costs them nothing to parse: one byte per event and a zero byte per
-  block end (1,881,448 bytes; not in the script). Then `zstd -19` reaches
+  block end (1,881,448 bytes; `--event-bytes`). Then `zstd -19` reaches
   95,401 bytes, `xz -9` 106,896 and `gzip -9` 114,295. KUTE's 80,789 is
   still 15 percent smaller than the best of them, and 29 percent smaller
   than gzip, which uses the same entropy coder as the container: that gap
@@ -343,8 +362,45 @@ line (`E5 E22 E5 ...`, 6,374,580 bytes), and ratios are against that.
   longer tokens left the entropy coder less to work with.
 * This is one dataset with 22 to 29 event types and long runs of one event.
   Nothing here says how it goes on events with many types or little
-  repetition, and the binary record formats in the directive's matrix
-  (CBOR, MessagePack, Protobuf) were not compared.
+  repetition.
+
+**The same events in binary record formats** (after v0.4.0; `--record-formats`,
+same report file). One record per block. "Integers" replaces each event name
+with a small number; the name table that needs is not counted.
+
+| form | raw bytes | + zstd -19 | + xz -9 |
+|------|----------:|-----------:|--------:|
+| **KUTE container** | 182,020 (plain) | 80,789 (its own zlib) | |
+| CBOR, integers | 1,881,602 | 98,072 | 109,564 |
+| MessagePack, integers | 1,973,223 | 98,868 | 110,548 |
+| Protocol Buffers, packed uint32 | 2,111,484 | 99,926 | 112,788 |
+| MessagePack, names | 6,581,367 | 133,851 | 166,720 |
+| CBOR, names | 6,489,746 | 133,918 | 166,176 |
+| Protocol Buffers, repeated string | 8,256,108 | 145,026 | 174,628 |
+
+* Uncompressed, the KUTE container is a tenth the size of the tightest
+  binary record form: learned sequences replace runs of events with one id.
+* Compressed, it is 18 percent smaller than the best of them. A strong
+  compressor recovers most of what the vocabulary learned.
+* The Protocol Buffers bytes are the wire format written by the script, not
+  by `protoc`. Records here hold event names only; timestamps and other
+  fields, which these formats are built to carry, are not in the comparison.
+
+## Resumed training (v0.5.0)
+
+90 MB of enwik8, byte BPE, single runs on one machine that was not idle.
+
+| run | seconds | peak memory | merges |
+|-----|--------:|------------:|-------:|
+| one run to 32,768 tokens | 17.0 | 221 MiB | 32,512 |
+| one run to 16,384 tokens | 14.6 | 217 MiB | 16,128 |
+| resumed from 16,384 to 32,768 | 7.5 | 178 MiB | 32,512 |
+| resumed from the finished 32,768 | 6.7 | 179 MiB | 32,512 |
+
+The resumed file is byte for byte the file of the single run. The last row
+is the floor: reading the corpus and applying known merges, learning
+nothing. Most of a run's time goes to the early merges, so stopping halfway
+by size is well past halfway by time.
 
 ## Compact vocabulary file (v0.4.0)
 

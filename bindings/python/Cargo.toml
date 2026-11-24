@@ -1,7 +1,7 @@
 [package]
 name = "kute-python"
 description = "Python bindings for the Kannaka Universal Tokenization Engine"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 rust-version = "1.85"
@@ -18,6 +18,7 @@ crate-type = ["cdylib"]
 [dependencies]
 kute = { package = "kute-engine", path = "../../crates/kute" }
 kute-bench = { path = "../../crates/kute-bench" }
+kute-discover = { path = "../../crates/kute-discover" }
 pyo3 = { version = "0.27", features = ["extension-module", "abi3-py39"] }
 serde = "1"
 serde_json = "1"

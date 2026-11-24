@@ -79,6 +79,16 @@ pub struct TrainingConfig {
     /// of the configuration because it decides where records end.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_bytes: Option<usize>,
+    /// Continue an earlier run instead of starting over. The vocabulary
+    /// given here must have been trained on the same corpus with the same
+    /// settings and a smaller `vocab_size`; its merges are kept and learning
+    /// goes on from where it stopped. The result is the vocabulary a single
+    /// run to the new size would have produced. Not part of the recorded
+    /// configuration: it changes how the result is reached, not the result.
+    /// Its merges are taken as given, so resume only from a vocabulary you
+    /// trained or trust.
+    #[serde(skip)]
+    pub resume_from: Option<Box<crate::Vocabulary>>,
 }
 
 fn one() -> u64 {
@@ -107,6 +117,7 @@ impl TrainingConfig {
             license: None,
             embed_test_vectors: false,
             stream_bytes: None,
+            resume_from: None,
         }
     }
 

@@ -4,9 +4,9 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.4, experimental. Formats and APIs may change before 1.0.
+Status: v0.5, experimental. Formats and APIs may change before 1.0.
 
-## What works in v0.4
+## What works in v0.5
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -65,10 +65,21 @@ Added in v0.4:
   under the best of them; on English text it is 11 to 13 percent larger
   than `zstd -19` and `xz -9`. See `benchmarks/README.md`.
 
+Added in v0.5:
+
+* `kute train --resume-from small.kvf --vocab-size N` continues an earlier
+  `bpe` or `sequence-bpe` run to a larger size and gives the same file one
+  run would.
+* The comparison extended to CBOR, MessagePack and Protocol Buffers.
+* Per-document latency percentiles in every benchmark evaluation.
+* Every training run re-encodes the start of its first records and fails
+  if they do not come back exact, whether or not test vectors are stored.
+* Python: `Engine.train(..., resume_from=, embed_test_vectors=)` and
+  `kute.discover(records)`.
+
 Version numbers here are the repository's own. Measured against the
-development directive of November 2026, v0.4 covers its items D02 to D05
-and D07 to D12 and part of D06; training checkpoints, comparison with
-binary record formats, Studio, representation research and integrations
+development directive of November 2026, v0.5 covers its items D02 to D05
+and D06 to D12 (D06 without a clean timing run); Studio, representation research and integrations
 (D13 to D15) are not built. The requirements document's "v0.2" (REST
 service, registry, MCP) is not built either.
 

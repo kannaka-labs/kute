@@ -189,6 +189,11 @@ loses is the encode check that `kute validate` runs. Learned tokens are frequent
 remain visible in any vocabulary; that is inherent and is not hidden by this
 switch.
 
+Since v0.4.0 a training run through the engine also encodes and decodes the
+start of its first four records (up to 64 KiB or 4,096 symbols each) and
+fails if they do not come back exact. This check runs whether or not vectors
+are stored, and keeps nothing (issue #2).
+
 ## ADR-0019: Decoders can bound output before producing it
 
 `decoded_units` computes the decoded length from the token table alone, and
@@ -349,9 +354,35 @@ is not implemented.
 Token ids in the plain container must be in their shortest varint form;
 padded forms are refused (issue #4).
 
+## ADR-0028: A vocabulary is its own training checkpoint
+
+A `bpe` or `sequence-bpe` run can continue from a vocabulary trained earlier on the same
+corpus with the same settings and a smaller size (`TrainingConfig::
+resume_from`, `kute train --resume-from`). The corpus is read again, the
+earlier merges are applied to it, and learning goes on. Which pair is merged
+next depends only on the state of the corpus under the merges so far, so the
+result is the vocabulary one run to the new size would give: same tokens,
+same digest, same file. The tests check that, with and without a token
+length limit.
+
+No separate checkpoint format was added. The vocabulary already records its
+merges, corpus fingerprint and settings, and a resumed run is refused when
+the fingerprint or a setting that affects merging differs.
+
+A resumed run trusts the merges it is given. The checks establish that the
+earlier vocabulary claims the same corpus and settings, not that its merges
+are what training on that corpus produces; a file edited to pass them would
+steer the result. Resume only from a vocabulary you trained or trust.
+
+What this does not give: a run does not write intermediate files by itself,
+so to survive an interruption it has to be run in stages. Each stage reads
+the corpus again; on 90 MB of text that was about 7 of the 17 seconds a
+whole run takes. `sequence-bpe` resumes the same way; the baseline
+algorithms cannot resume.
+
 ## Deferred
 
-Registry service and signing, import from other tokenizer formats, training
-checkpoints, event values, units and relationships, timestamps in token
-containers, entropy-coded containers, comparison with Zstandard and with binary record formats, and
+Registry service and signing, import from other tokenizer formats,
+checkpoints written during a run, event values, units and relationships,
+timestamps in token containers, entropy-coded containers, and
 adapters for DNA, telemetry, mathematics and quantum circuits.
