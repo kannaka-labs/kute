@@ -109,7 +109,7 @@ impl Tokenizer for SequenceBpeTokenizer {
         let limit = config.max_token_length;
         let learned = train_merges(words, &counts, base, config.vocab_size - base - reserved, config.min_frequency, |l, r| {
             let len = lengths[l as usize] + lengths[r as usize];
-            if limit.map_or(true, |m| len <= m) && len <= kute_types::vocab::MAX_TOKEN_SYMBOLS {
+            if limit.is_none_or(|m| len <= m) && len <= kute_types::vocab::MAX_TOKEN_SYMBOLS {
                 lengths.push(len);
                 true
             } else {

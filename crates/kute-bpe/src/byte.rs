@@ -317,7 +317,7 @@ impl Tokenizer for BpeTokenizer {
         let limit = config.max_token_length;
         let learned = train_merges(words, &counts, 256, max_merges, config.min_frequency, |l, r| {
             let len = lengths[l as usize] + lengths[r as usize];
-            if limit.map_or(true, |m| len <= m) && len <= kute_types::vocab::MAX_TOKEN_BYTES {
+            if limit.is_none_or(|m| len <= m) && len <= kute_types::vocab::MAX_TOKEN_BYTES {
                 lengths.push(len);
                 true
             } else {
