@@ -4,7 +4,7 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.5, experimental. Formats and APIs may change before 1.0.
+Status: v0.6, experimental. Formats and APIs may change before 1.0.
 
 ## Measured against Hugging Face `tokenizers`
 
@@ -31,7 +31,7 @@ rerun it:
 pip install kute-engine
 ```
 
-## What works in v0.5
+## What works in v0.6
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -102,8 +102,20 @@ Added in v0.5:
 * Python: `Engine.train(..., resume_from=, embed_test_vectors=)` and
   `kute.discover(records)`.
 
+Changed in v0.6:
+
+* `kute evolve` builds an added sequence over the parent's own encoding, so
+  the new token is one the encoder reaches. Before, most added tokens went
+  unused. An evolved vocabulary now carries the generator `kute evolve-2`,
+  the name of the rule, so releases that implement it agree on the digest.
+  **v0.6 and v0.5 derive different children from the same step**, and
+  peers on the two sides will see their digests differ.
+* Measured: frozen, evolved and retrained event vocabularies on HDFS_v1
+  (evolving did not help there), and the comparison with Hugging Face
+  `tokenizers` above, including a one-thread run.
+
 Version numbers here are the repository's own. Measured against the
-development directive of November 2026, v0.5 covers its items D02 to D05
+development directive of November 2026, v0.6 covers its items D02 to D05
 and D06 to D12 (D06 without a clean timing run); Studio, representation research and integrations
 (D13 to D15) are not built. The requirements document's "v0.2" (REST
 service, registry, MCP) is not built either.

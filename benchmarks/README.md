@@ -386,7 +386,7 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
-## Frozen, evolved and retrained event vocabularies (after v0.5.0)
+## Frozen, evolved and retrained event vocabularies (v0.6.0)
 
 `benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by
 time, and encodes the same held-out events (1,766,436 events, none seen by
