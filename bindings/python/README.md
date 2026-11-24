@@ -27,7 +27,7 @@ vocabulary that produced them, so `decode` takes the same vocabulary.
 `decode` returns `str` for vocabularies trained through the `text` adapter and
 `bytes` for everything else. `decode_bytes` always returns `bytes`.
 
-After 0.4.0 (not yet released):
+Since 0.5.0:
 
 ```python
 small = engine.train("corpus/", vocabulary_id="example:text", vocab_size=8192)

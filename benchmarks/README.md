@@ -35,7 +35,7 @@ kute benchmark --vocab my.kvf --dataset path/to/held-out-data
 * Cases marked `synthetic` come from seeded template generators. They show the
   machinery works. They do not predict results on real data.
 
-## Latency per document (after v0.4.0)
+## Latency per document (v0.5.0)
 
 File: `results/suite-after-v0.4.0-windows-x86_64.json`. Each evaluation now
 records how long one document takes to encode and to decode, as p50, p90,
@@ -386,7 +386,7 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
-## Resumed training (after v0.4.0)
+## Resumed training (v0.5.0)
 
 90 MB of enwik8, byte BPE, single runs on one machine that was not idle.
 
