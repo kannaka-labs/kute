@@ -18,6 +18,8 @@ rustbpe = ["dep:rustbpe", "dep:pyo3"]
 kute-types.workspace = true
 kute-core.workspace = true
 fancy-regex.workspace = true
+regex.workspace = true
+rayon.workspace = true
 rustc-hash.workspace = true
 serde_json.workspace = true
 # Pinned to a commit: the crates.io release (0.1.0) is built on pyo3 0.23,

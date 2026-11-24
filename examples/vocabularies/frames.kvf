@@ -2,7 +2,7 @@
 "manifest": {
   "algorithm": "bpe",
   "description": "Synthetic binary telemetry frames (kute sample-data)",
-  "generator": "kute 0.1.0",
+  "generator": "kute 0.2.0",
   "id": "example:frames",
   "kvf_version": "0.1",
   "lossless": true,
@@ -994,6 +994,6 @@
 ],
 "integrity": {
   "algorithm": "sha256",
-  "digest": "sha256:0cb35a2ec155879831d8d591b3ca17ea489aa8900d719141b5b1fc58c3f8349c"
+  "digest": "sha256:116c49cbcd72543822f401132feb5c6e8fc26ba7281730b66aac64bbd42ae6c4"
 }
 }

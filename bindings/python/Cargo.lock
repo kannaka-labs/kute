@@ -183,7 +183,7 @@ checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "kute"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kute-adapters",
  "kute-algorithms",
@@ -197,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "kute-adapters"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "kute-algorithms"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -216,10 +216,11 @@ dependencies = [
 
 [[package]]
 name = "kute-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "kute",
+ "rayon",
  "serde",
  "serde_json",
  "sha2",
@@ -227,18 +228,20 @@ dependencies = [
 
 [[package]]
 name = "kute-bpe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "fancy-regex",
  "kute-core",
  "kute-types",
+ "rayon",
+ "regex",
  "rustc-hash",
  "serde_json",
 ]
 
 [[package]]
 name = "kute-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kute-types",
  "sha2",
@@ -246,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "kute-python"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kute",
  "kute-bench",
@@ -257,9 +260,10 @@ dependencies = [
 
 [[package]]
 name = "kute-types"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64",
+ "flate2",
  "semver",
  "serde",
  "serde_json",
@@ -269,7 +273,7 @@ dependencies = [
 
 [[package]]
 name = "kute-vocab"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kute-types",
  "serde",
@@ -416,6 +420,18 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "regex"
+version = "1.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9807af0e638c12e753aa1b4e601791bf2a8f71274023c8bbeec12fc149950857"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]

@@ -1,5 +1,6 @@
 use crate::{KuteError, Result, Version, VocabularyId};
 use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
 
 /// What kind of information a payload carries. Declared by the adapter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -103,30 +104,24 @@ struct ContainerHeader {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     adapter: Option<String>,
     count: u64,
+    /// Format 2 only: width of each id in the compressed body, 1 to 4 bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    id_bytes: Option<u8>,
 }
 
 const MAGIC: &[u8; 5] = b"KUTE\x01";
+/// Format 2: the ids are fixed-width little-endian integers in a zlib stream.
+const MAGIC_COMPRESSED: &[u8; 5] = b"KUTE\x02";
 const MAX_HEADER: usize = 64 * 1024;
+/// DEFLATE cannot expand by more than about 1032 to 1, so a body that claims
+/// more output than this for its size is rejected before any is produced.
+const MAX_INFLATE_RATIO: u64 = 1040;
 
 impl TokenSequence {
     /// Serialize to the `.kute` container: magic, little-endian header length,
     /// JSON header, then LEB128 varint token ids.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let header = serde_json::to_vec(&ContainerHeader {
-            vocabulary_id: self.vocabulary_id.clone(),
-            vocabulary_version: self.vocabulary_version.clone(),
-            vocabulary_digest: self.vocabulary_digest.clone(),
-            modality: self.modality,
-            adapter: self.adapter.clone(),
-            count: self.ids.len() as u64,
-        })?;
-        if header.len() > MAX_HEADER {
-            return Err(KuteError::LimitExceeded("token sequence header exceeds 64 KiB".into()));
-        }
-        let mut out = Vec::with_capacity(MAGIC.len() + 4 + header.len() + self.ids.len() * 2);
-        out.extend_from_slice(MAGIC);
-        out.extend_from_slice(&(header.len() as u32).to_le_bytes());
-        out.extend_from_slice(&header);
+        let mut out = self.start_container(MAGIC, None, self.ids.len() * 2)?;
         for &id in &self.ids {
             let mut v = id;
             loop {
@@ -142,12 +137,60 @@ impl TokenSequence {
         Ok(out)
     }
 
-    /// Parse a `.kute` container. Rejects truncated, oversized or trailing data.
+    fn start_container(&self, magic: &[u8; 5], id_bytes: Option<u8>, body_hint: usize) -> Result<Vec<u8>> {
+        let header = serde_json::to_vec(&ContainerHeader {
+            vocabulary_id: self.vocabulary_id.clone(),
+            vocabulary_version: self.vocabulary_version.clone(),
+            vocabulary_digest: self.vocabulary_digest.clone(),
+            modality: self.modality,
+            adapter: self.adapter.clone(),
+            count: self.ids.len() as u64,
+            id_bytes,
+        })?;
+        if header.len() > MAX_HEADER {
+            return Err(KuteError::LimitExceeded("token sequence header exceeds 64 KiB".into()));
+        }
+        let mut out = Vec::with_capacity(magic.len() + 4 + header.len() + body_hint);
+        out.extend_from_slice(magic);
+        out.extend_from_slice(&(header.len() as u32).to_le_bytes());
+        out.extend_from_slice(&header);
+        Ok(out)
+    }
+
+    /// Serialize to the compressed `.kute` container (format 2): the same
+    /// header, then the ids as fixed-width little-endian integers inside one
+    /// zlib stream. Smaller than format 1 on anything repetitive; `from_bytes`
+    /// reads both.
+    pub fn to_bytes_compressed(&self) -> Result<Vec<u8>> {
+        let max = self.ids.iter().copied().max().unwrap_or(0);
+        let width: usize = match max {
+            0..=0xff => 1,
+            0x100..=0xffff => 2,
+            0x1_0000..=0xff_ffff => 3,
+            _ => 4,
+        };
+        let mut plain = Vec::with_capacity(self.ids.len() * width);
+        for &id in &self.ids {
+            plain.extend_from_slice(&id.to_le_bytes()[..width]);
+        }
+        let out = self.start_container(MAGIC_COMPRESSED, Some(width as u8), plain.len() / 2)?;
+        let mut encoder = flate2::write::ZlibEncoder::new(out, flate2::Compression::best());
+        encoder.write_all(&plain)?;
+        Ok(encoder.finish()?)
+    }
+
+    /// Parse a `.kute` container of either format. Rejects truncated,
+    /// oversized or trailing data.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let bad = |why: &str| KuteError::InvalidInput(format!("not a valid .kute token sequence: {why}"));
-        if bytes.len() < MAGIC.len() + 4 || &bytes[..MAGIC.len()] != MAGIC {
+        if bytes.len() < MAGIC.len() + 4 {
             return Err(bad("missing KUTE magic"));
         }
+        let compressed = match &bytes[..MAGIC.len()] {
+            m if m == MAGIC => false,
+            m if m == MAGIC_COMPRESSED => true,
+            _ => return Err(bad("missing KUTE magic")),
+        };
         let mut pos = MAGIC.len();
         let header_len = u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]]) as usize;
         pos += 4;
@@ -158,10 +201,57 @@ impl TokenSequence {
         let header: ContainerHeader = serde_json::from_slice(&bytes[pos..header_end]).map_err(|e| bad(&format!("header: {e}")))?;
         pos = header_end;
         let remaining = bytes.len() - pos;
-        if header.count > remaining as u64 {
+        let ids = if compressed {
+            let width = match header.id_bytes {
+                Some(w @ 1..=4) => w as usize,
+                _ => return Err(bad("compressed container needs id_bytes between 1 and 4")),
+            };
+            let expected = header.count.checked_mul(width as u64).ok_or_else(|| bad("token count overflows"))?;
+            if expected > (remaining as u64).saturating_mul(MAX_INFLATE_RATIO) {
+                return Err(bad("declared token count exceeds what the data can hold"));
+            }
+            let mut decoder = flate2::read::ZlibDecoder::new(&bytes[pos..]);
+            let mut plain = Vec::with_capacity(expected as usize);
+            // One byte past the expected length, so a longer stream is caught
+            // and the stream checksum is verified.
+            (&mut decoder).take(expected + 1).read_to_end(&mut plain).map_err(|e| bad(&format!("compressed ids: {e}")))?;
+            if plain.len() as u64 != expected {
+                return Err(bad("token count does not match the header"));
+            }
+            if decoder.total_in() != remaining as u64 {
+                return Err(bad("data after the compressed ids"));
+            }
+            plain
+                .chunks_exact(width)
+                .map(|c| {
+                    let mut le = [0u8; 4];
+                    le[..width].copy_from_slice(c);
+                    u32::from_le_bytes(le)
+                })
+                .collect()
+        } else {
+            if header.id_bytes.is_some() {
+                return Err(bad("id_bytes belongs to the compressed format only"));
+            }
+            Self::read_varints(&bytes[pos..], header.count).map_err(bad)?
+        };
+        Ok(Self {
+            vocabulary_id: header.vocabulary_id,
+            vocabulary_version: header.vocabulary_version,
+            vocabulary_digest: header.vocabulary_digest,
+            modality: header.modality,
+            adapter: header.adapter,
+            ids,
+        })
+    }
+
+    fn read_varints(bytes: &[u8], count: u64) -> std::result::Result<Vec<u32>, &'static str> {
+        let bad = |why: &'static str| why;
+        let mut pos = 0;
+        if count > bytes.len() as u64 {
             return Err(bad("declared token count exceeds the data present"));
         }
-        let mut ids = Vec::with_capacity(header.count as usize);
+        let mut ids = Vec::with_capacity(count as usize);
         while pos < bytes.len() {
             let mut value: u32 = 0;
             let mut shift = 0u32;
@@ -183,17 +273,10 @@ impl TokenSequence {
             }
             ids.push(value);
         }
-        if ids.len() as u64 != header.count {
+        if ids.len() as u64 != count {
             return Err(bad("token count does not match the header"));
         }
-        Ok(Self {
-            vocabulary_id: header.vocabulary_id,
-            vocabulary_version: header.vocabulary_version,
-            vocabulary_digest: header.vocabulary_digest,
-            modality: header.modality,
-            adapter: header.adapter,
-            ids,
-        })
+        Ok(ids)
     }
 }
 
@@ -219,6 +302,47 @@ mod tests {
         assert_eq!(TokenSequence::from_bytes(&bytes).unwrap(), s);
         let empty = seq(vec![]);
         assert_eq!(TokenSequence::from_bytes(&empty.to_bytes().unwrap()).unwrap(), empty);
+    }
+
+    #[test]
+    fn compressed_container_round_trip() {
+        for ids in [vec![], vec![7], vec![0, 255], vec![0, 256, 65_535], vec![65_536, 3], vec![1, u32::MAX], (0..5000).map(|i| i % 97).collect()] {
+            let s = seq(ids);
+            let bytes = s.to_bytes_compressed().unwrap();
+            assert_eq!(TokenSequence::from_bytes(&bytes).unwrap(), s);
+        }
+        let repetitive = seq((0..20_000).map(|i| 300 + i % 50).collect());
+        assert!(repetitive.to_bytes_compressed().unwrap().len() * 10 < repetitive.to_bytes().unwrap().len());
+    }
+
+    #[test]
+    fn compressed_container_rejects_damage() {
+        let s = seq((0..400).map(|i| 1000 + i % 13).collect());
+        let bytes = s.to_bytes_compressed().unwrap();
+        for cut in 0..bytes.len() {
+            assert!(TokenSequence::from_bytes(&bytes[..cut]).is_err(), "truncated at {cut}");
+        }
+        let mut extra = bytes.clone();
+        extra.push(0);
+        assert!(TokenSequence::from_bytes(&extra).is_err());
+        // A header that claims more ids than the body holds, and one that
+        // claims an absurd number, are both refused.
+        let text = String::from_utf8_lossy(&bytes).to_string();
+        assert!(text.contains("\"count\":400"));
+        for claim in ["401", "399", "999999999999"] {
+            let mut forged = Vec::new();
+            let header_len = u32::from_le_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]) as usize;
+            let header = String::from_utf8(bytes[9..9 + header_len].to_vec()).unwrap().replace("\"count\":400", &format!("\"count\":{claim}"));
+            forged.extend_from_slice(&bytes[..5]);
+            forged.extend_from_slice(&(header.len() as u32).to_le_bytes());
+            forged.extend_from_slice(header.as_bytes());
+            forged.extend_from_slice(&bytes[9 + header_len..]);
+            assert!(TokenSequence::from_bytes(&forged).is_err(), "count {claim}");
+        }
+        let mut flipped = bytes.clone();
+        let last = flipped.len() - 6;
+        flipped[last] ^= 0x40;
+        assert!(TokenSequence::from_bytes(&flipped).is_err());
     }
 
     #[test]

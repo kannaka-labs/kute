@@ -2,7 +2,7 @@
 "manifest": {
   "algorithm": "bpe",
   "description": "Synthetic agent messages (kute sample-data)",
-  "generator": "kute 0.1.0",
+  "generator": "kute 0.2.0",
   "id": "example:agent:messages",
   "kvf_version": "0.1",
   "lossless": true,
@@ -2194,6 +2194,6 @@
 ],
 "integrity": {
   "algorithm": "sha256",
-  "digest": "sha256:da0959eb0edacf81440e8dfe8c9b85694b7ce1342db29e2164e3f75111080bf4"
+  "digest": "sha256:3830a4a6b95e64bc3c901dd53d5e65969f9b6cc2af2a876033a8d328a3c2ae10"
 }
 }

@@ -109,9 +109,15 @@ pub struct Evaluation {
     pub vocabulary_utilization: f64,
     /// Size of all `.kute` containers: headers plus varint ids.
     pub serialized_bytes: u64,
+    /// Size of the same sequences as compressed containers (format 2).
+    pub compressed_bytes: u64,
     pub vocabulary_file_bytes: u64,
     /// raw / serialized. Above 1 means smaller than the input.
     pub ratio_serialized: f64,
+    /// raw / compressed containers.
+    pub ratio_compressed: f64,
+    /// raw / (compressed containers + vocabulary file).
+    pub ratio_compressed_with_vocabulary: f64,
     /// raw / (serialized + vocabulary file): what it costs to ship both.
     pub ratio_with_vocabulary: f64,
     /// gzip (default level) over each raw document, summed.
@@ -126,6 +132,9 @@ pub struct Evaluation {
     pub decode_seconds_median: f64,
     pub encode_mb_per_second: f64,
     pub decode_mb_per_second: f64,
+    /// Threads available to the encoder. Text inputs of 1 MiB or more are
+    /// encoded on all of them; smaller inputs use one.
+    pub threads: usize,
     pub peak_memory: &'static str,
 }
 
@@ -156,6 +165,7 @@ pub fn evaluate(engine: &Engine, vocabulary: &Vocabulary, documents: &[Document]
     let mut canonical_units = 0u64;
     let mut tokens = 0u64;
     let mut serialized = 0u64;
+    let mut compressed = 0u64;
     let mut gzip = 0u64;
     let mut used: BTreeSet<u32> = BTreeSet::new();
     let (mut canonical_exact, mut raw_exact) = (true, true);
@@ -173,6 +183,9 @@ pub fn evaluate(engine: &Engine, vocabulary: &Vocabulary, documents: &[Document]
         canonical_units += canonical.payload.len() as u64;
         tokens += sequence.ids.len() as u64;
         serialized += sequence.to_bytes()?.len() as u64;
+        let packed = sequence.to_bytes_compressed()?;
+        canonical_exact &= kute::TokenSequence::from_bytes(&packed)? == sequence;
+        compressed += packed.len() as u64;
         gzip += gzip_len(&d.bytes) as u64;
         used.extend(sequence.ids.iter().copied());
         sequences.push(sequence);
@@ -211,8 +224,11 @@ pub fn evaluate(engine: &Engine, vocabulary: &Vocabulary, documents: &[Document]
         vocabulary_size: vocabulary.tokens.len(),
         vocabulary_utilization: round(used.len() as f64 / vocabulary.tokens.len().max(1) as f64),
         serialized_bytes: serialized,
+        compressed_bytes: compressed,
         vocabulary_file_bytes,
         ratio_serialized: ratio(raw_bytes, serialized),
+        ratio_compressed: ratio(raw_bytes, compressed),
+        ratio_compressed_with_vocabulary: ratio(raw_bytes, compressed + vocabulary_file_bytes),
         ratio_with_vocabulary: ratio(raw_bytes, serialized + vocabulary_file_bytes),
         gzip_bytes: gzip,
         ratio_gzip: ratio(raw_bytes, gzip),
@@ -223,7 +239,8 @@ pub fn evaluate(engine: &Engine, vocabulary: &Vocabulary, documents: &[Document]
         decode_seconds_median: decode_s,
         encode_mb_per_second: if encode_s > 0.0 { round(mb / encode_s) } else { 0.0 },
         decode_mb_per_second: if decode_s > 0.0 { round(mb / decode_s) } else { 0.0 },
-        peak_memory: "not measured in v0.1",
+        threads: rayon::current_num_threads(),
+        peak_memory: "not measured",
     })
 }
 

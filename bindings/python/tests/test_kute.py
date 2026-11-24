@@ -28,7 +28,7 @@ def vocab(engine):
 
 
 def test_module_surface(engine):
-    assert kute.__version__ == "0.1.0"
+    assert kute.__version__ == "0.2.0"
     assert kute.KVF_VERSION == "0.1"
     assert {"bpe", "bytes", "char", "dictionary", "sequence-bpe"} <= set(engine.algorithms())
     assert {"binary", "text", "json", "jsonl", "jsonl-events"} <= set(engine.adapters())

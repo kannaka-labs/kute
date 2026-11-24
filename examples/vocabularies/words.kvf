@@ -2,7 +2,7 @@
 "manifest": {
   "algorithm": "bpe",
   "description": "Synthetic invented-word text (kute sample-data)",
-  "generator": "kute 0.1.0",
+  "generator": "kute 0.2.0",
   "id": "example:words",
   "kvf_version": "0.1",
   "lossless": true,
@@ -3795,6 +3795,6 @@
 ],
 "integrity": {
   "algorithm": "sha256",
-  "digest": "sha256:9c217c0b9ba3f141cd12431a917a2e2785daf1f72b987743c5516b5418bd1ad4"
+  "digest": "sha256:e17d7b2b8dc31c0985e1bc940b3bf8be722ec394cbb68713569c5ba977145041"
 }
 }

@@ -116,6 +116,30 @@ versioned independently and referenced, not embedded, by vocabularies. The
 core has no HRM dependency and makes no HRM claims. See
 `docs/hrm-adapter-contract.md`.
 
+## ADR-0013: The GPT-4 pre-tokenizer preset runs on an automaton engine
+
+The preset pattern uses possessive quantifiers and one lookahead, which need
+a backtracking regex engine. That engine was nearly all of the encode time.
+For the preset only, KUTE compiles an equivalent pattern for the `regex`
+crate and applies the lookahead by hand; any other pattern still runs as
+written on `fancy-regex`. Texts of 1 MiB or more under the preset are cut
+between a line feed and an ASCII letter, a position no branch of the preset
+can match across, and the pieces are encoded on separate threads.
+
+Both shortcuts must give exactly the ids of the plain path. Tests compare the
+two engines chunk for chunk on several thousand inputs, and the parallel
+encoder against a serial pass. The stored pattern in a vocabulary is
+unchanged, so exports and other readers are unaffected.
+
+## ADR-0014: A second container format with compressed ids
+
+Format 1 stores varint ids and is simple to read. Format 2 stores fixed-width
+ids inside a zlib stream. It exists because a token stream is still highly
+repetitive, and leaving that on the table made KUTE files larger than gzip of
+the original. Format 1 remains the default so that existing files and readers
+keep working; `from_bytes` reads both. See section 2.1 of the token envelope
+specification for the format and its reader limits.
+
 ## ADR-0015: License (provisional)
 
 MIT or Apache-2.0 at the user's option, the common choice for Rust libraries.

@@ -1,6 +1,7 @@
 # KUTE token envelope and token sequence container 0.1
 
-Status: published with KUTE v0.1.0. Experimental.
+Status: published with KUTE v0.1.0; container format 2 (section 2.1) added in
+v0.2.0. Experimental.
 
 Two small formats for tokens that leave their vocabulary file:
 
@@ -101,5 +102,35 @@ Size: ids below 128 take one byte, below 16,384 two, below 2,097,152 three.
 The header is typically 150 to 250 bytes, which matters for short inputs;
 benchmarks report container size including it.
 
-The container holds ids only. It is not compressed and not encrypted, and it
-is not a privacy mechanism: anyone with the vocabulary can decode it.
+### 2.1 Format 2: compressed ids
+
+Added in KUTE v0.2.0. Readers accept both formats; writers choose.
+
+```
+offset  size  content
+0       5     magic: 4B 55 54 45 02   ("KUTE", format 2)
+5       4     header length H, as in format 1
+9       H     header: the format 1 header plus `id_bytes`
+9+H     ...   one zlib stream (RFC 1950) to the end of the file
+```
+
+`id_bytes` is an integer from 1 to 4: the width W of every id. Writers use
+the smallest width that holds the largest id in the sequence. The zlib stream
+decompresses to exactly `count` times W bytes: the ids in order, each an
+unsigned little-endian integer of W bytes.
+
+Rules for readers, on top of those above:
+
+* Reject a format 2 file without `id_bytes`, or with a value outside 1 to 4,
+  and a format 1 file that has it.
+* Before decompressing, reject a file where `count` times W exceeds 1040
+  times the size of the compressed body. DEFLATE cannot expand further than
+  about 1032 to 1, so such a header cannot be honest.
+* Never produce more than `count` times W bytes. Reject a stream that holds
+  more or fewer, a stream whose checksum fails, and any bytes after it.
+
+Fixed-width ids are used here, not varints, because the compressor finds
+repeated token runs more easily when every id has the same length.
+
+Neither format is encrypted, and neither is a privacy mechanism: anyone with
+the vocabulary can decode it.

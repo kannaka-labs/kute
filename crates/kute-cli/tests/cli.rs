@@ -50,6 +50,13 @@ fn use_case_1_text() {
     let out = kute(&dir, &["decode", "--vocab", "words.kvf", "--input", "words-eval.kute"]);
     assert_eq!(out.stdout, read(&dir, "data/words-eval.txt"));
 
+    // the compressed container is smaller and decodes to the same bytes
+    let packed = ok(&dir, &["encode", "--vocab", "words.kvf", "--input", "data/words-eval.txt", "--output", "words-eval.packed.kute", "--compress"]);
+    assert_eq!(packed["tokens"], encoded["tokens"]);
+    assert!(packed["serialized_bytes"].as_u64().unwrap() < encoded["serialized_bytes"].as_u64().unwrap());
+    ok(&dir, &["decode", "--vocab", "words.kvf", "--input", "words-eval.packed.kute", "--output", "words-eval.packed.out"]);
+    assert_eq!(read(&dir, "words-eval.packed.out"), read(&dir, "data/words-eval.txt"));
+
     let validated = ok(&dir, &["validate", "words.kvf"]);
     assert_eq!(validated["failures"].as_array().unwrap().len(), 0);
     assert!(validated["vectors"].as_u64().unwrap() >= 1);

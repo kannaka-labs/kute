@@ -2,7 +2,7 @@
 "manifest": {
   "algorithm": "sequence-bpe",
   "description": "Synthetic plant alarm episodes (kute sample-data)",
-  "generator": "kute 0.1.0",
+  "generator": "kute 0.2.0",
   "id": "kute:industrial:events",
   "kvf_version": "0.1",
   "lossless": true,
@@ -162,6 +162,6 @@
 ],
 "integrity": {
   "algorithm": "sha256",
-  "digest": "sha256:3aa8a2bf2b949327b1000177b4a8e7a5c7e1ebbba45a9f31e419f259f4ec174d"
+  "digest": "sha256:7cf95165e7f75927fb1742e269f82bae1250fd614bd021c38def48ef4307ec40"
 }
 }

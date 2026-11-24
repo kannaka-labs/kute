@@ -3,6 +3,7 @@
 
 use crate::merge::{apply_merges, train_merges, Pair};
 use fancy_regex::Regex;
+use rayon::prelude::*;
 use kute_core::{check_sequence, sequence_for, CorpusFingerprint, CorpusSource, Tokenizer};
 use kute_types::{
     CanonicalInput, KuteError, Manifest, MergeRule, Modality, Payload, PayloadKind, Provenance, Result,
@@ -20,8 +21,22 @@ pub const COMPATIBLE_ALGORITHMS: &[&str] = &["bpe", "rustbpe"];
 struct Loaded {
     vocabulary: Vocabulary,
     ranks: FxHashMap<Pair, u32>,
-    regex: Option<Regex>,
+    regex: Option<Splitter>,
 }
+
+/// How a pre-tokenizer pattern is executed.
+pub(crate) enum Splitter {
+    /// Any pattern, on the backtracking engine.
+    Fancy(Regex),
+    /// The GPT-4 preset on the automaton engine. The preset's possessive
+    /// quantifiers never change what it matches (each guards a character class
+    /// disjoint from what follows), so they are dropped; its one lookahead,
+    /// `\s+(?!\S)`, is applied by hand in `for_each_chunk`. The differential
+    /// test in this file holds the two engines to identical chunks.
+    Gpt4(regex::Regex),
+}
+
+const GPT4_FAST: &str = r"'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]|\s+";
 
 #[derive(Default)]
 pub struct BpeTokenizer {
@@ -42,13 +57,18 @@ impl BpeTokenizer {
     }
 }
 
-pub(crate) fn compile(pattern: Option<&str>) -> Result<Option<Regex>> {
+pub(crate) fn compile(pattern: Option<&str>) -> Result<Option<Splitter>> {
     match pattern {
         None => Ok(None),
-        Some(p) => Regex::new(p)
-            .map(Some)
+        Some(p) if p == kute_types::config::GPT4_PATTERN => regex::Regex::new(GPT4_FAST)
+            .map(|re| Some(Splitter::Gpt4(re)))
             .map_err(|e| KuteError::InvalidConfig(format!("pretokenizer pattern does not compile: {e}"))),
+        Some(p) => compile_fancy(p).map(|re| Some(Splitter::Fancy(re))),
     }
+}
+
+fn compile_fancy(pattern: &str) -> Result<Regex> {
+    Regex::new(pattern).map_err(|e| KuteError::InvalidConfig(format!("pretokenizer pattern does not compile: {e}")))
 }
 
 /// Split `bytes` into chunks and hand each to `f`. Every byte is delivered
@@ -56,13 +76,45 @@ pub(crate) fn compile(pattern: Option<&str>) -> Result<Option<Regex>> {
 /// never lose information: text the pattern skips becomes its own chunk, and
 /// input that is not valid UTF-8 (or that the regex engine gives up on) is
 /// delivered whole.
-pub(crate) fn for_each_chunk<'a>(regex: Option<&Regex>, bytes: &'a [u8], mut f: impl FnMut(&'a [u8])) {
+pub(crate) fn for_each_chunk<'a>(splitter: Option<&Splitter>, bytes: &'a [u8], mut f: impl FnMut(&'a [u8])) {
     if bytes.is_empty() {
         return;
     }
-    let (Some(re), Ok(text)) = (regex, std::str::from_utf8(bytes)) else {
+    let (Some(splitter), Ok(text)) = (splitter, std::str::from_utf8(bytes)) else {
         f(bytes);
         return;
+    };
+    let re = match splitter {
+        Splitter::Fancy(re) => re,
+        Splitter::Gpt4(re) => {
+            let mut at = 0;
+            while at < text.len() {
+                let Some(m) = re.find_at(text, at) else { break };
+                let (start, mut end) = (m.start(), m.end());
+                if end <= start {
+                    break;
+                }
+                // `\s+(?!\S)`: a whitespace run that stops before a non-space
+                // gives its last character back. Only the `\s+` branch can
+                // end in whitespace other than a line break.
+                if end < text.len() {
+                    if let Some(c) = text[start..end].chars().next_back() {
+                        if c.is_whitespace() && c != '\n' && c != '\r' && end - start > c.len_utf8() {
+                            end -= c.len_utf8();
+                        }
+                    }
+                }
+                if start > at {
+                    f(&bytes[at..start]);
+                }
+                f(&bytes[start..end]);
+                at = end;
+            }
+            if at < bytes.len() {
+                f(&bytes[at..]);
+            }
+            return;
+        }
     };
     let mut last = 0;
     for m in re.find_iter(text) {
@@ -81,7 +133,49 @@ pub(crate) fn for_each_chunk<'a>(regex: Option<&Regex>, bytes: &'a [u8], mut f: 
     }
 }
 
+/// Inputs at least this long are encoded in pieces on several threads.
+const PARALLEL_MIN_BYTES: usize = 1 << 20;
+const PARALLEL_PIECE_BYTES: usize = 1 << 18;
+
+/// Cut points for encoding a long text in parallel under the GPT-4 preset.
+///
+/// A cut is placed only between a line feed and an ASCII letter. No branch of
+/// the preset can match across that position (line breaks only ever end a
+/// match, and the one branch that starts with an optional non-letter excludes
+/// line breaks), and the preset has no look-behind, so the pieces tokenize
+/// exactly as the whole does.
+fn parallel_cuts(bytes: &[u8]) -> Vec<usize> {
+    let mut cuts = vec![0];
+    let mut target = PARALLEL_PIECE_BYTES;
+    while target < bytes.len() {
+        match (target..bytes.len()).find(|&i| bytes[i - 1] == b'\n' && bytes[i].is_ascii_alphabetic()) {
+            Some(i) => {
+                cuts.push(i);
+                target = i + PARALLEL_PIECE_BYTES;
+            }
+            None => break,
+        }
+    }
+    cuts.push(bytes.len());
+    cuts
+}
+
 fn encode_bytes(loaded: &Loaded, bytes: &[u8]) -> Vec<u32> {
+    if bytes.len() >= PARALLEL_MIN_BYTES && matches!(loaded.regex, Some(Splitter::Gpt4(_))) && std::str::from_utf8(bytes).is_ok() {
+        let cuts = parallel_cuts(bytes);
+        if cuts.len() > 2 {
+            let pieces: Vec<Vec<u32>> = cuts.par_windows(2).map(|w| encode_piece(loaded, &bytes[w[0]..w[1]])).collect();
+            let mut out = Vec::with_capacity(pieces.iter().map(Vec::len).sum());
+            for p in &pieces {
+                out.extend_from_slice(p);
+            }
+            return out;
+        }
+    }
+    encode_piece(loaded, bytes)
+}
+
+fn encode_piece(loaded: &Loaded, bytes: &[u8]) -> Vec<u32> {
     let mut out = Vec::with_capacity(bytes.len() / 2 + 1);
     let mut scratch: Vec<u32> = Vec::new();
     // Words repeat, so remember where each short chunk's ids already sit in
@@ -339,4 +433,74 @@ pub(crate) fn sample_prefix(bytes: &[u8], max: usize) -> Vec<u8> {
         }
     }
     bytes[..end.max(1)].to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kute_types::config::GPT4_PATTERN;
+    use kute_types::VocabularyId;
+
+    fn chunks(splitter: &Splitter, text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for_each_chunk(Some(splitter), text.as_bytes(), |c| out.push(String::from_utf8(c.to_vec()).unwrap()));
+        out
+    }
+
+    fn xorshift(state: &mut u64) -> u64 {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        *state
+    }
+
+    /// The automaton path for the GPT-4 preset must split exactly as the
+    /// backtracking engine does on the preset as written.
+    #[test]
+    fn fast_gpt4_splitter_matches_the_pattern() {
+        let Some(fast @ Splitter::Gpt4(_)) = compile(Some(GPT4_PATTERN)).unwrap() else { panic!("preset should take the fast path") };
+        let reference = Splitter::Fancy(compile_fancy(GPT4_PATTERN).unwrap());
+        let mut cases: Vec<String> = [
+            "", " ", "  ", "   a", "a   ", "a \n b", "a  \n\n  b", "\n\n\n", " \n", "\r\n\r\n x", "don't we'll I'VE it'S 'tis ''", "x = 12345.678e-9;",
+            "tabs\t\tand\t spaces  \t", "end with spaces   ", "naïve café 日本語 テスト", "emoji 🙂🙂 ok", "nbsp\u{a0}\u{a0}x \u{2028} y\u{3000}\u{3000}z",
+            "e\u{301}tude \u{301}\u{301}", "٣٤٥ ١٢٣٤ ⅷ", "fn main() {\n    println!(\"{}\", 1);\n}\n", "a\n\nb\n \nc \n", "!!!\n\n\nabc", " !a", "  !", "\t\n\t\nx",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let alphabet: Vec<char> = "abcXYZ 012  \t\n\r'.,!?-_(){}\u{a0}\u{2028}\u{3000}é日ß\u{301}٣🙂".chars().collect();
+        let mut state = 0x2545f4914f6cdd1du64;
+        for _ in 0..4000 {
+            let len = xorshift(&mut state) % 40;
+            cases.push((0..len).map(|_| alphabet[(xorshift(&mut state) % alphabet.len() as u64) as usize]).collect());
+        }
+        for text in &cases {
+            let (a, b) = (chunks(&fast, text), chunks(&reference, text));
+            assert_eq!(a, b, "input {text:?}");
+            assert_eq!(a.concat(), *text);
+        }
+    }
+
+    /// Encoding a long text in parallel pieces gives the ids of one serial pass.
+    #[test]
+    fn parallel_encode_matches_serial() {
+        let words = ["alpha", "beta", "gamma", "delta", "x1", "42", "naïve", "日本", "don't", "--", "\t"];
+        let mut state = 0x9e3779b97f4a7c15u64;
+        let mut text = String::new();
+        while text.len() < (PARALLEL_MIN_BYTES * 5) / 2 {
+            for _ in 0..(1 + xorshift(&mut state) % 14) {
+                text.push_str(words[(xorshift(&mut state) % words.len() as u64) as usize]);
+                text.push_str(if xorshift(&mut state) % 9 == 0 { "  " } else { " " });
+            }
+            text.push_str(match xorshift(&mut state) % 5 { 0 => "\n\n", 1 => " \n", 2 => "\r\n", _ => "\n" });
+        }
+        let mut config = TrainingConfig::new(VocabularyId::parse("test:parallel").unwrap(), 400);
+        config.pretokenizer = kute_types::Pretokenizer::Gpt4;
+        let mut tokenizer = BpeTokenizer::new();
+        let sample = CanonicalInput::bytes(Modality::Text, text.as_bytes()[..60_000].to_vec());
+        tokenizer.train(&mut kute_core::VecCorpus::new(vec![sample]), &config).unwrap();
+        let loaded = tokenizer.loaded().unwrap();
+        assert!(parallel_cuts(text.as_bytes()).len() > 3, "the text should be cut into several pieces");
+        assert_eq!(encode_bytes(loaded, text.as_bytes()), encode_piece(loaded, text.as_bytes()));
+    }
 }

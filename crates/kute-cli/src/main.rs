@@ -30,6 +30,9 @@ enum Command {
         /// Where to write the .kute container. Without it, token ids are printed as JSON.
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Write the compressed container (format 2) instead of plain varint ids.
+        #[arg(long, requires = "output")]
+        compress: bool,
     },
     /// Decode a .kute token sequence back to bytes.
     Decode {
@@ -79,6 +82,10 @@ enum Command {
         /// Repository root for the suite's in-repo corpora.
         #[arg(long)]
         repo_root: Option<PathBuf>,
+        /// A large UTF-8 text file for the suite's real-data case (for example enwik8).
+        /// The first 90% trains a 32K vocabulary; the rest is the evaluation set.
+        #[arg(long, requires = "suite")]
+        large_text: Option<PathBuf>,
         #[arg(long, default_value_t = 5)]
         iterations: usize,
         /// Also write the JSON report to this file.
@@ -206,13 +213,13 @@ fn run(cli: Cli) -> kute::Result<()> {
     let engine = Engine::new();
     match cli.command {
         Command::Train(args) => train(&engine, *args),
-        Command::Encode { vocab: vocab_path, input, output } => {
+        Command::Encode { vocab: vocab_path, input, output, compress } => {
             let tokenizer = engine.tokenizer(vocab::load(&vocab_path)?)?;
             let raw = std::fs::read(&input)?;
             let sequence = engine.encode_raw(tokenizer.as_ref(), &raw)?;
             match output {
                 Some(path) => {
-                    let bytes = sequence.to_bytes()?;
+                    let bytes = if compress { sequence.to_bytes_compressed()? } else { sequence.to_bytes()? };
                     std::fs::write(&path, &bytes)?;
                     print(&json!({
                         "output": path,
@@ -285,9 +292,9 @@ fn run(cli: Cli) -> kute::Result<()> {
             std::fs::write(&sidecar, serde_json::to_vec_pretty(&meta)?)?;
             print(&json!({ "bpe_file": output, "metadata": sidecar, "tokens": export.n_vocab }))
         }
-        Command::Benchmark { vocab: vocab_path, dataset, suite, repo_root, iterations, output } => {
+        Command::Benchmark { vocab: vocab_path, dataset, suite, repo_root, large_text, iterations, output } => {
             let report = if suite {
-                serde_json::to_value(kute_bench::suite::run(&engine, &kute_bench::suite::Options { repo_root, iterations })?)?
+                serde_json::to_value(kute_bench::suite::run(&engine, &kute_bench::suite::Options { repo_root, iterations, large_text })?)?
             } else {
                 let (Some(vocab_path), Some(dataset)) = (vocab_path, dataset) else {
                     return Err(KuteError::InvalidConfig("benchmark needs --vocab and --dataset, or --suite".into()));

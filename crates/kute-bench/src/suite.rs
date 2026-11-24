@@ -15,6 +15,8 @@ use std::time::Instant;
 pub struct Options {
     /// Repository root, for the in-repo prose and source corpora (B01, B02).
     pub repo_root: Option<PathBuf>,
+    /// A large UTF-8 text file for the real-data case B01-large.
+    pub large_text: Option<PathBuf>,
     pub iterations: usize,
 }
 
@@ -136,8 +138,44 @@ fn read_tree(root: &Path, dirs: &[&str], extension: &str) -> Vec<Document> {
     out
 }
 
+/// Split a large text 90/10 on a line boundary.
+fn large_text_case(path: &Path) -> std::result::Result<Case, String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    if std::str::from_utf8(&bytes).is_err() {
+        return Err("the file is not valid UTF-8".into());
+    }
+    if bytes.len() < 4 << 20 {
+        return Err("the file is smaller than 4 MiB".into());
+    }
+    let target = bytes.len() / 10 * 9;
+    let cut = bytes[target..].iter().position(|&b| b == b'\n').map(|i| target + i + 1).filter(|&c| c < bytes.len()).ok_or("no line break in the last tenth")?;
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    Ok(Case {
+        id: "KUTE-B01-large",
+        title: "Natural language at scale: a large real corpus",
+        description: format!("The file {name} ({} bytes), supplied with --large-text. Train: everything up to the first line break past 90%. Evaluate: the rest. Both parts come from one source, so the evaluation set is in-domain.", bytes.len()),
+        synthetic: false,
+        algorithm: "bpe",
+        baseline: "bytes",
+        adapter: "text",
+        adapter_config: AdapterConfig::default(),
+        pretokenizer: Pretokenizer::Gpt4,
+        vocab_size: 32_768,
+        train: doc(&format!("{name}:train"), bytes[..cut].to_vec()),
+        eval: doc(&format!("{name}:eval"), bytes[cut..].to_vec()),
+        notes: vec!["The evaluation set is one document above 1 MiB, so encoding uses every thread listed under threads.".into()],
+    })
+}
+
 fn cases(options: &Options, skipped: &mut Vec<String>) -> Vec<Case> {
     let mut out = Vec::new();
+    match &options.large_text {
+        Some(path) => match large_text_case(path) {
+            Ok(case) => out.push(case),
+            Err(why) => skipped.push(format!("KUTE-B01-large natural language at scale: {why}")),
+        },
+        None => skipped.push("KUTE-B01-large natural language at scale: needs --large-text".into()),
+    }
     match &options.repo_root {
         Some(root) => {
             let train = read_tree(root, &["docs", "specifications"], "md");
@@ -334,7 +372,7 @@ fn targets(engine: &Engine, cases: &[CaseResult], vocabularies: &[(String, Vocab
     });
 
     // 1 KB encode latency on the first text vocabulary available.
-    if let Some((name, vocabulary)) = vocabularies.iter().find(|(_, v)| v.pretokenizer.is_some()).or(vocabularies.first()) {
+    if let Some((name, vocabulary)) = vocabularies.iter().find(|(id, v)| v.pretokenizer.is_some() && id != "KUTE-B01-large").or(vocabularies.first()) {
         let tokenizer = engine.tokenizer(vocabulary.clone())?;
         let source = data::invented_words(71, 60_000);
         let samples: Vec<&[u8]> = source.chunks_exact(1024).take(400).collect();
@@ -424,7 +462,7 @@ fn targets(engine: &Engine, cases: &[CaseResult], vocabularies: &[(String, Vocab
             prd_value: value.into(),
             measured: "not measured".into(),
             met: None,
-            method: "Out of scope for v0.1: there is no service yet, and memory measurement is not implemented.".into(),
+            method: "Out of scope so far: there is no service yet, and memory measurement is not implemented.".into(),
         });
     }
     Ok(out)
@@ -433,7 +471,7 @@ fn targets(engine: &Engine, cases: &[CaseResult], vocabularies: &[(String, Vocab
 #[cfg(feature = "rustbpe")]
 fn compare_backends(engine: &Engine, cases: &[Case], iterations: usize) -> Result<(Vec<BackendComparison>, String)> {
     let mut out = Vec::new();
-    for case in cases.iter().filter(|c| c.algorithm == "bpe" && c.pretokenizer == Pretokenizer::Gpt4) {
+    for case in cases.iter().filter(|c| c.algorithm == "bpe" && c.pretokenizer == Pretokenizer::Gpt4 && c.id != "KUTE-B01-large") {
         let documents: Vec<Vec<u8>> = case.train.iter().map(|d| d.bytes.clone()).collect();
         let time = |algorithm: &str, suffix: &str| -> Result<(Vocabulary, f64)> {
             let config = config_for(case, suffix)?;
@@ -490,18 +528,18 @@ pub fn run(engine: &Engine, options: &Options) -> Result<SuiteReport> {
         ("KUTE-B07 telemetry", "needs numerical quantization (planned v0.3)"),
         ("KUTE-B08 mathematics", "needs an expression adapter and dataset"),
         ("KUTE-B09 quantum circuits", "needs a circuit adapter and dataset"),
-        ("KUTE-B10 HRM states", "research; only the adapter contract exists in v0.1"),
+        ("KUTE-B10 HRM states", "research; only the adapter contract exists"),
     ] {
         skipped.push(format!("{id}: not run, {why}"));
     }
     let targets = targets(engine, &results, &vocabularies)?;
     let (rustbpe_comparison, rustbpe_comparison_status) = compare_backends(engine, &cases, options.iterations)?;
     Ok(SuiteReport {
-        report: "KUTE initial benchmark program, v0.1",
+        report: "KUTE initial benchmark program",
         environment: Environment::detect(),
         methodology: vec![
             "Each case trains on one dataset and is evaluated on a separate one; fingerprints of both are recorded.",
-            "Compression is complete serialized size (.kute containers: header plus varint ids) against raw bytes, with and without the vocabulary file, next to gzip at its default level on the same bytes.",
+            "Size is complete serialized size against raw bytes, with and without the vocabulary file, next to gzip at its default level on the same bytes. Two containers are measured: format 1 (header plus varint ids) and format 2 (header plus zlib-compressed fixed-width ids).",
             "Every evaluation document is encoded, decoded and compared; a case is exact only if all of them match.",
             "Timings are medians over the stated number of iterations, single process, on the machine described under environment. They are not comparable across machines.",
             "Cases marked synthetic use seeded template generators. Their numbers show the machinery works; they do not predict results on real data.",

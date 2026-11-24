@@ -4,9 +4,9 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.1, experimental. Formats and APIs may change before 1.0.
+Status: v0.2, experimental. Formats and APIs may change before 1.0.
 
-## What works in v0.1
+## What works in v0.2
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -19,6 +19,11 @@ Status: v0.1, experimental. Formats and APIs may change before 1.0.
   vectors and strict validation. See `specifications/kvf/KVF-0.1.md`.
 * A CLI (`kute`), Python bindings, export to tiktoken's format, and a
   reproducible benchmark suite.
+* Two token containers: plain varint ids, and a compressed form
+  (`kute encode --compress`) that is smaller than gzip of the original on
+  the suite's large text case. See `benchmarks/README.md` for where it is not.
+* Text encoding that matches tiktoken id for id on an exported vocabulary and
+  runs faster than it on the same machine; long texts use every core.
 * An experimental adapter contract for Holographic Resonance Medium (HRM)
   research. It is an interface only. See "What KUTE does not claim".
 
@@ -102,8 +107,10 @@ declaration is stored in each vocabulary.
 
 * **No compression claims beyond what the benchmarks show.** The suite reports
   full serialized size, with and without the vocabulary file, next to gzip.
-  On small datasets the vocabulary costs more than it saves. Most suite
-  datasets are synthetic and are labeled so.
+  The compressed container beats gzip on 10 MB of held-out Wikipedia text
+  when the vocabulary is already shared, and loses to it on small binary
+  records. On small datasets the vocabulary costs more than it saves. Most
+  suite datasets are synthetic and are labeled so.
 * **No claims about HRM.** `plugins/hrm` maps token content to deterministic
   phase vectors so that HRM experiments have a stable interface. Whether those
   representations are useful for anything is an open research question that
@@ -113,7 +120,7 @@ declaration is stored in each vocabulary.
 * **No privacy.** A vocabulary can reveal frequent strings from its training
   data, and a `.kute` file is decodable by anyone with the vocabulary.
 
-Not in v0.1: registry service, signatures, streaming, import from other
+Not in v0.2: registry service, signatures, streaming, import from other
 tokenizer formats, and adapters for DNA, telemetry, mathematics and quantum
 circuits.
 
