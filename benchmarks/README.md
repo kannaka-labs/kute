@@ -480,6 +480,22 @@ into. So read the speed figures as "faster on both machines measured, by
 between 1.1 and 1.8 times to train and 4 and 10 times to encode", not as
 one ratio.
 
+Both libraries held to one thread (`RAYON_NUM_THREADS=1`,
+`TOKENIZERS_PARALLELISM=false`), five runs each on the laptop; report
+`results/tokenizers-enwik8-1thread.json`:
+
+| | KUTE 0.5.0 | tokenizers 0.23.2 |
+|---|---:|---:|
+| train, median of 5 (range) | 12.4 s (11.9 to 16.4) | 49.0 s (40.0 to 53.0) |
+| encode as one document, median (range) | 0.63 s (0.52 to 0.78) | 7.82 s (7.32 to 8.65) |
+| encode as a batch of lines, median (range) | not run | 6.24 s (5.97 to 7.14) |
+
+On one thread KUTE trained about 4 times faster and encoded about 10 times
+faster. KUTE's training took no longer on one thread than on eight, so its
+trainer gains little from more threads here, while `tokenizers` gets a
+large part of its training speed from them. That is why the training gap
+narrows on the 24-thread machine.
+
 How to read it:
 
 - The two trainers split text differently before merging, each by its
@@ -487,8 +503,8 @@ How to read it:
   differ, and so the token counts compare the tools as people use them, not
   one algorithm against itself.
 - `tokenizers` encodes one document on one thread and a batch on several.
-  KUTE spreads one long document over every core. On a single thread the gap
-  in encode time would be smaller; that was not measured here.
+  KUTE spreads one long document over every core. The single-thread table
+  above removes that difference.
 - The slowest `tokenizers` training run (57.8 s) was the first; the other
   nine took 22.5 to 29.9 s.
 - One dataset, one machine. Nothing here says how either tool does on other
