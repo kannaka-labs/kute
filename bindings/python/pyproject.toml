@@ -3,19 +3,24 @@ requires = ["maturin>=1.7,<2"]
 build-backend = "maturin"
 
 [project]
-name = "kute"
+name = "kute-engine"
 version = "0.2.0"
 description = "Kannaka Universal Tokenization Engine: train, exchange and apply vocabularies for text, bytes, structured records and event sequences"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT OR Apache-2.0" }
 authors = [{ name = "Kannaka Labs" }]
+keywords = ["tokenizer", "bpe", "tokenization", "vocabulary"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
     "Topic :: Text Processing",
 ]
+
+[project.urls]
+Repository = "https://github.com/kannaka-labs/kute"
+Issues = "https://github.com/kannaka-labs/kute/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8", "tiktoken>=0.8"]

@@ -18,7 +18,7 @@ cargo test --workspace
 ```
 
 Rust 1.80 or newer. No Python is needed for the default workspace. The
-`rustbpe` feature and the Python bindings need Python 3.9 or newer; see the
+rustbpe backend and the Python bindings need Python 3.9 or newer; see the
 README.
 
 ## What a change needs

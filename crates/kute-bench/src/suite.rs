@@ -87,7 +87,7 @@ pub struct SuiteReport {
     pub cases: Vec<CaseResult>,
     pub skipped: Vec<String>,
     pub targets: Vec<TargetCheck>,
-    /// Present only when built with the `rustbpe` feature.
+    /// Present only when the engine has the rustbpe backend registered.
     pub rustbpe_comparison: Vec<BackendComparison>,
     pub rustbpe_comparison_status: String,
 }
@@ -468,8 +468,12 @@ fn targets(engine: &Engine, cases: &[CaseResult], vocabularies: &[(String, Vocab
     Ok(out)
 }
 
-#[cfg(feature = "rustbpe")]
+/// Runs only when the engine has a `rustbpe` algorithm registered, which the
+/// `kute-ref` command from `backends/rustbpe` does.
 fn compare_backends(engine: &Engine, cases: &[Case], iterations: usize) -> Result<(Vec<BackendComparison>, String)> {
+    if !engine.registry().algorithm_names().iter().any(|n| n == "rustbpe") {
+        return Ok((Vec::new(), "not run: this engine has no rustbpe backend (use kute-ref from backends/rustbpe; it needs Python)".into()));
+    }
     let mut out = Vec::new();
     for case in cases.iter().filter(|c| c.algorithm == "bpe" && c.pretokenizer == Pretokenizer::Gpt4 && c.id != "KUTE-B01-large") {
         let documents: Vec<Vec<u8>> = case.train.iter().map(|d| d.bytes.clone()).collect();
@@ -505,11 +509,6 @@ fn compare_backends(engine: &Engine, cases: &[Case], iterations: usize) -> Resul
         });
     }
     Ok((out, "run".into()))
-}
-
-#[cfg(not(feature = "rustbpe"))]
-fn compare_backends(_: &Engine, _: &[Case], _: usize) -> Result<(Vec<BackendComparison>, String)> {
-    Ok((Vec::new(), "not run: built without the rustbpe feature (it needs a Python installation)".into()))
 }
 
 /// Run every case that can run here.

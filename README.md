@@ -12,7 +12,8 @@ Status: v0.2, experimental. Formats and APIs may change before 1.0.
   algorithms and adapters plug in without changes to the core.
 * Algorithms: `bpe` (byte-level BPE, native Rust), `sequence-bpe` (BPE over
   named symbols such as events), and the baselines `bytes`, `char` and
-  `dictionary`. `rustbpe` is available as an optional reference backend.
+  `dictionary`. `rustbpe` is available as a reference backend, built
+  separately from `backends/rustbpe`.
 * Adapters: `binary`, `text` (both byte-exact), `json`, `jsonl` (canonicalizing)
   and `jsonl-events` (keeps one field per record).
 * KVF 0.1, the vocabulary file format, with content digests, embedded test
@@ -28,6 +29,10 @@ Status: v0.2, experimental. Formats and APIs may change before 1.0.
   research. It is an interface only. See "What KUTE does not claim".
 
 ## Quick start
+
+Install from crates.io with `cargo install kute-cli`, or from PyPI with
+`pip install kute-engine`. The Rust library is the crate `kute-engine`,
+imported as `kute`. To build from source:
 
 ```
 cargo build --release -p kute-cli
@@ -63,14 +68,15 @@ Five worked use cases, each independent of the others, are in
 ```
 crates/kute-types       shared types: errors, identifiers, inputs, the vocabulary model
 crates/kute-core        traits (Tokenizer, ModalityAdapter, RepresentationBackend), registry
-crates/kute-bpe         byte BPE, sequence BPE, optional rustbpe backend
+crates/kute-bpe         byte BPE, sequence BPE
 crates/kute-algorithms  bytes, char, dictionary
 crates/kute-adapters    binary, text, json, jsonl, jsonl-events
 crates/kute-vocab       KVF read/write/validate, compare, tiktoken export
-crates/kute             the engine: one entry point over all of the above
+crates/kute             the engine (crate kute-engine): one entry point over all of the above
 crates/kute-bench       evaluation harness and the benchmark suite
 crates/kute-cli         the kute command
 plugins/hrm             experimental HRM representation plugin
+backends/rustbpe        rustbpe reference backend and the kute-ref command (not published)
 bindings/python         Python package (PyO3, built with maturin)
 specifications/         KVF 0.1, token envelope and .kute container
 docs/                   use cases, HRM contract, decision records
@@ -81,15 +87,18 @@ benchmarks/             how to run the suite, and recorded results
 
 ```
 cargo test --workspace                       # no Python needed
-cargo test -p kute-bpe --features rustbpe    # needs Python; see below
+cd backends/rustbpe && cargo test            # needs Python; see below
 cd bindings/python && maturin develop --release && pytest tests
 ```
 
-The `rustbpe` feature embeds a Python interpreter, because rustbpe's only
+The rustbpe backend embeds a Python interpreter, because rustbpe's only
 training entry point takes a Python iterator. It needs Python at build time
 and at run time. On Windows, set `PYO3_PYTHON` to the interpreter and put its
-directory on `PATH`. The dependency is pinned to a git revision of rustbpe,
-since the crates.io release uses an older PyO3.
+directory on `PATH`. It depends on a pinned git revision of rustbpe, since
+the crates.io release uses an older PyO3; crates.io does not accept git
+dependencies, so this backend is a separate crate that is not published.
+Its `kute-ref` binary is the `kute` command with `--algorithm rustbpe`
+added.
 
 ## Losslessness, stated per component
 

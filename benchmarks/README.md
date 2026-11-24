@@ -9,8 +9,9 @@ cargo build --release -p kute-cli
 
 Add `--large-text path/to/enwik8` to include the large real-data case. The
 recorded run used enwik8, the first 100 MB of an English Wikipedia dump, from
-https://mattmahoney.net/dc/enwik8.zip. Add `--features rustbpe` to the build
-(needs Python) to include the comparison with the rustbpe reference backend. To measure your own vocabulary
+https://mattmahoney.net/dc/enwik8.zip. Run the suite with
+`kute-ref` (built in `backends/rustbpe`, needs Python) in place of `kute` to
+include the comparison with the rustbpe reference backend. To measure your own vocabulary
 on your own data:
 
 ```
@@ -46,8 +47,8 @@ the input.
 | case | data | vocabulary | fewer tokens than baseline | plain container | compressed container | compressed, with vocabulary | gzip | exact |
 |------|------|-----------:|---------------------------:|----------------:|---------------------:|----------------------------:|-----:|-------|
 | B01-large natural language | enwik8: 90 MB train, 10 MB eval | 32,768 | 3.92x | 2.03 | **3.24** | 1.56 | 2.78 | bytes |
-| B01 natural language | this repo's docs, 9 KB eval | 2,048 | 3.24x | 1.70 | 2.04 | 0.05 | 2.08 | bytes |
-| B02 source code | this repo's Rust, 114 KB eval | 4,096 | 3.35x | 1.81 | 3.24 | 0.27 | 3.28 | bytes |
+| B01 natural language | this repo's docs, 9 KB eval | 2,048 | 3.24x | 1.71 | 2.06 | 0.05 | 2.10 | bytes |
+| B02 source code | this repo's Rust, 114 KB eval | 4,096 | 3.33x | 1.79 | 3.20 | 0.27 | 3.27 | bytes |
 | B03 binary records | synthetic, 64 KB eval | 1,024 | 2.36x | 1.56 | 4.34 | 0.59 | 4.61 | bytes |
 | B03 control, random bytes | synthetic, 64 KB eval | 1,024 | 1.01x | 0.67 | 0.77 | 0.39 | 1.00 | bytes |
 | B04 industrial alarms | synthetic, 227 KB eval | 64 | 3.17x | 144 (tags only) | 195 (tags only) | 22.3 | 10.99 | canonical |
@@ -63,8 +64,8 @@ What this run shows:
   Shipping the 3.3 MB vocabulary with it brings that to 1.56. The vocabulary
   is paid for once, so the gap closes as more text is sent.
 * **It does not beat gzip everywhere.** It is just behind gzip on this
-  repository's small prose and source sets (2.04 against 2.08, and 3.24
-  against 3.28), and further behind on synthetic binary records (4.34
+  repository's small prose and source sets (2.06 against 2.10, and 3.20
+  against 3.27), and further behind on synthetic binary records (4.34
   against 4.61). Stronger compressors than gzip were
   not part of this run.
 * On small datasets the vocabulary still costs more than it saves: with the
@@ -81,8 +82,10 @@ What this run shows:
 
 Speed, same machine:
 
-* Encoding the 10 MB Wikipedia set took a median of 0.16 s, 64 MB/s, on 8
-  threads. Training the 32,768-token vocabulary on 90 MB took 14 s.
+* Encoding the 10 MB Wikipedia set took a median of 0.20 s, 51 MB/s, on 8
+  threads. Training the 32,768-token vocabulary on 90 MB took 22 s. The
+  machine was under background load for the recorded run; an earlier run of
+  the same code on a quieter machine gave 64 MB/s and 14 s.
 * Against tiktoken 0.14.0 on the same exported vocabulary, both called from
   Python, runs alternated (`benchmarks/tiktoken_compare.py`): on one thread
   KUTE encoded at 15.9 MB/s and tiktoken at 9.1 MB/s. With all 8 threads KUTE
@@ -99,13 +102,13 @@ hardware is defined yet):
 | target | required | measured |
 |--------|----------|----------|
 | lossless reconstruction | 100% | 14 of 14 evaluations exact |
-| 1 KB encode latency | P95 under 5 ms | P95 0.21 ms, median 0.14 ms |
-| 32K vocabulary load | under 500 ms | 62 ms to a ready tokenizer (3.3 MiB file) |
-| vocabulary lookup | P95 under 1 ms | mean 1.9 ns (a mean, not a P95) |
+| 1 KB encode latency | P95 under 5 ms | P95 0.39 ms, median 0.25 ms |
+| 32K vocabulary load | under 500 ms | 121 ms to a ready tokenizer (3.3 MiB file) |
+| vocabulary lookup | P95 under 1 ms | mean 4.5 ns (a mean, not a P95) |
 | determinism | identical output | retraining gave the same digest |
 | memory, service availability | reported | not measured |
 
-rustbpe comparison (built with the feature, Python 3.14): on B01 and B02 the
+rustbpe comparison (run with `kute-ref`, Python 3.14): on B01 and B02 the
 native backend and rustbpe learned identical merge tables and produced
 identical encodings of the evaluation sets. The large case was not run
 through rustbpe.

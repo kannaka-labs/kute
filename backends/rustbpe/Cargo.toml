@@ -1,0 +1,37 @@
+[package]
+name = "kute-rustbpe"
+description = "The rustbpe reference backend for KUTE, and a kute command with it built in"
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.80"
+authors = ["Kannaka Labs"]
+repository = "https://github.com/kannaka-labs/kute"
+# Not published: rustbpe is pinned to a git revision (see below), which
+# crates.io does not accept. Build it from this repository.
+publish = false
+
+# Outside the main workspace: it links a Python interpreter.
+[workspace]
+
+[[bin]]
+name = "kute-ref"
+path = "src/main.rs"
+
+[dependencies]
+kute = { package = "kute-engine", path = "../../crates/kute" }
+kute-types = { path = "../../crates/kute-types" }
+kute-core = { path = "../../crates/kute-core" }
+kute-bpe = { path = "../../crates/kute-bpe" }
+kute-cli = { path = "../../crates/kute-cli" }
+# Pinned to a commit: the crates.io release (0.1.0) is built on pyo3 0.23,
+# which predates current Python versions; this revision uses pyo3 0.27.
+rustbpe = { git = "https://github.com/karpathy/rustbpe", rev = "ddf848f6961a0655dc8693742fc338e5682c0d3b" }
+pyo3 = { version = "0.27", features = ["auto-initialize"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 4

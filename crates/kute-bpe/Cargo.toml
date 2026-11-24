@@ -1,18 +1,16 @@
 [package]
 name = "kute-bpe"
-description = "Byte Pair Encoding for KUTE: native byte and symbol-sequence BPE, plus an optional rustbpe backend"
+description = "Byte Pair Encoding for KUTE: native byte-level BPE and BPE over symbol sequences"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-
-[features]
-default = []
-# Enables the rustbpe reference backend. rustbpe links CPython through pyo3 and
-# trains from a Python iterator, so this feature needs a Python 3 installation
-# at build time and at run time. See docs/adr/0002-rustbpe-reference-backend.md.
-rustbpe = ["dep:rustbpe", "dep:pyo3"]
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [dependencies]
 kute-types.workspace = true
@@ -22,7 +20,3 @@ regex.workspace = true
 rayon.workspace = true
 rustc-hash.workspace = true
 serde_json.workspace = true
-# Pinned to a commit: the crates.io release (0.1.0) is built on pyo3 0.23,
-# which predates current Python versions; this revision uses pyo3 0.27.
-rustbpe = { git = "https://github.com/karpathy/rustbpe", rev = "ddf848f6961a0655dc8693742fc338e5682c0d3b", optional = true }
-pyo3 = { version = "0.27", optional = true, features = ["auto-initialize"] }

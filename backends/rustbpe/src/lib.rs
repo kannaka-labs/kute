@@ -12,7 +12,7 @@
 //! which drops any text the pattern does not match. This backend therefore
 //! verifies every encode by decoding it and refuses input it cannot round-trip.
 
-use crate::byte::{build_vocabulary, sample_prefix};
+use kute_bpe::byte::{build_vocabulary, sample_prefix};
 use kute_core::{check_sequence, sequence_for, CorpusFingerprint, CorpusSource, Tokenizer};
 use kute_types::{
     CanonicalInput, KuteError, Payload, PayloadKind, Result, TestVector, TokenKind, TokenPayload,
@@ -127,7 +127,7 @@ impl Tokenizer for RustBpeTokenizer {
 
     fn load(&mut self, mut vocabulary: Vocabulary) -> Result<()> {
         vocabulary.validate()?;
-        if !crate::byte::COMPATIBLE_ALGORITHMS.contains(&vocabulary.manifest.algorithm.as_str()) {
+        if !kute_bpe::byte::COMPATIBLE_ALGORITHMS.contains(&vocabulary.manifest.algorithm.as_str()) {
             return Err(KuteError::VocabularyMismatch(format!(
                 "the rustbpe backend cannot interpret a {:?} vocabulary",
                 vocabulary.manifest.algorithm
@@ -186,4 +186,9 @@ impl Tokenizer for RustBpeTokenizer {
             notes: "rustbpe reference backend. Valid UTF-8 text only; input its split pattern cannot cover is refused. Needs a Python runtime.".to_string(),
         }
     }
+}
+
+/// Add the `rustbpe` algorithm to a registry.
+pub fn register(registry: &mut kute_core::Registry) {
+    registry.register_algorithm(ALGORITHM, RustBpeTokenizer::boxed);
 }

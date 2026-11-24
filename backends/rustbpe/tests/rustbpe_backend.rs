@@ -1,9 +1,9 @@
 //! MVP criterion: rustbpe integrated behind the generic tokenizer interface.
 //!
-//! Runs only with `--features rustbpe` (needs a Python installation).
-#![cfg(feature = "rustbpe")]
+//! Needs a Python installation.
 
-use kute_bpe::{BpeTokenizer, RustBpeTokenizer};
+use kute_bpe::BpeTokenizer;
+use kute_rustbpe::RustBpeTokenizer;
 use kute_core::{Tokenizer, VecCorpus};
 use kute_types::{CanonicalInput, KuteError, Payload, Pretokenizer, TrainingConfig, VocabularyId};
 

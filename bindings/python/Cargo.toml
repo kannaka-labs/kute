@@ -16,7 +16,7 @@ name = "kute_python"
 crate-type = ["cdylib"]
 
 [dependencies]
-kute = { path = "../../crates/kute" }
+kute = { package = "kute-engine", path = "../../crates/kute" }
 kute-bench = { path = "../../crates/kute-bench" }
 pyo3 = { version = "0.27", features = ["extension-module", "abi3-py39"] }
 serde = "1"

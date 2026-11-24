@@ -57,16 +57,18 @@ a Python interpreter under every build and make text encoding lossy.
 
 So: `bpe` is a native implementation of the same algorithm (most frequent
 pair, ties to the smallest pair, ids from 256), and `rustbpe` is available
-behind the cargo feature `rustbpe`, through the same `Tokenizer` trait. A test
-under that feature checks that both learn identical merges and produce
+as a separate crate, `backends/rustbpe`, through the same `Tokenizer` trait.
+A test there checks that both learn identical merges and produce
 identical encodings, and that vocabularies load in either. The rustbpe
 backend verifies each encoding by decoding it and refuses input it would
 alter.
 
-Consequences: the feature needs Python at build and run time. The dependency
-is pinned to a git revision, because the crates.io release of rustbpe uses an
-older PyO3; `kute-bpe` cannot be published to crates.io with that feature
-until rustbpe publishes a matching release.
+Consequences: the backend needs Python at build and run time. Its rustbpe
+dependency is pinned to a git revision, because the crates.io release of
+rustbpe uses an older PyO3. crates.io does not accept git dependencies, so
+from v0.2.0 the backend is its own unpublished crate, outside the workspace,
+and the published crates carry no trace of it. Its `kute-ref` binary is the
+`kute` command with the backend registered.
 
 ## ADR-0006: KVF 0.1 is one JSON document
 

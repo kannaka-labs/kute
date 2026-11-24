@@ -205,7 +205,8 @@ fn encode_piece(loaded: &Loaded, bytes: &[u8]) -> Vec<u32> {
 
 /// Assemble a byte-BPE vocabulary from learned merges. Shared with the
 /// rustbpe backend so both write identical tables.
-pub(crate) fn build_vocabulary(
+#[doc(hidden)]
+pub fn build_vocabulary(
     algorithm: &str,
     config: &TrainingConfig,
     merges: &[(u32, u32, u32, Option<u64>)],
@@ -422,7 +423,8 @@ impl BpeTokenizer {
 }
 
 /// Up to `max` leading bytes, cut on a UTF-8 boundary when the data is text.
-pub(crate) fn sample_prefix(bytes: &[u8], max: usize) -> Vec<u8> {
+#[doc(hidden)]
+pub fn sample_prefix(bytes: &[u8], max: usize) -> Vec<u8> {
     if bytes.len() <= max {
         return bytes.to_vec();
     }

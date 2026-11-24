@@ -182,20 +182,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
-name = "kute"
-version = "0.2.0"
-dependencies = [
- "kute-adapters",
- "kute-algorithms",
- "kute-bpe",
- "kute-core",
- "kute-types",
- "kute-vocab",
- "rayon",
- "serde",
-]
-
-[[package]]
 name = "kute-adapters"
 version = "0.2.0"
 dependencies = [
@@ -219,7 +205,7 @@ name = "kute-bench"
 version = "0.2.0"
 dependencies = [
  "flate2",
- "kute",
+ "kute-engine",
  "rayon",
  "serde",
  "serde_json",
@@ -248,11 +234,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "kute-engine"
+version = "0.2.0"
+dependencies = [
+ "kute-adapters",
+ "kute-algorithms",
+ "kute-bpe",
+ "kute-core",
+ "kute-types",
+ "kute-vocab",
+ "rayon",
+ "serde",
+]
+
+[[package]]
 name = "kute-python"
 version = "0.2.0"
 dependencies = [
- "kute",
  "kute-bench",
+ "kute-engine",
  "pyo3",
  "serde",
  "serde_json",

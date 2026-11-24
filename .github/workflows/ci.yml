@@ -45,10 +45,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: rustbpe
-      - name: Test kute-bpe with the rustbpe feature
+          workspaces: backends/rustbpe
+      - name: Test the rustbpe backend
         run: |
           export LD_LIBRARY_PATH="$(python -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))'):$LD_LIBRARY_PATH"
-          cargo test -p kute-bpe --features rustbpe --locked
+          cd backends/rustbpe && cargo test --locked
 
   python:
     name: python bindings

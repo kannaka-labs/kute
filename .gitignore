@@ -7,3 +7,4 @@
 /examples/data/
 /benchmarks/results/*scratch*
 .venv/
+/backends/rustbpe/target/
