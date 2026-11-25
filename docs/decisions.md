@@ -1088,9 +1088,15 @@ what each cost. Still made of released commands only.
 
 The two paths stay two. A peer that requires signatures refuses
 proposals (ADR-0047), so "negotiated" and "signed" are not one act
-here: the signed vocabulary is sent whole. Measured: about 93 kB on the
-socket for the signed path against 2 kB for the proposal, and a refusal
-comes only after the file has been sent.
+here: the signed vocabulary is sent whole. Measured, each figure the
+bytes on the socket in both directions for one exchange: 93,432 for the
+candidate sent whole and refused (unsigned; 93,781 signed by a key the
+worker was not told of), no task delivered in either; 161,063 for the
+candidate signed by the queen, taken, with 100 tasks delivered in the
+same exchange; 2,068 for the proposal of the same candidate to a worker
+without the requirement, no task in it. So the file costs about 93 kB
+where the proposal costs 2 kB, and a refusal comes only after the file
+has been sent.
 
 Signing what a proposal derives was not done here; it is ADR-0053.
 
@@ -1148,6 +1154,14 @@ block is now dropped earlier. All six are in test files
 (`kute-protocol/tests`, `kute/tests/untrusted_input.rs`); none is in a
 library or the command line. They were not rewritten, and those tests
 pass on the new edition.
+
+The edition also drops the temporaries of an `if let` condition before
+the `else` branch. Its lint (`if-let-rescope`, run the same way on
+b057a05) names nothing. That lint was seen here to fire on a type with
+its own `Drop` and not on a `MutexGuard`, so locks were searched for by
+hand as well: the workspace has one `Mutex` (the job queue in
+`kute-cli/src/http.rs`), locked in a `let`, and no `RefCell` or
+`RwLock`; no guard is taken in an `if let` condition.
 
 ## Deferred
 
