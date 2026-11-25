@@ -161,9 +161,10 @@ enum PeerAction {
         /// Vocabularies this side already holds. Repeatable.
         #[arg(long)]
         vocab: Vec<PathBuf>,
-        /// Refuse vocabularies this side does not already hold.
+        /// Take vocabularies this side does not already hold. Off by
+        /// default: the other side can add nothing unless told it may.
         #[arg(long)]
-        no_new_vocabularies: bool,
+        accept_vocabularies: bool,
         /// Let the other side extend vocabularies held here.
         #[arg(long)]
         accept_proposals: bool,
@@ -202,8 +203,8 @@ fn split_additions(additions: &[String]) -> Vec<Vec<String>> {
 fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
     use kute_protocol::{Framed, Peer, Policy, Session, DEFAULT_MAX_FRAME};
     match action {
-        PeerAction::Serve { listen, vocab: held, no_new_vocabularies, accept_proposals, max_units, output_dir } => {
-            let policy = Policy { accept_vocabularies: !no_new_vocabularies, accept_proposals, max_decoded_units: max_units, ..Policy::default() };
+        PeerAction::Serve { listen, vocab: held, accept_vocabularies, accept_proposals, max_units, output_dir } => {
+            let policy = Policy { accept_vocabularies, accept_proposals, max_decoded_units: max_units, ..Policy::default() };
             let mut peer = Peer::new("kute", engine, policy);
             for path in &held {
                 peer.add_vocabulary(vocab::load(path)?)?;

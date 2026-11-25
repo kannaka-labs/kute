@@ -3,7 +3,7 @@
 //! messages."
 
 use kute::{AdapterConfig, Engine, KuteError, TrainingConfig, UnknownPolicy, Version, Vocabulary, VocabularyId};
-use kute_protocol::{ErrorCode, Framed, Message, Peer, Policy, Session, Transport, VocabRef, DEFAULT_MAX_FRAME, PROTOCOL_VERSION};
+use kute_protocol::{ErrorCode, Framed, Message, Peer, Policy, Session, Transport, VocabRef, DEFAULT_MAX_FRAME, EVOLUTION_RULE, PROTOCOL_VERSION};
 use std::net::{TcpListener, TcpStream};
 
 fn events(names: &[&str]) -> Vec<u8> {
@@ -20,6 +20,12 @@ fn train(id: &str, cycle: &[&str]) -> Vocabulary {
 }
 
 const CYCLE: [&str; 4] = ["MOTOR_START", "CURRENT_HIGH", "MOTOR_TRIP", "OPERATOR_ACK"];
+
+/// The default policy takes nothing from the other side; most tests need a
+/// peer that takes vocabularies.
+fn open() -> Policy {
+    Policy { accept_vocabularies: true, ..Policy::default() }
+}
 
 /// A responder on a real socket, in its own thread, with its own engine and
 /// policy. Returns the peer after the initiator disconnects.
@@ -48,7 +54,7 @@ fn initiator(address: std::net::SocketAddr, held: &[Vocabulary]) -> (Session<Fra
 #[test]
 fn peers_negotiate_exchange_and_extend_a_vocabulary() {
     let vocabulary = train("test:protocol:events", &CYCLE);
-    let (address, handle) = responder(Policy { accept_proposals: true, ..Policy::default() }, Vec::new());
+    let (address, handle) = responder(Policy { accept_proposals: true, ..open() }, Vec::new());
     let (mut a, digests) = initiator(address, std::slice::from_ref(&vocabulary));
     let digest = &digests[0];
 
@@ -165,7 +171,7 @@ fn a_peer_trusts_nothing_it_is_sent() {
     let kvf = kute::vocab::to_vec(&vocabulary).unwrap();
 
     // Data nobody asked for.
-    let mut peer = ready_peer(Policy::default());
+    let mut peer = ready_peer(open());
     assert_eq!(code(&peer.handle(Message::VocabData { digest: honest.digest.clone(), kvf: kvf.clone() })), ErrorCode::OutOfOrder);
 
     // Announce one vocabulary, send another.
@@ -186,12 +192,12 @@ fn a_peer_trusts_nothing_it_is_sent() {
     alien.algorithm = "not-an-algorithm".into();
     alien.digest = "sha256:11".into();
     assert_eq!(code(&peer.handle(Message::VocabAnnounce { vocabulary: alien })), ErrorCode::UnsupportedAlgorithm);
-    let mut small = ready_peer(Policy { max_vocabulary_tokens: 4, ..Policy::default() });
+    let mut small = ready_peer(Policy { max_vocabulary_tokens: 4, ..open() });
     assert_eq!(code(&small.handle(Message::VocabAnnounce { vocabulary: honest.clone() })), ErrorCode::TooLarge);
 
     // The honest transfer works, and then a message that would decode past
     // the budget is refused before decoding.
-    let mut tight = ready_peer(Policy { max_decoded_units: 8, ..Policy::default() });
+    let mut tight = ready_peer(Policy { max_decoded_units: 8, ..open() });
     assert!(matches!(tight.handle(Message::VocabAnnounce { vocabulary: honest.clone() })[0], Message::VocabRequest { .. }));
     assert_eq!(tight.handle(Message::VocabData { digest: honest.digest.clone(), kvf })[0], Message::VocabAccept { digest: honest.digest.clone() });
     let mut sender = Peer::new("a", Engine::new(), Policy::default());
@@ -226,4 +232,233 @@ fn framing_is_bounded() {
     let message = Message::Ack { id: 7, units: 3, sha256: "ab".into() };
     pipe.send(&message).unwrap();
     assert!(pipe.send(&Message::EncodedMessage { id: 1, container: vec![0; 4096] }).is_err(), "over the frame limit");
+}
+
+/// Hand `vocabulary` to a ready peer the way the other side would.
+fn give(peer: &mut Peer, vocabulary: &Vocabulary) -> Vec<Message> {
+    let announced = VocabRef::of(vocabulary).unwrap();
+    let reply = peer.handle(Message::VocabAnnounce { vocabulary: announced.clone() });
+    if !matches!(reply[0], Message::VocabRequest { .. }) {
+        return reply;
+    }
+    peer.handle(Message::VocabData { digest: announced.digest, kvf: kute::vocab::to_vec(vocabulary).unwrap() })
+}
+
+/// B2: with no policy set, the other side can add nothing.
+#[test]
+fn the_default_policy_takes_nothing_from_the_other_side() {
+    let vocabulary = train("test:protocol:deny", &CYCLE);
+    let mut peer = ready_peer(Policy::default());
+    assert_eq!(code(&give(&mut peer, &vocabulary)), ErrorCode::Refused);
+    assert!(peer.digests().is_empty());
+    let mut holder = ready_peer(Policy::default());
+    let digest = holder.add_vocabulary(vocabulary).unwrap();
+    let propose = Message::SymbolPropose { digest, additions: vec![vec!["X".into()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    assert_eq!(code(&holder.handle(propose)), ErrorCode::Refused);
+    assert_eq!(holder.digests().len(), 1);
+}
+
+/// AC-703: a proposal made under another evolution rule is refused before
+/// anything is derived, and an older protocol is refused at the handshake.
+#[test]
+fn a_proposal_under_another_evolution_rule_is_refused_before_derivation() {
+    let vocabulary = train("test:protocol:rule", &CYCLE);
+    let mut peer = ready_peer(Policy { accept_proposals: true, ..open() });
+    let digest = peer.add_vocabulary(vocabulary).unwrap();
+    let additions = vec![vec!["VALVE_7_STUCK".to_string()]];
+
+    // What a v0.5 peer would send: the earlier rule, or no rule field at all.
+    for rule in ["kute 0.5.0", "kute evolve-1", ""] {
+        let propose = Message::SymbolPropose { digest: digest.clone(), additions: additions.clone(), version: "0.2.0".into(), rule: rule.into() };
+        let reply = peer.handle(propose);
+        assert_eq!(code(&reply), ErrorCode::UnsupportedRule, "rule {rule:?}");
+        assert_eq!(peer.digests(), vec![digest.clone()], "nothing was derived or held for rule {rule:?}");
+    }
+    let without_rule = format!(r#"{{"type":"SYMBOL_PROPOSE","digest":"{digest}","additions":[["VALVE_7_STUCK"]],"version":"0.2.0"}}"#);
+    let old: Message = serde_json::from_str(&without_rule).unwrap();
+    assert_eq!(code(&peer.handle(old)), ErrorCode::UnsupportedRule);
+
+    // The same proposal under this build's rule is taken.
+    let propose = Message::SymbolPropose { digest: digest.clone(), additions, version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    assert!(matches!(peer.handle(propose)[0], Message::VocabAccept { .. }));
+    assert_eq!(peer.digests().len(), 2);
+
+    // Capabilities name the rule, so an initiator can decline to propose.
+    match peer.capabilities() {
+        Message::Capabilities { evolution_rules, kvf_versions, .. } => {
+            assert_eq!(evolution_rules, vec![EVOLUTION_RULE.to_string()]);
+            assert!(!kvf_versions.is_empty());
+        }
+        other => panic!("{other:?}"),
+    }
+    // A peer speaking the previous protocol does not get past HELLO.
+    let mut fresh = Peer::new("b", Engine::new(), open());
+    assert_eq!(code(&fresh.handle(Message::Hello { protocol: 1, peer: "old".into(), software: "kute 0.6.0".into() })), ErrorCode::UnsupportedProtocol);
+}
+
+/// The initiator's side of the same gate: it does not send a proposal to a
+/// peer whose capabilities name another rule.
+#[test]
+fn an_initiator_does_not_propose_to_a_peer_with_another_rule() {
+    struct OtherRule {
+        peer: Peer,
+        queue: std::collections::VecDeque<Message>,
+        proposals_seen: std::rc::Rc<std::cell::Cell<u32>>,
+    }
+    impl Transport for OtherRule {
+        fn send(&mut self, message: &Message) -> kute::Result<()> {
+            if matches!(message, Message::SymbolPropose { .. }) {
+                self.proposals_seen.set(self.proposals_seen.get() + 1);
+            }
+            for mut reply in self.peer.handle(message.clone()) {
+                if let Message::Capabilities { evolution_rules, .. } = &mut reply {
+                    *evolution_rules = vec!["kute evolve-1".to_string()];
+                }
+                self.queue.push_back(reply);
+            }
+            Ok(())
+        }
+        fn recv(&mut self) -> kute::Result<Option<Message>> {
+            Ok(self.queue.pop_front())
+        }
+    }
+    let vocabulary = train("test:protocol:rule-initiator", &CYCLE);
+    let seen = std::rc::Rc::new(std::cell::Cell::new(0));
+    let mut far = Peer::new("far", Engine::new(), Policy { accept_proposals: true, ..open() });
+    far.add_vocabulary(vocabulary.clone()).unwrap();
+    let mut near = Peer::new("near", Engine::new(), open());
+    let digest = near.add_vocabulary(vocabulary).unwrap();
+    let mut session = Session::new(near, OtherRule { peer: far, queue: Default::default(), proposals_seen: seen.clone() });
+    let remote = session.connect().unwrap();
+    assert_eq!(remote.evolution_rules, vec!["kute evolve-1".to_string()]);
+    let err = session.propose(&digest, &[vec!["X".to_string()]], "0.2.0").unwrap_err();
+    assert!(matches!(err, KuteError::Unsupported(_)), "{err}");
+    assert_eq!(seen.get(), 0, "no proposal left this side");
+    assert_eq!(session.peer.digests().len(), 1, "nothing was derived locally");
+}
+
+/// AC-702: what the other side can make a peer hold is bounded in all, not
+/// only per vocabulary, and repeating a transfer does not add to it.
+#[test]
+fn the_other_side_cannot_pass_the_aggregate_budgets() {
+    let vocabularies: Vec<Vocabulary> = (0..6).map(|i| train(&format!("test:protocol:budget-{i}"), &CYCLE)).collect();
+    let tokens = vocabularies[0].len() as u64;
+
+    // By count.
+    let mut peer = ready_peer(Policy { max_held_vocabularies: 3, ..open() });
+    let mut taken = 0;
+    for round in 0..50 {
+        for v in &vocabularies {
+            match &give(&mut peer, v)[0] {
+                Message::VocabAccept { .. } => taken += 1,
+                Message::Error { code, .. } => assert_eq!(*code, ErrorCode::TooLarge, "round {round}"),
+                other => panic!("{other:?}"),
+            }
+            assert!(peer.digests().len() <= 3);
+        }
+    }
+    assert_eq!(peer.digests().len(), 3);
+    // The three held ones were accepted every round without growing anything.
+    assert_eq!(taken, 3 * 50);
+
+    // By tokens in all: two fit, the third does not.
+    let mut peer = ready_peer(Policy { max_held_tokens: 2 * tokens + 1, ..open() });
+    assert!(matches!(give(&mut peer, &vocabularies[0])[0], Message::VocabAccept { .. }));
+    assert!(matches!(give(&mut peer, &vocabularies[1])[0], Message::VocabAccept { .. }));
+    assert_eq!(code(&give(&mut peer, &vocabularies[2])), ErrorCode::TooLarge);
+
+    // The announcement may lie about the size; the data is counted again.
+    let mut peer = ready_peer(Policy { max_held_tokens: tokens - 1, ..open() });
+    let mut lie = VocabRef::of(&vocabularies[0]).unwrap();
+    lie.tokens = 1;
+    assert!(matches!(peer.handle(Message::VocabAnnounce { vocabulary: lie.clone() })[0], Message::VocabRequest { .. }));
+    let data = Message::VocabData { digest: lie.digest, kvf: kute::vocab::to_vec(&vocabularies[0]).unwrap() };
+    assert!(matches!(peer.handle(data)[0], Message::Error { .. }));
+    assert!(peer.digests().is_empty());
+
+    // Proposals count against the same budgets, before derivation.
+    let mut peer = ready_peer(Policy { accept_proposals: true, max_held_vocabularies: 2, ..open() });
+    let mut digest = peer.add_vocabulary(vocabularies[0].clone()).unwrap();
+    for step in 0..20 {
+        let propose = Message::SymbolPropose {
+            digest: digest.clone(),
+            additions: vec![vec![format!("NEW_{step}")]],
+            version: format!("0.{}.0", step + 2),
+            rule: EVOLUTION_RULE.into(),
+        };
+        match &peer.handle(propose)[0] {
+            Message::VocabAccept { digest: next } => digest = next.clone(),
+            Message::Error { code, .. } => assert_eq!(*code, ErrorCode::TooLarge),
+            other => panic!("{other:?}"),
+        }
+        assert!(peer.digests().len() <= 2, "step {step}");
+    }
+    assert_eq!(peer.digests().len(), 2);
+}
+
+/// AC-702 and B5: the inbox is bounded, a full inbox answers BUSY and
+/// delivers nothing, and a repeated message is not delivered twice.
+#[test]
+fn delivery_is_bounded_and_repeats_are_not_delivered_twice() {
+    let vocabulary = train("test:protocol:delivery", &CYCLE);
+    let mut sender = Peer::new("a", Engine::new(), Policy::default());
+    let digest = sender.add_vocabulary(vocabulary.clone()).unwrap();
+    let raw = events(&CYCLE);
+    let message = |id: u64| sender.encode_message(id, &digest, &raw, UnknownPolicy::Strict).unwrap();
+
+    let mut peer = ready_peer(Policy { max_inbox_messages: 5, replay_window: 8, ..open() });
+    peer.add_vocabulary(vocabulary.clone()).unwrap();
+
+    // Sustained sending without the application reading: never more than five held.
+    let mut busy = 0;
+    for id in 1..=2000u64 {
+        match &peer.handle(message(id).0)[0] {
+            Message::Ack { .. } => {}
+            Message::Error { code, .. } => {
+                assert_eq!(*code, ErrorCode::Busy);
+                busy += 1;
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    assert_eq!(busy, 1995);
+    let inbox = peer.take_inbox();
+    assert_eq!(inbox.iter().map(|d| d.id).collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+
+    // After the application reads, delivery resumes; a message refused as
+    // busy was not recorded, so sending it again delivers it once.
+    let (again, expected) = message(6);
+    let receipt = peer.handle(again.clone());
+    assert_eq!(receipt[0], Message::Ack { id: 6, units: 4, sha256: expected });
+    // The same message again: the same receipt, no second delivery.
+    for _ in 0..10 {
+        assert_eq!(peer.handle(again.clone()), receipt);
+    }
+    assert_eq!(peer.take_inbox().len(), 1);
+    // Even with the inbox full, a repeat of a delivered message is answered.
+    for id in 7..=11 {
+        assert!(matches!(peer.handle(message(id).0)[0], Message::Ack { .. }));
+    }
+    assert_eq!(code(&peer.handle(message(12).0)), ErrorCode::Busy);
+    assert_eq!(peer.handle(again.clone()), receipt);
+    // The same id on other content is refused.
+    let other = sender.encode_message(6, &digest, &events(&["MOTOR_START"]), UnknownPolicy::Strict).unwrap().0;
+    assert_eq!(code(&peer.handle(other)), ErrorCode::Invalid);
+    assert_eq!(peer.take_inbox().len(), 5);
+
+    // The window is bounded too: after eight newer ids, id 6 is forgotten
+    // and a repeat is delivered as new. That is the documented limit.
+    for id in 13..=20 {
+        assert!(matches!(peer.handle(message(id).0)[0], Message::Ack { .. }));
+        peer.take_inbox();
+    }
+    assert_eq!(peer.handle(again)[0], receipt[0]);
+    assert_eq!(peer.take_inbox().len(), 1, "outside the window a repeat is a new delivery");
+
+    // Bytes are bounded as well as messages.
+    let mut small = ready_peer(Policy { max_inbox_bytes: raw.len() as u64 * 2, ..open() });
+    small.add_vocabulary(vocabulary).unwrap();
+    assert!(matches!(small.handle(message(1).0)[0], Message::Ack { .. }));
+    assert!(matches!(small.handle(message(2).0)[0], Message::Ack { .. }));
+    assert_eq!(code(&small.handle(message(3).0)), ErrorCode::Busy);
 }

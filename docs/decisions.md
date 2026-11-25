@@ -453,6 +453,39 @@ still only as trustworthy as the code that made it, and `digest()` on it
 is a record, not a proof. Code that receives one from outside should call
 `validate()` or load it.
 
+## ADR-0031: Exchange protocol 2: deny by default, budgets in all, the rule named, repeats answered once
+
+The directive for v0.7 asks that the exchange be safe to put in front of a
+peer that is not trusted. Four parts of that need no new dependency and
+are done together as protocol number 2:
+
+* **Deny by default.** `Policy::default()` took vocabularies from the other
+  side; it now takes neither vocabularies nor proposals. `kute peer serve`
+  has `--accept-vocabularies` in place of `--no-new-vocabularies`.
+* **Budgets in all.** Per-item limits did not stop a peer from being filled
+  one acceptable item at a time. There is now a limit on vocabularies held
+  and on tokens over all of them, applied when a vocabulary is announced,
+  again when it arrives, and to a proposal before it is derived; and a
+  limit on the messages and bytes waiting in the inbox, past which a
+  message is answered `busy` and not delivered.
+* **The evolution rule is negotiated.** v0.6.0 changed the rule, and peers
+  on the two rules found out only when their digests differed. The rule is
+  now listed in `CAPABILITIES` and named in `SYMBOL_PROPOSE`; a mismatch is
+  refused before derivation on both sides.
+* **A delivery contract.** A repeated message id with the same container
+  gets its first receipt again and is delivered once; with a different
+  container it is refused. The memory of ids is a bounded window.
+
+The protocol number went up instead of the new fields being optional,
+because a number 1 peer would send proposals without a rule and expect
+vocabularies to be taken by default; refusing it at `HELLO` says so at once.
+
+Not done here, and the reason the protocol is still not for untrusted
+networks: authentication and encryption (so policy is the same for every
+peer), limits on connections, rate and CPU time, and lineage by parent
+digest in place of the copied training record. Those are the next steps of
+the same work package.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

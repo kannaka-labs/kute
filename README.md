@@ -72,8 +72,10 @@ Added in v0.3:
   or sequences appended and every existing token id unchanged.
 * `kute peer serve` / `kute peer send`: two processes agree on a vocabulary
   by digest, transfer it if needed, extend it together and exchange encoded
-  messages with a receipt. No encryption or authentication. See
-  `specifications/protocol`.
+  messages with a receipt. A peer takes nothing new from the other side
+  unless told to (`--accept-vocabularies`, `--accept-proposals`), bounds
+  what it will hold in all, and does not deliver a repeated message twice.
+  No encryption or authentication yet. See `specifications/protocol`.
 * `kute train --stream-bytes`: training memory that does not grow with
   file size (227 MiB against 959 MiB on a 500 MB input), and a peak-memory
   figure in every training report.

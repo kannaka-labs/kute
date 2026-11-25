@@ -19,7 +19,15 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 
-pub const PROTOCOL_VERSION: u32 = 1;
+/// Version 2 added the evolution rule to `CAPABILITIES` and to
+/// `SYMBOL_PROPOSE`, the `UNSUPPORTED_RULE` and `BUSY` errors, and the
+/// delivery contract for repeated message ids. A version 1 peer is refused
+/// at `HELLO`.
+pub const PROTOCOL_VERSION: u32 = 2;
+/// The rule by which this build derives an evolved vocabulary. Two peers
+/// that name different rules would derive different children from the same
+/// proposal, so a proposal is only taken under this exact name.
+pub const EVOLUTION_RULE: &str = kute::bpe::sequence::EVOLVE_GENERATOR;
 /// Default and largest frame a peer will read.
 pub const DEFAULT_MAX_FRAME: u64 = 64 * 1024 * 1024;
 
@@ -60,13 +68,29 @@ pub enum ErrorCode {
     /// The peer's policy does not allow the request.
     Refused,
     TooLarge,
+    /// The proposal names an evolution rule this peer does not implement.
+    UnsupportedRule,
+    /// The peer's inbox is full; nothing was delivered. Send again later.
+    Busy,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Message {
     Hello { protocol: u32, peer: String, software: String },
-    Capabilities { algorithms: Vec<String>, adapters: Vec<String>, max_frame_bytes: u64, accepts_vocabularies: bool, accepts_proposals: bool },
+    Capabilities {
+        algorithms: Vec<String>,
+        adapters: Vec<String>,
+        max_frame_bytes: u64,
+        accepts_vocabularies: bool,
+        accepts_proposals: bool,
+        /// Evolution rules this peer can apply to a proposal.
+        #[serde(default)]
+        evolution_rules: Vec<String>,
+        /// KVF versions this peer reads.
+        #[serde(default)]
+        kvf_versions: Vec<String>,
+    },
     /// "I intend to use this vocabulary."
     VocabAnnounce { vocabulary: VocabRef },
     /// "I do not have it; send it."
@@ -86,7 +110,15 @@ pub enum Message {
     SymbolInfo { digest: String, token_id: Option<u32>, content_hash: String },
     /// "Extend that vocabulary with these symbols and sequences, as this
     /// version." Accepted with `VOCAB_ACCEPT` naming the new digest.
-    SymbolPropose { digest: String, additions: Vec<Vec<String>>, version: String },
+    /// `rule` names the derivation the proposer used; a peer that does not
+    /// implement exactly that rule refuses before deriving anything.
+    SymbolPropose {
+        digest: String,
+        additions: Vec<Vec<String>>,
+        version: String,
+        #[serde(default)]
+        rule: String,
+    },
     /// "Re-encode this sequence under another vocabulary you hold."
     Translate {
         id: u64,
@@ -111,6 +143,9 @@ fn refuse(code: ErrorCode, message: impl Into<String>) -> Vec<Message> {
 }
 
 /// What a peer is willing to do for the other side.
+///
+/// The default takes nothing new from the other side: no vocabularies and
+/// no proposals. Both have to be switched on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Policy {
     /// Take vocabularies it does not have from the other side.
@@ -121,16 +156,34 @@ pub struct Policy {
     pub max_vocabulary_tokens: u64,
     /// Refuse a message that would decode to more than this.
     pub max_decoded_units: u64,
+    /// The most vocabularies this peer will hold, counting its own. The
+    /// other side cannot add one past this.
+    pub max_held_vocabularies: u64,
+    /// The most tokens over all held vocabularies, counting its own.
+    pub max_held_tokens: u64,
+    /// Delivered messages kept until `take_inbox`. When full, a message is
+    /// answered `BUSY` and not delivered.
+    pub max_inbox_messages: u64,
+    /// Decoded bytes kept until `take_inbox`.
+    pub max_inbox_bytes: u64,
+    /// How many of the latest message ids are remembered, so that a repeat
+    /// gets its first receipt again instead of a second delivery.
+    pub replay_window: u64,
 }
 
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            accept_vocabularies: true,
+            accept_vocabularies: false,
             accept_proposals: false,
             max_frame_bytes: DEFAULT_MAX_FRAME,
             max_vocabulary_tokens: 1_000_000,
             max_decoded_units: 256 * 1024 * 1024,
+            max_held_vocabularies: 64,
+            max_held_tokens: 4_000_000,
+            max_inbox_messages: 1024,
+            max_inbox_bytes: 256 * 1024 * 1024,
+            replay_window: 1024,
         }
     }
 }
@@ -165,6 +218,9 @@ pub struct Peer {
     stage: Stage,
     wanted: Option<VocabRef>,
     inbox: Vec<Delivered>,
+    inbox_bytes: u64,
+    /// The latest message ids: id, SHA-256 of the container, receipt sent.
+    seen: std::collections::VecDeque<(u64, String, Message)>,
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -173,7 +229,17 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 
 impl Peer {
     pub fn new(name: &str, engine: Engine, policy: Policy) -> Self {
-        Self { name: name.to_string(), engine, policy, held: BTreeMap::new(), stage: Stage::New, wanted: None, inbox: Vec::new() }
+        Self {
+            name: name.to_string(),
+            engine,
+            policy,
+            held: BTreeMap::new(),
+            stage: Stage::New,
+            wanted: None,
+            inbox: Vec::new(),
+            inbox_bytes: 0,
+            seen: Default::default(),
+        }
     }
 
     /// Hold `vocabulary`. Returns its digest.
@@ -205,7 +271,24 @@ impl Peer {
 
     /// Messages received and decoded since the last call.
     pub fn take_inbox(&mut self) -> Vec<Delivered> {
+        self.inbox_bytes = 0;
         std::mem::take(&mut self.inbox)
+    }
+
+    /// Whether the other side may add a vocabulary of `tokens` tokens: the
+    /// refusal if it would pass what this peer is willing to hold in all.
+    fn over_budget(&self, tokens: u64) -> Option<Vec<Message>> {
+        if self.held.len() as u64 >= self.policy.max_held_vocabularies {
+            return Some(refuse(ErrorCode::TooLarge, format!("this peer already holds {} vocabularies, its limit", self.held.len())));
+        }
+        let held: u64 = self.held.values().map(|h| h.vocabulary.len() as u64).sum();
+        if held.saturating_add(tokens) > self.policy.max_held_tokens {
+            return Some(refuse(
+                ErrorCode::TooLarge,
+                format!("this peer holds {held} tokens and takes at most {} in all", self.policy.max_held_tokens),
+            ));
+        }
+        None
     }
 
     pub fn engine(&self) -> &Engine {
@@ -227,6 +310,8 @@ impl Peer {
             max_frame_bytes: self.policy.max_frame_bytes,
             accepts_vocabularies: self.policy.accept_vocabularies,
             accepts_proposals: self.policy.accept_proposals,
+            evolution_rules: vec![EVOLUTION_RULE.to_string()],
+            kvf_versions: vec![kute::KVF_VERSION.to_string()],
         }
     }
 
@@ -312,6 +397,9 @@ impl Peer {
                 if vocabulary.tokens > self.policy.max_vocabulary_tokens {
                     return Ok(refuse(ErrorCode::TooLarge, format!("vocabularies above {} tokens are not taken", self.policy.max_vocabulary_tokens)));
                 }
+                if let Some(refusal) = self.over_budget(vocabulary.tokens) {
+                    return Ok(refusal);
+                }
                 let digest = vocabulary.digest.clone();
                 self.wanted = Some(vocabulary);
                 Ok(vec![Message::VocabRequest { digest }])
@@ -333,6 +421,10 @@ impl Peer {
                 if vocabulary.len() as u64 > self.policy.max_vocabulary_tokens {
                     return Ok(refuse(ErrorCode::TooLarge, "vocabulary exceeds the token limit"));
                 }
+                // Again, on what was sent and not on what was announced.
+                if let Some(refusal) = self.over_budget(vocabulary.len() as u64) {
+                    return Ok(refusal);
+                }
                 let report = self.engine.verify(&vocabulary)?;
                 if !report.ok() {
                     return Ok(refuse(ErrorCode::Invalid, format!("the vocabulary fails its own test vectors: {}", report.failures.join("; "))));
@@ -345,9 +437,26 @@ impl Peer {
                 let token_id = self.hold(&digest)?.vocabulary.tokens.iter().find(|t| t.payload == payload).map(|t| t.id);
                 Ok(vec![Message::SymbolInfo { digest, token_id, content_hash: payload.content_hash() }])
             }
-            Message::SymbolPropose { digest, additions, version } => {
+            Message::SymbolPropose { digest, additions, version, rule } => {
                 if !self.policy.accept_proposals {
                     return Ok(refuse(ErrorCode::Refused, "this peer does not accept vocabulary proposals"));
+                }
+                // Before anything is derived: under another rule the child
+                // would differ, and the two sides would part silently.
+                if rule != EVOLUTION_RULE {
+                    return Ok(refuse(
+                        ErrorCode::UnsupportedRule,
+                        format!("the proposal uses evolution rule {rule:?}; this peer implements {EVOLUTION_RULE:?}"),
+                    ));
+                }
+                // An addition of n symbols adds at most n symbols and n merges.
+                let most: u64 = additions.iter().map(|a| 2 * a.len() as u64).sum();
+                let parent = self.hold(&digest)?.vocabulary.len() as u64;
+                if parent.saturating_add(most) > self.policy.max_vocabulary_tokens {
+                    return Ok(refuse(ErrorCode::TooLarge, "the proposal would pass the vocabulary token limit"));
+                }
+                if let Some(refusal) = self.over_budget(parent.saturating_add(most)) {
+                    return Ok(refusal);
                 }
                 let digest = self.evolve(&digest, &additions, &version)?;
                 Ok(vec![Message::VocabAccept { digest }])
@@ -358,13 +467,35 @@ impl Peer {
                 Ok(vec![Message::EncodedMessage { id, container: translated.to_bytes_compressed()? }])
             }
             Message::EncodedMessage { id, container } => {
+                // A repeat of a delivered message gets its receipt again and
+                // is not delivered twice; the same id on other content is an
+                // error. Ids older than the window are not remembered.
+                let fingerprint = sha256_hex(&container);
+                if let Some((_, first, receipt)) = self.seen.iter().find(|(seen, _, _)| *seen == id) {
+                    return Ok(if *first == fingerprint {
+                        vec![receipt.clone()]
+                    } else {
+                        refuse(ErrorCode::Invalid, format!("message id {id} was already used for different content"))
+                    });
+                }
+                if self.inbox.len() as u64 >= self.policy.max_inbox_messages {
+                    return Ok(refuse(ErrorCode::Busy, format!("the inbox holds {} messages, its limit", self.inbox.len())));
+                }
                 let sequence = TokenSequence::from_bytes(&container)?;
                 let held = self.hold(&sequence.vocabulary_digest)?;
                 let units = kute::decoded_units(&held.vocabulary, &sequence)?;
                 let bytes = self.engine.decode_raw_bounded(held.tokenizer.as_ref(), &sequence, self.policy.max_decoded_units)?;
-                let sha256 = sha256_hex(&bytes);
+                if self.inbox_bytes.saturating_add(bytes.len() as u64) > self.policy.max_inbox_bytes {
+                    return Ok(refuse(ErrorCode::Busy, format!("the inbox holds {} bytes and takes at most {}", self.inbox_bytes, self.policy.max_inbox_bytes)));
+                }
+                let receipt = Message::Ack { id, units, sha256: sha256_hex(&bytes) };
+                self.inbox_bytes += bytes.len() as u64;
                 self.inbox.push(Delivered { id, sequence, bytes });
-                Ok(vec![Message::Ack { id, units, sha256 }])
+                self.seen.push_back((id, fingerprint, receipt.clone()));
+                while self.seen.len() as u64 > self.policy.replay_window {
+                    self.seen.pop_front();
+                }
+                Ok(vec![receipt])
             }
             Message::VocabAccept { .. } | Message::SymbolInfo { .. } | Message::Ack { .. } | Message::Error { .. } => {
                 Ok(refuse(ErrorCode::OutOfOrder, "a reply arrived where a request was expected"))
@@ -441,6 +572,7 @@ pub struct Remote {
     pub algorithms: Vec<String>,
     pub accepts_vocabularies: bool,
     pub accepts_proposals: bool,
+    pub evolution_rules: Vec<String>,
 }
 
 fn peer_error(code: ErrorCode, message: String) -> KuteError {
@@ -452,11 +584,12 @@ pub struct Session<T: Transport> {
     pub peer: Peer,
     transport: T,
     next_id: u64,
+    remote: Option<Remote>,
 }
 
 impl<T: Transport> Session<T> {
     pub fn new(peer: Peer, transport: T) -> Self {
-        Self { peer, transport, next_id: 1 }
+        Self { peer, transport, next_id: 1, remote: None }
     }
 
     fn ask(&mut self, message: &Message) -> Result<Message> {
@@ -479,8 +612,10 @@ impl<T: Transport> Session<T> {
             other => return Self::unexpected(other),
         };
         match self.ask(&self.peer.capabilities())? {
-            Message::Capabilities { algorithms, accepts_vocabularies, accepts_proposals, .. } => {
-                Ok(Remote { peer, software, algorithms, accepts_vocabularies, accepts_proposals })
+            Message::Capabilities { algorithms, accepts_vocabularies, accepts_proposals, evolution_rules, .. } => {
+                let remote = Remote { peer, software, algorithms, accepts_vocabularies, accepts_proposals, evolution_rules };
+                self.remote = Some(remote.clone());
+                Ok(remote)
             }
             other => Self::unexpected(other),
         }
@@ -525,10 +660,23 @@ impl<T: Transport> Session<T> {
     /// applies the step itself; the digests must agree. Returns the new
     /// digest. Nothing changes locally if the other side refuses.
     pub fn propose(&mut self, digest: &str, additions: &[Vec<String>], version: &str) -> Result<String> {
+        if let Some(remote) = &self.remote {
+            if !remote.evolution_rules.iter().any(|r| r == EVOLUTION_RULE) {
+                return Err(KuteError::Unsupported(format!(
+                    "the peer implements evolution rules {:?}, not {EVOLUTION_RULE:?}; a proposal would derive different vocabularies on the two sides",
+                    remote.evolution_rules
+                )));
+            }
+        }
         let parsed = Version::parse(version).map_err(|e| KuteError::InvalidIdentifier(format!("version {version:?}: {e}")))?;
         let child = kute::bpe::sequence::evolve(&self.peer.hold(digest)?.vocabulary, additions, parsed)?;
         let expected = child.digest()?;
-        let propose = Message::SymbolPropose { digest: digest.to_string(), additions: additions.to_vec(), version: version.to_string() };
+        let propose = Message::SymbolPropose {
+            digest: digest.to_string(),
+            additions: additions.to_vec(),
+            version: version.to_string(),
+            rule: EVOLUTION_RULE.to_string(),
+        };
         match self.ask(&propose)? {
             Message::VocabAccept { digest: theirs } if theirs == expected => self.peer.add_vocabulary(child),
             Message::VocabAccept { digest: theirs } => {
