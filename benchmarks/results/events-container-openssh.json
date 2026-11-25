@@ -1,133 +1,133 @@
 {
- "label": "Loghub-2.0 OpenSSH, 638,947 events with parameters",
- "layout": {
-  "group_field": "pid",
-  "symbol_field": "event",
-  "time_field": "t"
- },
- "events": 638947,
- "entities": 32420,
- "event_names": 38,
- "source_bytes": 77425684,
- "canonical_bytes": 77425684,
- "canonical_sha256": "sha256:445f967bb279a11978b5dfacbcf6ddbac21e910a25e638f00daba94f37b2f02d",
- "checks": {
-  "digest_matches_header": true,
-  "same_records_as_source": true,
-  "byte_identical_to_source": false,
-  "header_says_byte_exact": false
- },
- "container": {
-  "bytes": 1274960,
-  "pack_seconds": 32.41,
-  "unpack_seconds": 0.73,
-  "time_order": "source",
-  "columns": [
-   {
-    "codec": "zstd",
-    "kind": "json",
-    "name": "@names",
-    "raw": 218,
-    "stored": 92
-   },
-   {
-    "codec": "zstd",
-    "kind": "json",
-    "name": "@shapes",
-    "raw": 49,
-    "stored": 54
-   },
-   {
-    "codec": "zstd",
-    "kind": "varint",
-    "name": "@shape",
-    "raw": 638947,
-    "stored": 37
-   },
-   {
-    "codec": "zstd",
-    "kind": "json",
-    "name": "@entities",
-    "raw": 184157,
-    "stored": 34281
-   },
-   {
-    "codec": "zstd",
-    "kind": "varint",
-    "name": "@entity",
-    "raw": 1565919,
-    "stored": 332030
-   },
-   {
-    "codec": "zstd",
-    "kind": "varint",
-    "name": "@symbols",
-    "raw": 638947,
-    "stored": 49737
-   },
-   {
-    "codec": "zstd",
-    "kind": "delta",
-    "name": "@time",
-    "raw": 641745,
-    "stored": 112512
-   },
-   {
-    "codec": "zstd",
-    "kind": "json",
-    "name": "f:fits",
-    "raw": 3194842,
-    "stored": 856
-   },
-   {
-    "codec": "zstd",
-    "kind": "json",
-    "name": "f:host",
-    "raw": 5111575,
-    "stored": 446
-   },
-   {
-    "codec": "zstd",
-    "kind": "json",
-    "name": "f:params",
-    "raw": 19894609,
-    "stored": 743413
-   },
-   {
-    "codec": "zstd",
-    "kind": "json",
-    "name": "f:proc",
-    "raw": 4472628,
-    "stored": 400
-   }
-  ]
- },
- "compressors_on_the_canonical_bytes": {
-  "zlib -9": {
-   "bytes": 3730572,
-   "seconds": 1.81,
-   "container_over_this": 0.342
+  "label": "Loghub-2.0 OpenSSH, 638,947 events with parameters",
+  "layout": {
+    "group_field": "pid",
+    "symbol_field": "event",
+    "time_field": "t"
   },
-  "xz -9": {
-   "bytes": 3887204,
-   "seconds": 74.58,
-   "container_over_this": 0.328
+  "events": 638947,
+  "entities": 32420,
+  "event_names": 38,
+  "source_bytes": 76729802,
+  "canonical_bytes": 76729802,
+  "canonical_sha256": "sha256:c365d28b9cc5e70703b266d50bd0dace341e5f776beecd155909681e7e8a14da",
+  "checks": {
+    "digest_matches_header": true,
+    "same_records_as_source": true,
+    "byte_identical_to_source": false,
+    "header_says_byte_exact": false
   },
-  "xz -9e, dictionary to fit": {
-   "bytes": 2059556,
-   "seconds": 384.38,
-   "container_over_this": 0.619
+  "container": {
+    "bytes": 1274967,
+    "pack_seconds": 27.62,
+    "unpack_seconds": 0.65,
+    "time_order": "source",
+    "columns": [
+      {
+        "codec": "zstd",
+        "kind": "json",
+        "name": "@names",
+        "raw": 218,
+        "stored": 92
+      },
+      {
+        "codec": "zstd",
+        "kind": "json",
+        "name": "@shapes",
+        "raw": 49,
+        "stored": 54
+      },
+      {
+        "codec": "zstd",
+        "kind": "varint",
+        "name": "@shape",
+        "raw": 638947,
+        "stored": 37
+      },
+      {
+        "codec": "zstd",
+        "kind": "json",
+        "name": "@entities",
+        "raw": 184157,
+        "stored": 34281
+      },
+      {
+        "codec": "zstd",
+        "kind": "varint",
+        "name": "@entity",
+        "raw": 1565919,
+        "stored": 332030
+      },
+      {
+        "codec": "zstd",
+        "kind": "varint",
+        "name": "@symbols",
+        "raw": 638947,
+        "stored": 49737
+      },
+      {
+        "codec": "zstd",
+        "kind": "delta",
+        "name": "@time",
+        "raw": 641743,
+        "stored": 112519
+      },
+      {
+        "codec": "zstd",
+        "kind": "json",
+        "name": "f:fits",
+        "raw": 3194842,
+        "stored": 856
+      },
+      {
+        "codec": "zstd",
+        "kind": "json",
+        "name": "f:host",
+        "raw": 5111575,
+        "stored": 446
+      },
+      {
+        "codec": "zstd",
+        "kind": "json",
+        "name": "f:params",
+        "raw": 19894609,
+        "stored": 743413
+      },
+      {
+        "codec": "zstd",
+        "kind": "json",
+        "name": "f:proc",
+        "raw": 4472628,
+        "stored": 400
+      }
+    ]
   },
-  "plain columns, xz -9 each": {
-   "bytes": 1388904,
-   "seconds": 7.23,
-   "container_over_this": 0.918
+  "compressors_on_the_canonical_bytes": {
+    "zlib -9": {
+      "bytes": 3714577,
+      "seconds": 1.06,
+      "container_over_this": 0.343
+    },
+    "xz -9": {
+      "bytes": 3879452,
+      "seconds": 27.16,
+      "container_over_this": 0.329
+    },
+    "xz -9e, dictionary to fit": {
+      "bytes": 2035152,
+      "seconds": 400.21,
+      "container_over_this": 0.626
+    },
+    "plain columns, xz -9 each": {
+      "bytes": 1378672,
+      "seconds": 11.04,
+      "container_over_this": 0.925
+    },
+    "zstd -19": {
+      "bytes": 2776163,
+      "seconds": 75.24,
+      "container_over_this": 0.459
+    }
   },
-  "zstd -19": {
-   "bytes": 2785261,
-   "seconds": 77.34,
-   "container_over_this": 0.458
-  }
- },
- "note": "one run; the container's columns are zlib streams"
+  "note": "one run; each column's codec is listed under container.columns"
 }

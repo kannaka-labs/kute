@@ -457,17 +457,17 @@ the 575,061 block ids (5.2 MB) and the times (5.4 MB).
 **OpenSSH** (Loghub-2.0), 638,947 log lines turned into records by
 `openssh_events.py` (times corrected since: see the prediction section): time, host, process, pid, the template id as the
 event name, and the text that fills the template's slots as `params`;
-77.4 MB of JSON Lines (report `results/events-container-openssh.json`):
+76.7 MB of JSON Lines (report `results/events-container-openssh.json`):
 
 | | bytes | of the JSON | time to write |
 |---|---:|---:|---:|
-| `kute events pack` (zstd columns, the default) | 1,274,960 | 1.6% | 32 s |
-| plain columns, xz -9 each | 1,388,904 | 1.8% | 7 s |
-| `kute events pack --codec zlib` (an earlier run) | 1,790,408 | 2.3% | 11 s |
-| xz -9e, dictionary as large as the input | 2,059,556 | 2.7% | 384 s |
-| zstd -19 | 2,785,261 | 3.6% | 77 s |
-| zlib -9 | 3,730,572 | 4.8% | 2 s |
-| xz -9 | 3,887,204 | 5.0% | 75 s |
+| `kute events pack` (zstd columns, the default) | 1,274,967 | 1.7% | 28 s |
+| plain columns, xz -9 each | 1,378,672 | 1.8% | 11 s |
+| `kute events pack --codec zlib` (an earlier run, on the file before its times were corrected) | 1,790,408 | 2.3% | 11 s |
+| xz -9e, dictionary as large as the input | 2,035,152 | 2.7% | 400 s |
+| zstd -19 | 2,776,163 | 3.6% | 75 s |
+| zlib -9 | 3,714,577 | 4.8% | 1 s |
+| xz -9 | 3,879,452 | 5.1% | 27 s |
 
 The records came back equal; the bytes differ from the source only in key
 order, which the source did not have sorted.
@@ -481,12 +481,16 @@ compressors run on the whole file at default settings and read better
 than it should have.
 
 The default codec is now Zstandard, and with it the container is 8%
-smaller than plain columns through xz, and 0.62 of xz tuned as far as it
+smaller than plain columns through xz, and 0.63 of xz tuned as far as it
 goes (extreme preset, dictionary covering the whole input). Of the
 distance between the zlib container and the zstd one, nearly all is the
 codec. What the container's own layout (grouping names by entity, time
 as differences) adds over plain columns is those 8%, measured here with
 two different codecs on the two sides, so not cleanly.
+
+The table was rerun after the times in the events file were corrected
+(a year boundary; see the prediction section): the sizes moved by under
+2% and no conclusion changed.
 
 Unpacking took 0.7 s. The times in this table are from a run while
 another job was using the machine and are slower than a quiet run; the

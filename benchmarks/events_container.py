@@ -122,7 +122,7 @@ def main() -> int:
         "checks": checks,
         "container": {"bytes": size, "pack_seconds": round(pack_seconds, 2), "unpack_seconds": round(unpack_seconds, 2), "time_order": header.get("time_order"), "columns": header["columns"]},
         "compressors_on_the_canonical_bytes": rows,
-        "note": "one run; the container's columns are zlib streams",
+        "note": "one run; each column's codec is listed under container.columns",
     }
     print(json.dumps(report, indent=1))
     return 0
