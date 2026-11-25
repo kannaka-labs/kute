@@ -212,6 +212,11 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
+* After 0.9.1, on `main`: Studio shows a running peer. `kute peer serve
+  --status-file` keeps a file saying what it is doing, and `kute serve
+  --studio --peer-status` shows it, a second or two old. It is the
+  peer's own account; a killed peer is shown as not running after a few
+  seconds. `docs/studio.md`.
 * Not built: discovery or mirroring of registries, uploads to one, TLS for
   the HTTP service, expiry or revocation of keys,
   learned representations.

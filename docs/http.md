@@ -43,6 +43,15 @@ name (`localhost`, `127.0.0.1`, `[::1]`), it accepts a body only as
 | `POST /v1/compare` | `{"a": ..., "b": ...}` | shared and distinct token payloads |
 | `POST /v1/discover` | `{"records": [[...], ...]}` or `{"lines": ...}` with the optional parameters; with `records`, optionally `"times": [[...], ...]`, one whole number for each symbol (0.9) | recurring sequences with their support; with `times`, also `timing`: how long each took, in the ticks given, measured on the same records |
 
+With `--peer-status FILE` (after 0.9.1, loopback only) there is one
+more: `GET /v1/peer` answers with the status file a `kute peer serve
+--status-file FILE` keeps on this machine: `present`, and when it is,
+`status` (the file), `age_seconds`, `stale` (it claims to run and has
+not been written for more than three of its beats) and `means`. The
+service does not connect to the peer; it reads at most 64 KiB from that
+one path, and passes on nothing that is not a status. Without the
+option the path is 404. `docs/studio.md`, "A running peer".
+
 The body of a POST is the arguments of the MCP tool of the same name, and
 the answer is that tool's result; [mcp.md](mcp.md) describes each one, and
 how a vocabulary is named.

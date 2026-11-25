@@ -321,6 +321,11 @@ impl Peer {
         self.held.keys().cloned().collect()
     }
 
+    /// How many delivered messages are waiting for `take_inbox`.
+    pub fn inbox_len(&self) -> usize {
+        self.inbox.len()
+    }
+
     /// Messages received and decoded since the last call.
     pub fn take_inbox(&mut self) -> Vec<Delivered> {
         self.inbox_bytes = 0;
@@ -876,12 +881,20 @@ impl<T: Transport> Session<T> {
     /// Responder: answer messages until the other side closes. Returns the
     /// number of messages handled.
     pub fn serve(&mut self) -> Result<u64> {
+        self.serve_observed(&mut |_, _| {})
+    }
+
+    /// As `serve`, calling `after` once each message has been handled and
+    /// answered, with the peer as it then is and the count so far. It is
+    /// for showing progress; it cannot change what is answered.
+    pub fn serve_observed(&mut self, after: &mut dyn FnMut(&Peer, u64)) -> Result<u64> {
         let mut handled = 0;
         while let Some(message) = self.transport.recv()? {
             for reply in self.peer.handle(message) {
                 self.transport.send(&reply)?;
             }
             handled += 1;
+            after(&self.peer, handled);
         }
         Ok(handled)
     }

@@ -5,6 +5,7 @@
 
 pub mod http;
 pub mod live;
+pub mod peer_status;
 pub mod registry;
 pub mod shadow;
 pub mod sign;
@@ -370,6 +371,12 @@ enum Command {
         /// answered, so no caller can make this process compute.
         #[arg(long, conflicts_with = "studio")]
         registry_only: bool,
+        /// The status file of a `kute peer serve --status-file` on this
+        /// machine. The service then answers `GET /v1/peer` with what
+        /// the file says and how old it is, and Studio shows it. Loopback
+        /// only: the file names who connected to the peer.
+        #[arg(long, value_name = "FILE", conflicts_with = "registry_only")]
+        peer_status: Option<PathBuf>,
         /// Another registry (http://host:port) to ask for a vocabulary
         /// this one does not hold. What comes back is checked as `kute
         /// fetch` checks it, kept in memory, and given on. Repeatable;
@@ -586,6 +593,13 @@ enum PeerAction {
         /// Write each decoded message and each vocabulary received here.
         #[arg(long)]
         output_dir: Option<PathBuf>,
+        /// Keep this file saying what the peer is doing: waiting, in an
+        /// exchange (with whom, how many messages so far), or ended and
+        /// how. It is rewritten every second while the peer runs. `kute
+        /// serve --studio --peer-status FILE` shows it. It names who
+        /// connected, so put it where only you can read.
+        #[arg(long, value_name = "FILE")]
+        status_file: Option<PathBuf>,
         /// This side's certificate chain (PEM). With --tls-key,
         /// --tls-client-ca and --allow, the connection is TLS 1.3 with a
         /// certificate on both sides. A connection that fails the
@@ -692,6 +706,7 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             insecure_plain,
             max_units,
             output_dir,
+            status_file,
             tls_cert,
             tls_key,
             tls_client_ca,
@@ -724,6 +739,27 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             // panics when the stream is closed: a parent that stopped reading
             // would otherwise let the next refused connection end the server.
             let _ = writeln!(std::io::stderr(), "listening on {}", listener.local_addr()?);
+            if let Some(path) = &status_file {
+                peer_status::start(
+                    path,
+                    json!({
+                        "software": format!("kute {}", kute::KUTE_VERSION),
+                        "process": std::process::id(),
+                        "listening": listener.local_addr()?.to_string(),
+                        "transport": if secured.is_some() { "TLS 1.3, a certificate on both sides" } else { "plain: not encrypted, and whoever connects is served" },
+                        "certificates_allowed": allow.len(),
+                        "takes": { "vocabularies": accept_vocabularies, "proposals": accept_proposals, "only_signed_by_a_trusted_key": !require_signature_from.is_empty() },
+                        "gives": { "vocabularies": give_vocabularies, "answers_to_queries": answer_queries, "translations": translate },
+                        "vocabulary_files_given_at_start": held.len(),
+                        "quiet_connection_dropped_after_seconds": timeout.map(|t| t.as_secs()),
+                        "state": peer_status::WAITING,
+                        "connections_refused": 0,
+                        "last_refusal": null,
+                        "exchange": null,
+                        "ended": null,
+                    }),
+                )?;
+            }
             if secured.is_none() {
                 let _ = writeln!(std::io::stderr(), "warning: no TLS. The connection is not encrypted and whoever connects is served.");
             }
@@ -740,6 +776,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                     Ok((stream, policy, who)) => break (Box::new(stream), Some(who.fingerprint), policy, from),
                     Err(e) => {
                         let _ = writeln!(std::io::stderr(), "refused {from}: {e}");
+                        peer_status::enter(peer_status::WAITING, |status| {
+                            status["connections_refused"] = json!(status["connections_refused"].as_u64().unwrap_or(0) + 1);
+                            status["last_refusal"] = json!({ "from": from.to_string(), "why": e.to_string(), "at": peer_status::now() });
+                        });
                     }
                 }
             };
@@ -751,8 +791,17 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 peer.add_vocabulary(vocab::load(path)?)?;
             }
             let before = peer.digests();
+            peer_status::enter(peer_status::EXCHANGE, |status| {
+                status["exchange"] = json!({ "from": from.to_string(), "peer_identity": identity, "messages_handled": 0, "delivered": 0, "vocabularies_held": before.len() });
+            });
             let mut session = Session::new(peer, Framed::new(stream, DEFAULT_MAX_FRAME));
-            let handled = session.serve()?;
+            let handled = session.serve_observed(&mut |peer, handled| {
+                peer_status::set(|status| {
+                    status["exchange"]["messages_handled"] = json!(handled);
+                    status["exchange"]["delivered"] = json!(peer.inbox_len());
+                    status["exchange"]["vocabularies_held"] = json!(peer.digests().len());
+                });
+            })?;
             let inbox = session.peer.take_inbox();
             let new: Vec<String> = session.peer.digests().into_iter().filter(|d| !before.contains(d)).collect();
             // Nothing received, nothing created.
@@ -768,6 +817,11 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                     }
                 }
             }
+            peer_status::set(|status| {
+                status["exchange"]["messages_handled"] = json!(handled);
+                status["exchange"]["delivered"] = json!(inbox.len());
+                status["exchange"]["vocabularies_received"] = json!(new);
+            });
             print(&json!({
                 "from": from.to_string(),
                 "peer_identity": identity,
@@ -1393,7 +1447,13 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 "warnings": warnings,
             }))
         }
-        Command::Peer { action } => peer(engine, action),
+        Command::Peer { action } => {
+            let result = peer(engine, action);
+            // Only `peer serve --status-file` began a status; for anything
+            // else this does nothing.
+            peer_status::end(&result);
+            result
+        }
         Command::Mcp { vocab: paths, max_input_bytes, max_output_bytes } => {
             let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
             let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_input_bytes.saturating_mul(2).saturating_add(1 << 20), ..Default::default() };
@@ -1544,7 +1604,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 _ => Err(KuteError::InvalidConfig("give --digest and --output, or --list".into())),
             }
         }
-        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, peer_status, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
             let registry = registry || registry_only;
             if !upstream.is_empty() && !registry {
                 return Err(KuteError::InvalidConfig("--upstream is for a registry: add --registry or --registry-only".into()));
@@ -1574,8 +1634,11 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             if studio && !http::is_loopback(&address) {
                 return Err(KuteError::InvalidConfig("Studio is served on a loopback address only: it is a page for the person at this machine".into()));
             }
+            if peer_status.is_some() && !http::is_loopback(&address) {
+                return Err(KuteError::InvalidConfig("--peer-status is given on a loopback address only: the status names who connected to the peer".into()));
+            }
             print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "upstreams": upstream, "upstream_files_need_a_trusted_signature": !upstream_trusted_key.is_empty(), "operations": !registry_only }))?;
-            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, federation, ..Default::default() };
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, federation, peer_status, ..Default::default() };
             http::serve(server, listener, options)
         }
         Command::Capabilities => {
