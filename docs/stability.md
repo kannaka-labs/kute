@@ -87,6 +87,26 @@ All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
 
+## Changes since v0.7.0 that need action
+
+- **Building `kute-cli` needs a C compiler.** The event and signal
+  containers (`kute-events`, `kute-signals`) use Zstandard through the
+  `zstd` crate, which compiles C. The other libraries and the Python
+  package do not.
+- **A vocabulary file may carry signatures**, and one with more than 16,
+  or with an overlong field in one, is refused. Signatures are outside
+  the digest: signing changes no digest, and the engine checks none
+  (`kute verify` does).
+- **`kute_hrm::inner_product` sums in `f64`.** Similarities can differ
+  from v0.7.0 in the last digits; the stated tolerance is 1e-4.
+- **Vocabularies trained by this release have new digests**, as with
+  every release: the generator string is part of the digest. The tokens
+  are the same.
+- Everything added in this release (`kute serve`, `kute events`,
+  `kute signals`, `kute live`, `kute shadow`, `kute predict`, signing) is
+  experimental: its formats (`KUTE-EV1`, `KUTE-SG1`, signature files,
+  checkpoints) may change before 1.0.
+
 ## Changes since v0.6.0 that need action
 
 - **Evolved vocabularies** made by this release record their parent by

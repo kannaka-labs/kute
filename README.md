@@ -4,7 +4,7 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.7, experimental. Formats and APIs may change before 1.0;
+Status: v0.8, experimental. Formats and APIs may change before 1.0;
 [docs/stability.md](docs/stability.md) says which, and how.
 
 ## Measured against Hugging Face `tokenizers`
@@ -33,14 +33,14 @@ KUTE's split pattern, `tokenizers` needs 2,571,668 tokens for the same
 text: KUTE's 2,551,171 is 0.8% fewer, not 5.6%. The larger figure compares
 defaults, and most of it is the split rather than the merging. Speed is
 the difference that remains: in that matched run, on the laptop and with
-the unreleased trainer on the `next` branch, KUTE trained in 4.2 s against
+the trainer released in v0.7, KUTE trained in 4.2 s against
 29.9 s and encoded in 0.30 s against 3.01 s.
 
 ```
 pip install kute-engine
 ```
 
-## What works in v0.7
+## What works in v0.8
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -166,6 +166,25 @@ Added in v0.5:
 * Python: `Engine.train(..., resume_from=, embed_test_vectors=)` and
   `kute.discover(records)`.
 
+Added in v0.8 (each has a doc under `docs/` and a record in
+`docs/decisions.md`; what an upgrade from v0.7 has to change is in
+[docs/stability.md](docs/stability.md)):
+
+* `kute serve` (HTTP, and `--studio`), `kute events`, `kute signals`,
+  `kute live` as a command with `--end-on` and `--idle`, `kute shadow`,
+  `kute predict`, `kute keygen/sign/verify`, `kute peer serve
+  --require-signature-from`, and `examples/queensync`.
+* Building the command line now needs a C compiler, for Zstandard in
+  the event and signal containers.
+* Results that went against KUTE, kept: on scripted agent messages zlib
+  with a preset dictionary is smaller than KUTE tokens by a fifth;
+  layered vocabularies gave no reason to add them; composed
+  representations did no better than exact counting; on OpenSSH a longer
+  past predicts the next event worse than the previous event alone; the
+  signals container adds a checked contract and not bytes.
+* Not built: a registry or federation, expiry or revocation of keys,
+  learned representations.
+
 Changed in v0.7 (the gates it was built against, with the evidence for
 each and the limitations, are in [docs/release-0.7.md](docs/release-0.7.md);
 what an upgrade from v0.6 has to change is in
@@ -200,8 +219,11 @@ Version numbers here are the repository's own. Measured against the
 development directive of November 2026, v0.6 covers its items D02 to D05
 and D06 to D12 (D06 without a clean timing run); Studio, representation research and integrations
 (D13 to D15) are not built. Of the requirements document's "v0.2" (REST
-service, registry, MCP), v0.7 has the MCP server; the REST service and the
-registry are not built.
+service, registry, MCP), v0.7 has the MCP server and v0.8 the REST
+service; the registry is not built. Measured against the v0.7 development
+specification, every item has a first pass in v0.8; three of them (layered
+vocabularies, composed representations, QueenSync) ended in a negative
+result.
 
 ## Quick start
 
