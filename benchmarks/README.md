@@ -542,6 +542,45 @@ above (report `results/tokenizers-enwik8-10runs-matched.json`):
   27.0 s with its own and 29.9 s with KUTE's.
 * One machine, not idle (see the ranges), one dataset.
 
+### The training time of `tokenizers` depends on what its process did before
+
+The run above trained both libraries repeatedly in one process. The
+reviewer found on a desktop that this changes the result, so
+`hf_repeat.py` now starts a new process for every training, one library
+per process (`--shared-process` keeps the old method). Same laptop, same
+data, matched split, ten runs
+(`results/tokenizers-enwik8-10runs-matched-isolated.json`):
+
+| | KUTE | tokenizers 0.23.2, KUTE's split |
+|---|---:|---:|
+| train, new process each time | 4.0 s (3.9 to 4.2) | 64.4 s (61.4 to 69.5) |
+| encode, one document | 0.28 s | 8.17 s |
+| encode, batch of lines | not run | 3.35 s (3.32 s without offsets) |
+
+`tokenizers` trains about twice as slowly in a new process here as it did
+in the shared one. Three further single runs on the laptop say where that
+comes from:
+
+| what the process did before the training | tokenizers train |
+|---|---:|
+| nothing (three trainings in a row, no encoding) | 68.5, 70.2, 69.8 s |
+| its own encodes of the 10 MB held-out text | 36.7 s |
+| then one KUTE training as well | 34.5 s |
+
+So the faster figure follows `tokenizers`' own large encodes, with or
+without KUTE in the process; a small `encode_batch` beforehand does not
+do it (75.7 s). The cause is not established. On the reviewer's desktop
+the effect has the other sign: 6.9 s for a first training, 11.0 s for
+later ones, and 15 s when sharing a process with KUTE. KUTE's own time
+moves much less (4.0 s here either way; 1.95 s first and 3.2 s later on
+the desktop).
+
+What can be said: on these two machines KUTE trained this vocabulary
+between about 3.5 and 16 times faster than `tokenizers`, and where in
+that range a run lands depends on the machine and on the state of the
+`tokenizers` process more than on anything KUTE does. A single ratio
+would be a choice of method. Encoding does not show the effect.
+
 How to read it:
 
 - The two trainers split text differently before merging, each by its
