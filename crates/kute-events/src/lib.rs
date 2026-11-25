@@ -67,6 +67,16 @@ pub enum Kind {
     Delta,
 }
 
+/// How a column is compressed. Named in every column so that a later
+/// codec can sit beside this one in one container; a reader refuses a
+/// codec it does not know.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Codec {
+    /// One zlib stream.
+    Zlib,
+}
+
 /// One column as the header describes it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Column {
@@ -74,6 +84,8 @@ pub struct Column {
     /// `@time`, or `f:` followed by a field name.
     pub name: String,
     pub kind: Kind,
+    /// How the column's bytes are compressed.
+    pub codec: Codec,
     /// Bytes before compression.
     pub raw: u64,
     /// Bytes in the container.
@@ -351,7 +363,7 @@ pub fn pack(source: &[u8], layout: &Layout) -> Result<(Vec<u8>, Packed)> {
     let mut columns: Vec<(Column, Vec<u8>)> = Vec::new();
     let mut add = |name: String, kind: Kind, raw: Vec<u8>| -> Result<()> {
         let stored = deflate(&raw)?;
-        columns.push((Column { name, kind, raw: raw.len() as u64, stored: stored.len() as u64 }, stored));
+        columns.push((Column { name, kind, codec: Codec::Zlib, raw: raw.len() as u64, stored: stored.len() as u64 }, stored));
         Ok(())
     };
     let varints = |values: &[u64]| {

@@ -690,6 +690,39 @@ name column has not been measured. Also absent: streaming writing,
 reading part of a container, units of measurement, and relationships
 between entities other than the one group field.
 
+## ADR-0039: Live discovery orders by event time behind a watermark and forgets by panes
+
+The prototype of ADR-0036 counted events in arrival order and never
+forgot. `kute_discover::watch::Watch` and `kute live` add what the
+specification's C2 asks for; `docs/live.md` describes the behaviour.
+
+Order: arrivals wait in a bounded buffer and are counted in order of
+(time, arrival) once the watermark, the latest time minus a configured
+lateness, passes them. Ties go by arrival so the result is a function of
+the arrivals. The late-event policy is to drop and count. The
+alternatives were to count late events out of order, which makes a
+sequence depend on delivery, or to hold windows open for them, which
+makes memory depend on the stream. When the buffer is full the earliest
+event is counted early and the watermark moves; that trades lateness
+tolerance for the memory bound, and is counted.
+
+Forgetting: time is cut into panes and each pane has its own
+Misra-Gries tables; a window is the last k panes, and a report adds
+their counts. Summaries of this kind add, and their undercount bounds
+add with them, so a sliding window needs no subtraction, which such a
+summary cannot do. The price is k tables and a merged copy at each
+report. One pane gives tumbling windows.
+
+Reports are driven by events, not by a clock: a pane closes when an
+event of a later pane is counted. A stream that goes quiet reports
+nothing until it speaks again or ends. A timer would need a second
+source of time and make replays differ from live runs.
+
+Transport is a file or a pipe, read synchronously, which is the
+backpressure. Reports are delivered at least once across a restart.
+NATS and MQTT adapters, which the specification lists as optional, are
+not built. Durations of patterns and gapped pairs remain offline only.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

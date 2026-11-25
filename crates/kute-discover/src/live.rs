@@ -39,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 /// The folded symbol: every symbol past `max_symbols`, or too long.
-const OTHER: u32 = 0;
+pub(crate) const OTHER: u32 = 0;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LiveParams {
@@ -86,12 +86,12 @@ impl LiveParams {
 }
 
 #[derive(Clone, Debug, Default)]
-struct Table {
-    counts: FxHashMap<Box<[u32]>, u64>,
+pub(crate) struct Table {
+    pub(crate) counts: FxHashMap<Box<[u32]>, u64>,
     /// Sequences of this length offered.
-    offered: u64,
+    pub(crate) offered: u64,
     /// Times every count was lowered by one: the most any count is under.
-    decrements: u64,
+    pub(crate) decrements: u64,
 }
 
 impl Table {
@@ -99,7 +99,7 @@ impl Table {
     /// count by one, and is itself dropped. Each such step removes
     /// `capacity + 1` from the total held, so there are at most
     /// `offered / (capacity + 1)` of them and the work is O(1) amortized.
-    fn offer(&mut self, sequence: &[u32], capacity: usize) {
+    pub(crate) fn offer(&mut self, sequence: &[u32], capacity: usize) {
         self.offered += 1;
         if let Some(count) = self.counts.get_mut(sequence) {
             *count += 1;
@@ -116,9 +116,9 @@ impl Table {
 }
 
 #[derive(Clone, Debug)]
-struct Tail {
-    recent: VecDeque<u32>,
-    last_seen: u64,
+pub(crate) struct Tail {
+    pub(crate) recent: VecDeque<u32>,
+    pub(crate) last_seen: u64,
 }
 
 /// A pattern found in the stream so far.
@@ -175,7 +175,7 @@ pub struct Live {
 /// FNV-1a: fixed, so a checkpoint means the same on every build. Two
 /// entities with the same hash share a tail; with 64 bits that is rare, and
 /// it is one more way an entity's context can be wrong, not a new kind.
-fn entity_key(entity: &str) -> u64 {
+pub(crate) fn entity_key(entity: &str) -> u64 {
     entity.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3))
 }
 
@@ -262,43 +262,7 @@ impl Live {
     /// at least `min_support` times with at least `min_cohesion_bits`,
     /// strongest first, at most `max_patterns`.
     pub fn report(&self, min_support: u64, min_cohesion_bits: f64, max_patterns: usize) -> LiveReport {
-        let total = self.tables[1].offered;
-        let count_of = |seq: &[u32]| self.tables.get(seq.len()).and_then(|t| t.counts.get(seq)).copied().unwrap_or(0);
-        let mut patterns = Vec::new();
-        for n in 2..self.tables.len() {
-            // As in `discover`: a sequence a longer one extends, occurring
-            // exactly as often, is left to the longer one.
-            let mut absorbed: FxHashSet<&[u32]> = FxHashSet::default();
-            if let Some(longer) = self.tables.get(n + 1) {
-                for (seq, &count) in longer.counts.iter().filter(|(_, &c)| c >= min_support) {
-                    for part in [&seq[..n], &seq[1..]] {
-                        if count_of(part) == count {
-                            absorbed.insert(part);
-                        }
-                    }
-                }
-            }
-            for (seq, &count) in &self.tables[n].counts {
-                if count < min_support || absorbed.contains(&seq[..]) {
-                    continue;
-                }
-                let Some(bits) = cohesion(seq, count, total, &count_of) else { continue };
-                if bits < min_cohesion_bits {
-                    continue;
-                }
-                let symbols: Vec<String> = seq.iter().map(|&id| self.names[id as usize].clone()).collect();
-                patterns.push(LivePattern {
-                    content_hash: hash_of(&symbols),
-                    symbols,
-                    support: count,
-                    support_at_most: count + self.tables[n].decrements,
-                    cohesion_bits: bits,
-                    evidence_bits: count as f64 * bits,
-                });
-            }
-        }
-        patterns.sort_by(|a, b| b.evidence_bits.total_cmp(&a.evidence_bits).then_with(|| b.symbols.len().cmp(&a.symbols.len())).then_with(|| a.symbols.cmp(&b.symbols)));
-        patterns.truncate(max_patterns);
+        let patterns = patterns_of(&self.tables, &self.names, min_support, min_cohesion_bits, max_patterns);
         let max_undercount: Vec<u64> = self.tables[1..].iter().map(|t| t.decrements).collect();
         LiveReport {
             events: self.events,
@@ -404,6 +368,49 @@ impl Live {
         live.evicted = saved.evicted;
         Ok(live)
     }
+}
+
+/// The patterns a set of tables holds: `tables[n]` counts sequences of
+/// length `n`. Shared by [`Live`] and [`crate::watch::Watch`].
+pub(crate) fn patterns_of(tables: &[Table], names: &[String], min_support: u64, min_cohesion_bits: f64, max_patterns: usize) -> Vec<LivePattern> {
+    let total = tables[1].offered;
+    let count_of = |seq: &[u32]| tables.get(seq.len()).and_then(|t| t.counts.get(seq)).copied().unwrap_or(0);
+    let mut patterns = Vec::new();
+    for n in 2..tables.len() {
+        // As in `discover`: a sequence a longer one extends, occurring
+        // exactly as often, is left to the longer one.
+        let mut absorbed: FxHashSet<&[u32]> = FxHashSet::default();
+        if let Some(longer) = tables.get(n + 1) {
+            for (seq, &count) in longer.counts.iter().filter(|(_, &c)| c >= min_support) {
+                for part in [&seq[..n], &seq[1..]] {
+                    if count_of(part) == count {
+                        absorbed.insert(part);
+                    }
+                }
+            }
+        }
+        for (seq, &count) in &tables[n].counts {
+            if count < min_support || absorbed.contains(&seq[..]) {
+                continue;
+            }
+            let Some(bits) = cohesion(seq, count, total, &count_of) else { continue };
+            if bits < min_cohesion_bits {
+                continue;
+            }
+            let symbols: Vec<String> = seq.iter().map(|&id| names[id as usize].clone()).collect();
+            patterns.push(LivePattern {
+                content_hash: hash_of(&symbols),
+                symbols,
+                support: count,
+                support_at_most: count + tables[n].decrements,
+                cohesion_bits: bits,
+                evidence_bits: count as f64 * bits,
+            });
+        }
+    }
+    patterns.sort_by(|a, b| b.evidence_bits.total_cmp(&a.evidence_bits).then_with(|| b.symbols.len().cmp(&a.symbols.len())).then_with(|| a.symbols.cmp(&b.symbols)));
+    patterns.truncate(max_patterns);
+    patterns
 }
 
 const SAVED_FORMAT: u32 = 1;

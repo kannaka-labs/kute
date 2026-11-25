@@ -456,29 +456,46 @@ event name, and the text that fills the template's slots as `params`;
 
 | | bytes | of the JSON | time to write |
 |---|---:|---:|---:|
-| `kute events pack` | 1,790,243 | 2.3% | 11 s |
-| zstd -19 | 2,785,261 | 3.6% | 62 s |
+| plain columns, xz -9 each | 1,388,904 | 1.8% | 8 s |
+| `kute events pack` | 1,790,408 | 2.3% | 11 s |
+| xz -9e, dictionary as large as the input | 2,059,556 | 2.7% | 205 s |
+| zstd -19 | 2,785,261 | 3.6% | 75 s |
 | zlib -9 | 3,730,572 | 4.8% | 1 s |
-| xz -9 | 3,887,204 | 5.0% | 25 s |
+| xz -9 | 3,887,204 | 5.0% | 23 s |
 
-The container is 0.64 of zstd, the best of the three here. The records
-came back equal; the bytes differ from the source only in key order,
-which the source did not have sorted.
+The records came back equal; the bytes differ from the source only in key
+order, which the source did not have sorted.
+
+**The container loses to the plainest column layout with a better
+codec.** "Plain columns" is one column per field, values in source order,
+no grouping by entity and no time differences, each column through
+xz -9: it is 22% smaller than the container. The reviewer found this;
+the first version of this section compared only with compressors run on
+the whole file at default settings and read better than it should have.
+A prototype of the container's own layout with xz in place of zlib came
+to about 1.33 MB on the same records, so grouping and differences are
+worth a few percent over plain columns, and the choice of codec is worth
+about a quarter. With the general compressor tuned (extreme preset,
+dictionary covering the whole input) the container is 0.87 of it, not
+0.46.
 
 What this does and does not show:
 
-* The gain is from the layout: like stored with like, names grouped by
-  entity, times as differences. Each column is plain zlib. No vocabulary
-  is trained or used, so this is not a measurement of tokenization.
+* Splitting records into columns is what helps, and it is not KUTE's
+  invention. zlib was chosen because it was already a dependency; these
+  numbers say it is the wrong codec for a format meant to be small. The
+  header names each column's codec so that another can be added.
+* No vocabulary is trained or used, so none of this is a measurement of
+  tokenization.
 * JSON Lines repeats every key on every line, which flatters any column
   layout. Against the original OpenSSH log text (70.5 MB, xz -9
   3,384,512 bytes) the container is 0.53, but the two do not hold quite
   the same thing: the records keep everything in the log line except its
   exact spacing and the year-less date, which became seconds.
-* Other column formats and log-specific compressors exist and were not
-  run. This compares with general compressors only.
+* Log-specific compressors and existing column formats were not run.
 * Two datasets, both logs, one run. Packing reads the whole input into
-  memory and runs at about 10 MB of JSON a second on this machine.
+  memory and runs at about 10 MB of JSON a second on this machine. The
+  HDFS table above has not yet been rerun with the two extra rows.
 
 ## Frozen, evolved and retrained event vocabularies (v0.6.0)
 

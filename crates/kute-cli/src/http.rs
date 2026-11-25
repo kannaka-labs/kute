@@ -218,9 +218,13 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         Ok(v) => v,
         Err(e) => return problem(400, "Bad Request", "bad_json", format!("the body is not JSON: {e}")),
     };
-    match server.call(operation, &arguments) {
-        Ok(result) => ok(result),
-        Err(message) => problem(422, "Unprocessable Content", "refused", message),
+    // A panic in an operation must not end the worker: with every worker
+    // gone the service would accept connections and answer none. No input
+    // is known to cause one.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| server.call(operation, &arguments))) {
+        Ok(Ok(result)) => ok(result),
+        Ok(Err(message)) => problem(422, "Unprocessable Content", "refused", message),
+        Err(_) => problem(500, "Internal Server Error", "internal", "the operation failed unexpectedly"),
     }
 }
 

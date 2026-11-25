@@ -88,6 +88,11 @@ considered) are those of the MCP server.
 What is not bounded: the time an operation itself takes once its request
 is read. An `encode` of 1 MiB takes milliseconds; a `discover` at the
 limits takes longer, and four of them occupy every worker. There is no
-per-client rate limit. Connections that send nothing hold a worker until
+per-client rate limit. An answer is written with a deadline on each
+write, not on the whole, so a client that reads very slowly can hold a
+worker longer than the timeout. A request refused before its body is read
+(too large, wrong host) is answered and closed without reading the rest,
+which some clients report as a reset instead of showing the answer.
+Connections that send nothing hold a worker until
 the timeout; with every worker and the queue held, new connections are
 told `busy` until some time out.

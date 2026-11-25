@@ -18,72 +18,83 @@
   "header_says_byte_exact": false
  },
  "container": {
-  "bytes": 1790243,
-  "pack_seconds": 10.8,
-  "unpack_seconds": 0.82,
+  "bytes": 1790408,
+  "pack_seconds": 8.65,
+  "unpack_seconds": 0.69,
   "time_order": "source",
   "columns": [
    {
+    "codec": "zlib",
     "kind": "json",
     "name": "@names",
     "raw": 218,
     "stored": 88
    },
    {
+    "codec": "zlib",
     "kind": "json",
     "name": "@shapes",
     "raw": 49,
     "stored": 53
    },
    {
+    "codec": "zlib",
     "kind": "varint",
     "name": "@shape",
     "raw": 638947,
     "stored": 642
    },
    {
+    "codec": "zlib",
     "kind": "json",
     "name": "@entities",
     "raw": 184157,
     "stored": 77088
    },
    {
+    "codec": "zlib",
     "kind": "varint",
     "name": "@entity",
     "raw": 1565919,
     "stored": 449986
    },
    {
+    "codec": "zlib",
     "kind": "varint",
     "name": "@symbols",
     "raw": 638947,
     "stored": 59030
    },
    {
+    "codec": "zlib",
     "kind": "delta",
     "name": "@time",
     "raw": 641745,
     "stored": 128375
    },
    {
+    "codec": "zlib",
     "kind": "json",
     "name": "f:fits",
     "raw": 3194842,
     "stored": 4979
    },
    {
+    "codec": "zlib",
     "kind": "json",
     "name": "f:host",
     "raw": 5111575,
     "stored": 7465
    },
    {
+    "codec": "zlib",
     "kind": "json",
     "name": "f:params",
     "raw": 19894609,
     "stored": 1055062
    },
    {
+    "codec": "zlib",
     "kind": "json",
     "name": "f:proc",
     "raw": 4472628,
@@ -94,17 +105,27 @@
  "compressors_on_the_canonical_bytes": {
   "zlib -9": {
    "bytes": 3730572,
-   "seconds": 1.09,
+   "seconds": 1.11,
    "container_over_this": 0.48
   },
   "xz -9": {
    "bytes": 3887204,
-   "seconds": 24.61,
+   "seconds": 23.0,
    "container_over_this": 0.461
+  },
+  "xz -9e, dictionary to fit": {
+   "bytes": 2059556,
+   "seconds": 205.03,
+   "container_over_this": 0.869
+  },
+  "plain columns, xz -9 each": {
+   "bytes": 1388904,
+   "seconds": 8.38,
+   "container_over_this": 1.289
   },
   "zstd -19": {
    "bytes": 2785261,
-   "seconds": 61.98,
+   "seconds": 75.26,
    "container_over_this": 0.643
   }
  },

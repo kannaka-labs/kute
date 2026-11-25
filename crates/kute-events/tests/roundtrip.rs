@@ -165,7 +165,7 @@ fn forged(events: u64, canonical: &[u8], columns: &[(&str, Kind, &[u8])]) -> Vec
         let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
         encoder.write_all(raw).unwrap();
         let stored = encoder.finish().unwrap();
-        described.push(kute_events::Column { name: name.to_string(), kind: *kind, raw: raw.len() as u64, stored: stored.len() as u64 });
+        described.push(kute_events::Column { name: name.to_string(), kind: *kind, codec: kute_events::Codec::Zlib, raw: raw.len() as u64, stored: stored.len() as u64 });
         body.extend(stored);
     }
     let header = kute_events::Header {

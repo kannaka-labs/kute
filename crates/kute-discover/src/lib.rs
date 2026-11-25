@@ -12,6 +12,7 @@
 //! a pattern means or what causes it.
 
 pub mod live;
+pub mod watch;
 
 use kute_core::CorpusFingerprint;
 use kute_types::{CanonicalInput, KuteError, Modality, Payload, Result, TokenPayload};

@@ -86,6 +86,9 @@ Added in v0.3:
   discover as Model Context Protocol tools on standard input and output.
   Read-only: it works on the vocabularies it was started with and the data
   in each call, with bounded inputs and outputs. See `docs/mcp.md`.
+* `kute live`: discovery over events as they arrive, ordered by event
+  time, in tumbling or sliding windows, with bounded memory, checkpoint
+  and resume. See `docs/live.md`.
 * `kute events pack|unpack|inspect`: complete event records (entity, time
   and every other field) kept exactly and stored by column. See
   `docs/events.md`.

@@ -51,8 +51,8 @@ def main() -> int:
 
     container, back = work / "events.kev", work / "back.jsonl"
     kute = str(pathlib.Path(a.kute).resolve())
-    command = [kute, "events", "pack", str(source), "--output", str(container), "--symbol", a.symbol]
-    for flag, value in (("--time", a.time), ("--group", a.group)):
+    command = [kute, "events", "pack", str(source), "--output", str(container), "--symbol-field", a.symbol]
+    for flag, value in (("--time-field", a.time), ("--group-field", a.group)):
         if value:
             command += [flag, value]
     started = time.perf_counter()
@@ -84,6 +84,23 @@ def main() -> int:
         "zlib -9": timed(lambda b: zlib.compress(b, 9)),
         "xz -9": timed(lambda b: lzma.compress(b, preset=9)),
     }
+    # A general compressor given every advantage: the extreme preset and
+    # a dictionary as large as the input, up to 256 MiB.
+    dictionary = min(max(len(canonical), 1 << 20), 256 << 20)
+    rows["xz -9e, dictionary to fit"] = timed(lambda b: lzma.compress(b, format=lzma.FORMAT_XZ, filters=[{"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME, "dict_size": dictionary}]))
+
+    # The plainest column layout: one column per field, values in source
+    # order as JSON texts, no grouping and no differences, plus the set of
+    # keys of each record; each column through xz -9.
+    plain = {}
+    for text in canonical.splitlines():
+        record = json.loads(text)
+        plain.setdefault("@keys", []).append(",".join(record))
+        for key, value in record.items():
+            plain.setdefault(key, []).append(json.dumps(value, separators=(",", ":"), ensure_ascii=False))
+    started = time.perf_counter()
+    plain_bytes = sum(len(lzma.compress(chr(10).join(values).encode(), preset=9)) for values in plain.values())
+    rows["plain columns, xz -9 each"] = {"bytes": plain_bytes, "seconds": round(time.perf_counter() - started, 2)}
     try:
         from compression import zstd  # Python 3.14
 

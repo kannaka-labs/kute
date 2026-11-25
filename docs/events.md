@@ -4,7 +4,7 @@ A token sequence of event names keeps the names and nothing else. `kute
 events` keeps the whole record: which entity it belongs to, when it
 happened, and every other field.
 
-    kute events pack events.jsonl --output events.kev --symbol event --time t --group block
+    kute events pack events.jsonl --output events.kev \n        --symbol-field event --time-field t --group-field block
     kute events unpack events.kev --output back.jsonl
     kute events inspect events.kev
 
@@ -35,9 +35,9 @@ and `unpack` checks both before returning anything.
 
 | option | field | rule |
 |---|---|---|
-| `--symbol` | the event name | required in every record; a non-empty string |
-| `--time` | the time | when named, required in every record; a whole number written as an integer |
-| `--group` | the entity | when named, required in every record; a string, a number or a boolean |
+| `--symbol-field` | the event name | required in every record; a non-empty string |
+| `--time-field` | the time | when named, required in every record; a whole number written as an integer |
+| `--group-field` | the entity | when named, required in every record; a string, a number or a boolean |
 
 Every other field is an attribute and may hold any JSON value, or be
 absent from some records. A record missing a required field is an error
@@ -53,8 +53,10 @@ need not increase.
 
     "KUTE-EV1\n"  length of header (4 bytes, little-endian)  header (JSON)  columns
 
-Each column is one zlib stream; the header lists them in order with their
-kind, their size before compression and their size in the file.
+The header lists the columns in order with their kind, their codec, their
+size before compression and their size in the file. The only codec so far
+is `zlib`: each column is one zlib stream. A reader refuses a codec it
+does not know.
 
 | column | kind | holds |
 |---|---|---|

@@ -4,6 +4,7 @@
 //! stderr. Exit status is 0 on success and 1 on any error.
 
 pub mod http;
+pub mod live;
 pub mod mcp;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -154,6 +155,65 @@ enum Command {
         #[arg(long, default_value_t = 4_194_304)]
         max_output_bytes: u64,
     },
+    /// Discovery over events as they arrive, by event time, in windows
+    /// that forget: JSON Lines in, one report per closed window out.
+    /// Memory is bounded by the options. Experimental.
+    Live {
+        /// JSON Lines to read; standard input when absent.
+        input: Option<PathBuf>,
+        /// Field holding the event name.
+        #[arg(long, value_name = "FIELD")]
+        symbol_field: String,
+        /// Field holding the time, a whole number of any unit.
+        #[arg(long, value_name = "FIELD")]
+        time_field: String,
+        /// Field naming the entity an event belongs to.
+        #[arg(long, value_name = "FIELD")]
+        group_field: Option<String>,
+        /// Length of a pane, in the unit of the time field.
+        #[arg(long)]
+        pane: i64,
+        /// Panes in a window: 1 for tumbling windows, more for a sliding one.
+        #[arg(long, default_value_t = 1)]
+        panes: usize,
+        /// How far behind the latest time an event may arrive and still count.
+        #[arg(long, default_value_t = 0)]
+        lateness: i64,
+        /// Events held waiting to be put in time order.
+        #[arg(long, default_value_t = 100_000)]
+        max_buffered: usize,
+        /// Longest sequence counted.
+        #[arg(long, default_value_t = 6)]
+        max_length: usize,
+        /// Distinct event names known; later ones are folded together.
+        #[arg(long, default_value_t = 65_536)]
+        max_symbols: usize,
+        /// Sequences counted at each length in each pane.
+        #[arg(long, default_value_t = 200_000)]
+        max_candidates: usize,
+        /// Entities whose recent events are remembered.
+        #[arg(long, default_value_t = 100_000)]
+        max_entities: usize,
+        #[arg(long, default_value_t = 5)]
+        min_support: u64,
+        #[arg(long, default_value_t = 1.0)]
+        min_cohesion_bits: f64,
+        /// Patterns in each report.
+        #[arg(long, default_value_t = 100)]
+        max_patterns: usize,
+        /// File the state is saved to as windows close.
+        #[arg(long)]
+        checkpoint: Option<PathBuf>,
+        /// Save after this many window reports.
+        #[arg(long, default_value_t = 1)]
+        checkpoint_every: u64,
+        /// Start from the checkpoint, passing over the input it had read.
+        #[arg(long)]
+        resume: bool,
+        /// Count lines that are not events and go on, instead of stopping.
+        #[arg(long)]
+        skip_bad_lines: bool,
+    },
     /// Complete event records (entity, time and every other field) packed
     /// by column into one container, and back. Experimental.
     Events {
@@ -213,14 +273,14 @@ enum EventsAction {
         #[arg(long)]
         output: PathBuf,
         /// Field holding the event name.
-        #[arg(long)]
-        symbol: String,
+        #[arg(long, value_name = "FIELD")]
+        symbol_field: String,
         /// Field holding the time, a whole number.
-        #[arg(long)]
-        time: Option<String>,
+        #[arg(long, value_name = "FIELD")]
+        time_field: Option<String>,
         /// Field naming the entity an event belongs to.
-        #[arg(long)]
-        group: Option<String>,
+        #[arg(long, value_name = "FIELD")]
+        group_field: Option<String>,
     },
     /// Write the records back as canonical JSON Lines, in source order.
     Unpack {
@@ -1056,9 +1116,34 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             server.serve(std::io::stdin().lock(), std::io::stdout().lock())?;
             Ok(())
         }
+        Command::Live {
+            input,
+            symbol_field,
+            time_field,
+            group_field,
+            pane,
+            panes,
+            lateness,
+            max_buffered,
+            max_length,
+            max_symbols,
+            max_candidates,
+            max_entities,
+            min_support,
+            min_cohesion_bits,
+            max_patterns,
+            checkpoint,
+            checkpoint_every,
+            resume,
+            skip_bad_lines,
+        } => {
+            let bounds = kute_discover::live::LiveParams { max_length, max_symbols, max_candidates, max_entities, ..Default::default() };
+            let params = kute_discover::watch::WatchParams { live: bounds, pane_ticks: pane, panes, lateness, max_buffered, min_support, min_cohesion_bits, max_patterns };
+            live::run(live::Options { input, symbol_field, time_field, group_field, params, checkpoint, checkpoint_every, resume, skip_bad_lines })
+        }
         Command::Events { action } => match action {
-            EventsAction::Pack { input, output, symbol, time, group } => {
-                let layout = kute_events::Layout { symbol_field: symbol, time_field: time, group_field: group };
+            EventsAction::Pack { input, output, symbol_field, time_field, group_field } => {
+                let layout = kute_events::Layout { symbol_field, time_field, group_field };
                 let (container, report) = kute_events::pack(&std::fs::read(&input)?, &layout)?;
                 std::fs::write(&output, &container)?;
                 print(&json!({ "output": output, "report": report }))
