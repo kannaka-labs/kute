@@ -1,0 +1,67 @@
+{
+  "machine": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "logical_cpus": 24,
+    "python": "3.15.2"
+  },
+  "method": "one training per process, one library per process",
+  "train_bytes": 90000189,
+  "eval_bytes": 9999811,
+  "vocab_size": 32768,
+  "pre_tokenizers": "matched: both split by the GPT-4 pattern",
+  "kute": {
+    "version": "0.6.0",
+    "train_seconds": {
+      "median": 1.891,
+      "min": 1.842,
+      "max": 1.966,
+      "runs": 10
+    },
+    "encode_seconds": {
+      "median": 0.134,
+      "min": 0.127,
+      "max": 0.144,
+      "runs": 10
+    },
+    "eval_tokens": [
+      2551171
+    ],
+    "distinct_vocabulary_digests": 1,
+    "round_trip_exact": true
+  },
+  "tokenizers": {
+    "version": "0.23.2",
+    "train_seconds": {
+      "median": 7.803,
+      "min": 7.563,
+      "max": 7.942,
+      "runs": 10
+    },
+    "encode_seconds_one_document": {
+      "median": 6.77,
+      "min": 6.665,
+      "max": 6.815,
+      "runs": 10
+    },
+    "encode_seconds_batch_of_lines": {
+      "median": 0.791,
+      "min": 0.785,
+      "max": 0.8,
+      "runs": 10
+    },
+    "encode_seconds_batch_of_lines_fast": {
+      "median": 0.82,
+      "min": 0.804,
+      "max": 0.855,
+      "runs": 10
+    },
+    "eval_tokens": [
+      2571668
+    ],
+    "eval_tokens_batch_of_lines": [
+      2571668
+    ],
+    "round_trip_exact": true
+  }
+}
