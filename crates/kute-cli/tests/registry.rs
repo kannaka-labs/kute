@@ -273,3 +273,89 @@ fn a_registry_that_lies_or_stalls_gets_nothing_written() {
     ok(&dir, &["fetch", "--from", &impostor(with_length(&wanted), 1), "--digest", &signed, "--output", "j.kvf", "--trusted-key", &ours]);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A registry that sends `answer` a byte at a time with `pause` between,
+/// until the client goes away.
+fn dripper(answer: Vec<u8>, pause: Duration) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else { return };
+        for byte in answer {
+            if stream.write_all(&[byte]).is_err() {
+                return;
+            }
+            std::thread::sleep(pause);
+        }
+    });
+    format!("http://{address}")
+}
+
+#[test]
+fn odd_answers_from_a_registry_are_kept_only_when_they_are_the_vocabulary() {
+    let dir = scratch("registry-odd");
+    let (signed, _, ours, _) = prepare(&dir);
+    let wanted = std::fs::read(dir.join("signed.kvf")).unwrap();
+    let document: Value = serde_json::from_slice(&wanted).unwrap();
+    let head = |extra: &str, length: &str| format!("HTTP/1.1 200 OK\r\n{extra}Content-Length: {length}\r\n\r\n").into_bytes();
+    let answer = |head: Vec<u8>, body: &[u8]| [head, body.to_vec()].concat();
+    let size = wanted.len().to_string();
+
+    // The same content in other bytes, or with harmless oddities in the headers: kept, and it is the vocabulary asked for.
+    let reformatted = serde_json::to_vec_pretty(&document).unwrap();
+    let kept: [(&str, Vec<u8>); 3] = [
+        ("reformatted.kvf", with_length(&reformatted)),
+        ("plus.kvf", answer(head("", &format!("+{size}")), &wanted)),
+        ("two-lengths.kvf", answer(head("Content-Length: 10\r\n", &size), &wanted)),
+    ];
+    for (name, bytes) in kept {
+        let report = ok(&dir, &["fetch", "--from", &impostor(bytes, 1), "--digest", &signed, "--output", name, "--trusted-key", &ours]);
+        assert_eq!(report["digest"], signed.as_str(), "{name}");
+        assert_eq!(ok(&dir, &["inspect", name])["summary"]["digest"], signed.as_str(), "{name}");
+    }
+
+    // A signature the registry added is written with the file, and the report says nobody checked it.
+    let mut added = document.clone();
+    added["integrity"]["signatures"].as_array_mut().unwrap().push(json!({ "key_id": format!("ed25519:{}", "00".repeat(32)), "algorithm": "ed25519", "signature": "AAAA" }));
+    let report = ok(&dir, &["fetch", "--from", &impostor(with_length(&serde_json::to_vec(&added).unwrap()), 1), "--digest", &signed, "--output", "added.kvf"]);
+    assert_eq!(report["signatures_in_the_file"], 2);
+    assert!(report["signatures_in_the_file_means"].as_str().unwrap().contains("none was checked"), "{report}");
+
+    // Not kept: bytes after the stated length; the content right but the digest it states wrong; a
+    // second value after the first; an interim answer first; a redirect; nesting past any vocabulary; headers that never end.
+    let mut misstated = document.clone();
+    misstated["integrity"]["digest"] = json!(format!("sha256:{}", "ab".repeat(32)));
+    let refused: [(&str, Vec<u8>, &str); 7] = [
+        // Seen only when the extra bytes arrive with the body, as they do for a file this small;
+        // sent later they are never read. Either way the file is not other than it should be.
+        ("more-after.kvf", answer(head("", &size), &[wanted.clone(), b"{\"more\":1}".to_vec()].concat()), "more bytes than the stated length"),
+        ("misstated.kvf", with_length(&serde_json::to_vec(&misstated).unwrap()), "does not match"),
+        ("trailing.kvf", with_length(&[wanted.clone(), b" {}".to_vec()].concat()), "trailing"),
+        ("interim.kvf", answer(b"HTTP/1.1 100 Continue\r\n\r\n".to_vec(), &with_length(&wanted)), "does not state its length"),
+        ("redirect.kvf", b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\n\r\n".to_vec(), "answered 302"),
+        ("nested.kvf", with_length(&["[".repeat(100_000), "]".repeat(100_000)].concat().into_bytes()), "not a KVF document"),
+        ("headers.kvf", [b"HTTP/1.1 200 OK\r\nX-A: ".to_vec(), vec![b'a'; 200_000]].concat(), "headers are larger"),
+    ];
+    for (name, bytes, why) in refused {
+        let said = fails(&dir, &["fetch", "--from", &impostor(bytes, 1), "--digest", &signed, "--output", name]);
+        assert!(said.contains(why), "{name}: {said}");
+        assert!(!dir.join(name).exists(), "{name} was written");
+    }
+
+    // What a registry says when it refuses is shown without its control characters, and not at length.
+    let message = format!("\u{1b}[31mred\u{1b}[0m\r\nkute: a line of its own {}", "x".repeat(1000));
+    let body = serde_json::to_vec(&json!({ "error": { "message": message } })).unwrap();
+    let said = fails(&dir, &["fetch", "--from", &impostor(answer(format!("HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\n\r\n", body.len()).into_bytes(), &body), 1), "--digest", &signed, "--output", "said.kvf"]);
+    assert!(said.contains("answered 404") && !said.contains('\u{1b}') && said.trim_end().lines().count() == 1 && said.len() < 500, "{said:?}");
+
+    // A registry that keeps sending, slowly, is given the time asked for and no more: in the body, and in headers that never end.
+    let slow: [(&str, Vec<u8>); 2] = [("slow-body.kvf", with_length(&wanted)), ("slow-head.kvf", [b"HTTP/1.1 200 OK\r\n".to_vec(), b"X-A: b\r\n".repeat(10_000)].concat())];
+    for (name, bytes) in slow {
+        let started = std::time::Instant::now();
+        let said = fails(&dir, &["fetch", "--from", &dripper(bytes, Duration::from_millis(100)), "--digest", &signed, "--output", name, "--timeout", "2"]);
+        assert!(said.contains("in time"), "{name}: {said}");
+        assert!(started.elapsed() < Duration::from_secs(5), "{name}: the deadline did not hold: {:?}", started.elapsed());
+        assert!(!dir.join(name).exists(), "{name} was written");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
