@@ -174,6 +174,23 @@ enum PeerAction {
         /// Write each decoded message and each vocabulary received here.
         #[arg(long)]
         output_dir: Option<PathBuf>,
+        /// This side's certificate chain (PEM). With --tls-key,
+        /// --tls-client-ca and --allow, the connection is TLS 1.3 with a
+        /// certificate on both sides. Without them it is a plain socket:
+        /// no encryption, and anyone who can connect is served.
+        #[arg(long, requires_all = ["tls_key", "tls_client_ca"])]
+        tls_cert: Option<PathBuf>,
+        /// This side's private key (PEM).
+        #[arg(long, requires = "tls_cert")]
+        tls_key: Option<PathBuf>,
+        /// Authorities whose client certificates are accepted (PEM).
+        #[arg(long, requires = "tls_cert")]
+        tls_client_ca: Option<PathBuf>,
+        /// A peer that may connect, by certificate fingerprint as printed
+        /// by `kute peer fingerprint`. Repeatable. Anyone else is refused,
+        /// even with a certificate from an accepted authority.
+        #[arg(long, value_name = "SHA256", requires = "tls_cert")]
+        allow: Vec<String>,
     },
     /// Connect, make sure the other side holds the vocabulary, and send files.
     Send {
@@ -193,26 +210,81 @@ enum PeerAction {
         additions: Vec<String>,
         #[arg(long)]
         new_version: Option<String>,
+        /// This side's certificate chain (PEM); with --tls-key and --tls-ca
+        /// the connection is TLS 1.3 with a certificate on both sides.
+        #[arg(long, requires_all = ["tls_key", "tls_ca"])]
+        tls_cert: Option<PathBuf>,
+        /// This side's private key (PEM).
+        #[arg(long, requires = "tls_cert")]
+        tls_key: Option<PathBuf>,
+        /// Authorities whose server certificates are accepted (PEM).
+        #[arg(long, requires = "tls_cert")]
+        tls_ca: Option<PathBuf>,
+        /// The name the server's certificate must carry. Default: the host
+        /// part of --connect.
+        #[arg(long, requires = "tls_cert")]
+        server_name: Option<String>,
+        /// Talk only to the server with this certificate fingerprint.
+        #[arg(long, value_name = "SHA256", requires = "tls_cert")]
+        server_fingerprint: Option<String>,
+    },
+    /// Print the fingerprint that identifies a certificate to `--allow`.
+    Fingerprint {
+        /// A certificate (PEM). The first one in the file is used.
+        #[arg(long)]
+        cert: PathBuf,
     },
 }
+
+/// A plain or an encrypted connection.
+trait Stream: std::io::Read + std::io::Write {}
+impl<T: std::io::Read + std::io::Write> Stream for T {}
 
 fn split_additions(additions: &[String]) -> Vec<Vec<String>> {
     additions.iter().map(|a| a.split_whitespace().map(str::to_string).collect()).collect()
 }
 
 fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
-    use kute_protocol::{Framed, Peer, Policy, Session, DEFAULT_MAX_FRAME};
+    use kute_protocol::{tls, Framed, Peer, Policy, Session, DEFAULT_MAX_FRAME};
     match action {
-        PeerAction::Serve { listen, vocab: held, accept_vocabularies, accept_proposals, max_units, output_dir } => {
+        PeerAction::Fingerprint { cert } => {
+            let chain = tls::load_certificates(&cert)?;
+            print(&json!({ "certificate": cert, "fingerprint": tls::fingerprint(&chain[0]) }))
+        }
+        PeerAction::Serve { listen, vocab: held, accept_vocabularies, accept_proposals, max_units, output_dir, tls_cert, tls_key, tls_client_ca, allow } => {
             let policy = Policy { accept_vocabularies, accept_proposals, max_decoded_units: max_units, ..Policy::default() };
+            let secured = match (&tls_cert, &tls_key, &tls_client_ca) {
+                (Some(cert), Some(key), Some(ca)) => {
+                    if allow.is_empty() {
+                        return Err(KuteError::InvalidConfig("with TLS, name at least one peer with --allow; nobody is allowed otherwise".into()));
+                    }
+                    let mut access = tls::Access::new();
+                    for fingerprint in &allow {
+                        access.allow(fingerprint, policy.clone())?;
+                    }
+                    Some((tls::server_config(tls::load_certificates(cert)?, tls::load_private_key(key)?, tls::load_certificates(ca)?)?, access))
+                }
+                _ => None,
+            };
+            let listener = std::net::TcpListener::bind(&listen)?;
+            eprintln!("listening on {}", listener.local_addr()?);
+            if secured.is_none() {
+                eprintln!("warning: no TLS. The connection is not encrypted and whoever connects is served.");
+            }
+            let (tcp, from) = listener.accept()?;
+            let (stream, identity, policy): (Box<dyn Stream>, Option<String>, Policy) = match &secured {
+                Some((config, access)) => {
+                    let (stream, who) = tls::accept(config, tcp)?;
+                    let policy = access.policy_for(&who)?;
+                    (Box::new(stream), Some(who.fingerprint), policy)
+                }
+                None => (Box::new(tcp), None, policy),
+            };
             let mut peer = Peer::new("kute", engine, policy);
             for path in &held {
                 peer.add_vocabulary(vocab::load(path)?)?;
             }
             let before = peer.digests();
-            let listener = std::net::TcpListener::bind(&listen)?;
-            eprintln!("listening on {}", listener.local_addr()?);
-            let (stream, from) = listener.accept()?;
             let mut session = Session::new(peer, Framed::new(stream, DEFAULT_MAX_FRAME));
             let handled = session.serve()?;
             let inbox = session.peer.take_inbox();
@@ -231,6 +303,7 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             }
             print(&json!({
                 "from": from.to_string(),
+                "peer_identity": identity,
                 "messages_handled": handled,
                 "vocabularies_received": new,
                 "received": inbox.iter().map(|m| json!({
@@ -242,11 +315,24 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 })).collect::<Vec<_>>(),
             }))
         }
-        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version } => {
+        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version, tls_cert, tls_key, tls_ca, server_name, server_fingerprint } => {
             let policy = kute::UnknownPolicy::parse(&unknown)?;
             let mut peer = Peer::new("kute", engine, Policy::default());
             let mut digest = peer.add_vocabulary(vocab::load(&vocab_path)?)?;
-            let mut session = Session::new(peer, Framed::new(std::net::TcpStream::connect(&connect)?, DEFAULT_MAX_FRAME));
+            let tcp = std::net::TcpStream::connect(&connect)?;
+            let (stream, server_identity): (Box<dyn Stream>, Option<String>) = match (&tls_cert, &tls_key, &tls_ca) {
+                (Some(cert), Some(key), Some(ca)) => {
+                    let config = tls::client_config(tls::load_certificates(cert)?, tls::load_private_key(key)?, tls::load_certificates(ca)?)?;
+                    let host = connect.rsplit_once(':').map_or(connect.as_str(), |(host, _)| host);
+                    let (stream, who) = tls::connect(&config, server_name.as_deref().unwrap_or(host), tcp)?;
+                    if server_fingerprint.as_ref().is_some_and(|wanted| *wanted != who.fingerprint) {
+                        return Err(KuteError::Integrity(format!("the server is {}, not the one named by --server-fingerprint", who.fingerprint)));
+                    }
+                    (Box::new(stream), Some(who.fingerprint))
+                }
+                _ => (Box::new(tcp), None),
+            };
+            let mut session = Session::new(peer, Framed::new(stream, DEFAULT_MAX_FRAME));
             let remote = session.connect()?;
             let transferred = session.share(&digest)?;
             let mut proposed = None;
@@ -263,6 +349,7 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             print(&json!({
                 "peer": remote.peer,
                 "peer_software": remote.software,
+                "server_identity": server_identity,
                 "vocabulary_transferred": transferred,
                 "vocabulary_after_proposal": proposed,
                 "sent": sent,

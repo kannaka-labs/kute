@@ -102,7 +102,8 @@ fn listen(server: &Holder, client_authority: &Authority, access: Access, connect
                 }
             };
             let mut session = Session::new(Peer::new("plant-b", Engine::new(), policy), Framed::new(stream, DEFAULT_MAX_FRAME));
-            let _ = session.serve();
+            // A sender that finishes says so; an unclean end would be an error.
+            session.serve().unwrap();
             let held = session.peer.digests().len();
             out.push(Served::Done { who, delivered: session.peer.take_inbox().into_iter().map(|d| d.bytes).collect(), held });
         }
@@ -111,7 +112,7 @@ fn listen(server: &Holder, client_authority: &Authority, access: Access, connect
     (address, handle)
 }
 
-type ClientSession = Session<Framed<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>>;
+type ClientSession = Session<Framed<tls::ClientStream>>;
 
 fn dial(address: std::net::SocketAddr, client: &Holder, server_authority: &Authority, held: &Vocabulary) -> kute::Result<(ClientSession, String, PeerIdentity)> {
     let config = tls::client_config(client.chain.clone(), client.key(), server_authority.der())?;

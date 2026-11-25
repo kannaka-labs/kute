@@ -507,9 +507,16 @@ Cost: `rustls` and `ring` are new dependencies of the protocol crate and of
 the CLI (`ring` builds C and assembly). The engine crates do not depend on
 them. `rcgen` is a test dependency only; no certificate is shipped.
 
-Not done: the CLI does not use the transport yet, there is no revocation
-beyond removing an identity from the list, and limits on connections and
-rate are still the caller's.
+`kute peer serve` and `kute peer send` take the certificate, key and
+authority files, `--allow <fingerprint>` names who may connect, and `kute
+peer fingerprint` prints the identity of a certificate. Without those
+options the commands still open a plain socket, and say so on stderr. A
+connection announces its own end (TLS `close_notify`) when dropped, and one
+that ends without that notice is an error to the reader, so a cut
+connection is not mistaken for a finished one.
+
+Not done: there is no revocation beyond removing an identity from the
+list, and limits on connections and rate are still the caller's.
 
 ## Deferred
 

@@ -191,6 +191,9 @@ with a certificate on both sides (`kute_protocol::tls`, through `rustls`).
   verifies but whose identity is not listed is disconnected before `HELLO`.
   The list is empty until identities are added to it.
 
+* A side that is finished closes with TLS `close_notify`. A connection
+  that ends without it is an error to the reader, not an end of session.
+
 Not provided: revocation (remove the identity from the list), certificate
 issuing or rotation, and any binding between an identity and particular
 vocabularies. A listed peer may do whatever its policy allows.
