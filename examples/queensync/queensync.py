@@ -301,8 +301,8 @@ def main() -> int:
         # The worker's copy and the queen's are the same vocabulary.
         ours = json.loads(bench.run("inspect", "candidate.kvf").stdout)
         theirs = json.loads(bench.run("inspect", received[0]).stdout)
-        negotiation["same_digest_on_both_sides"] = ours["digest"] == theirs["digest"]
-        negotiation["digest"] = ours["digest"]
+        negotiation["same_digest_on_both_sides"] = ours["summary"]["digest"] == theirs["summary"]["digest"]
+        negotiation["digest"] = ours["summary"]["digest"]
     # The first connection of all carries the base vocabulary to the worker.
     first_contact = bench.exchange("first", "base.kvf", [], [])
 
