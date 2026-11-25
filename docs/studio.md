@@ -85,12 +85,26 @@ The service's tests check the headers, the host rule, that the page is
 absent without `--studio`, and that the script contains none of the
 calls that would put markup on the page or reach elsewhere.
 
-The page itself was driven once in a headless browser against a live
-service through every view: each rendered the service's real answers, a
-corpus line containing a script element stayed text, a request to an
-outside site was blocked, and an inline script did not run. That run is
-not part of the automated tests, so a later change to the script is not
-covered by it.
+The page itself is driven in a real browser by a test, since 0.9.1
+(`crates/kute-cli/tests/studio_browser.rs` and the script beside it):
+headless Chrome or Edge over the DevTools protocol, against a live
+`kute serve --studio`, with no packages beyond Node. It goes through
+every view; encodes and decodes; compares; finds a planted sequence and
+reads its timing table to the figure; opens report files the command
+line made (one exchange from each side, two appended, a `kute shadow`
+report, an unknown file and a broken one); and checks that an event
+name written as markup stays text, that a request to another origin
+and a script written into the page are refused by the browser's
+policy, that every request went to the page's own origin, and that no
+script error occurred. Breaking the page on purpose made it fail.
 
-Not checked: screen readers, browsers other than one Chromium build,
-and very large answers.
+It runs only when asked, because it needs Node 22 or later and a
+Chromium browser:
+
+    KUTE_STUDIO_BROWSER=require cargo test -p kute-cli --test studio_browser
+
+Continuous integration runs it on Linux with Chrome. It was also run
+here on Windows with Chrome and with Edge. Not covered: Firefox and
+Safari, the file picker itself (the test hands the page a file through
+the browser's debugging interface), how the page looks, and use by
+keyboard or screen reader, and very large answers.
