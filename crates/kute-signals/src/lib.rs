@@ -296,8 +296,13 @@ pub fn pack(values: &[f64], mode: Mode) -> Result<(Vec<u8>, Report)> {
             // Exact values keep any bound. When the bound is finer than the
             // signal's own resolution, steps of it cost more than the
             // values themselves; the smaller of the two is written.
-            let stepped = pack_as(values, mode, false)?;
             let exact = pack_as(values, mode, true)?;
+            // A bound so large that twice it is not a number has no step.
+            // Exact values keep it.
+            if !(2.0 * max_error).is_finite() {
+                return Ok(exact);
+            }
+            let stepped = pack_as(values, mode, false)?;
             Ok(if exact.0.len() < stepped.0.len() { exact } else { stepped })
         }
     }
@@ -420,6 +425,23 @@ fn open(container: &[u8]) -> Result<(Header, usize)> {
         return Err(damaged("the header is too long or cut short"));
     }
     let header: Header = serde_json::from_slice(&container[start..start + length]).map_err(|e| damaged(format!("the header does not parse: {e}")))?;
+    // What the header says of itself is read by people and programs
+    // deciding whether to trust the values, and the hash does not cover
+    // it. A header whose statements cannot all be true is refused.
+    let observed = header.max_error_observed;
+    let agrees = match (header.contract.as_str(), header.max_error) {
+        ("exact", None) => observed == 0.0 && header.scheme != Scheme::Steps,
+        ("bounded", Some(bound)) => bound.is_finite() && bound > 0.0 && (0.0..=bound).contains(&observed),
+        _ => false,
+    };
+    let fields = match header.scheme {
+        Scheme::Decimal => header.decimals.is_some() && header.step_bits.is_none(),
+        Scheme::Steps => header.decimals.is_none() && header.step_bits.is_some(),
+        Scheme::Bits => header.decimals.is_none() && header.step_bits.is_none() && observed == 0.0,
+    };
+    if !agrees || !fields {
+        return Err(damaged("the header's statements about its contract do not agree with each other"));
+    }
     Ok((header, start + length))
 }
 
