@@ -89,6 +89,13 @@ window and nothing was dropped late or released early. `support_at_most`
 covers the undercount of the summary only; what folding and eviction
 lose is counted but not bounded.
 
+`--end-on EVENT` (repeatable) names an event that ends its entity: once
+it is counted, the entity is forgotten and its place freed, in time
+order and not on arrival. Where entities have an end that the stream
+states (a job finishing, a block deleted, a session closing), this
+keeps finished entities from holding places that long-lived ones then
+lose. It has not been measured on real data.
+
 The entity limit matters most. An entity evicted between two of its
 events loses the sequence across the gap, so the limit should be above
 the number of entities active at once. On a replayed day of HDFS, with

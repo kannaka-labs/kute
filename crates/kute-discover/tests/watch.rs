@@ -205,6 +205,7 @@ fn old_windows_are_forgotten_and_state_stays_inside_its_bound() {
         min_support: 20,
         min_cohesion_bits: 1.0,
         max_patterns: 50,
+        end_symbols: Vec::new(),
     };
     let bound = tight.state_bytes_bound();
     let mut watch = Watch::new(tight).unwrap();
@@ -344,4 +345,60 @@ fn times_at_the_ends_of_the_range_and_bad_parameters_do_no_harm() {
     ] {
         assert!(Watch::new(bad).is_err());
     }
+}
+
+#[test]
+fn an_ending_event_frees_its_entity_so_that_long_lived_ones_are_not_evicted() {
+    // One job runs the whole time, a step every 40 ticks. Short jobs come
+    // and go around it, three events each, never to be heard from again.
+    let mut events: Vec<Event> = Vec::new();
+    for t in 0..4000i64 {
+        let job = t / 4;
+        match t % 4 {
+            0 => events.push((format!("job-{job}"), "START".into(), t)),
+            1 => events.push((format!("job-{job}"), "WORK".into(), t)),
+            2 => events.push((format!("job-{job}"), "END".into(), t)),
+            _ if t % 40 == 3 => events.push(("long".into(), if (t / 40) % 2 == 0 { "PING".into() } else { "PONG".into() }, t)),
+            _ => {}
+        }
+    }
+    let bounds = kute_discover::live::LiveParams { max_entities: 8, ..Default::default() };
+    let base = WatchParams { live: bounds, pane_ticks: 1_000_000, max_patterns: 10_000, ..WatchParams::default() };
+    let support = |reports: &[WindowReport], symbols: &[&str]| reports.last().unwrap().patterns.iter().find(|p| p.symbols == symbols).map_or(0, |p| p.support);
+
+    // Without an ending event the finished jobs hold the places, and the
+    // long job, seen least recently, is the one pushed out between steps.
+    let without = run(base.clone(), &events);
+    assert!(without.last().unwrap().entities_evicted > 0);
+    assert!(support(&without, &["PING", "PONG"]) < 40, "{}", support(&without, &["PING", "PONG"]));
+
+    // With it nothing is evicted and every step of the long job is joined
+    // to the one before.
+    let mut watch = Watch::new(WatchParams { end_symbols: vec!["END".into()], ..base.clone() }).unwrap();
+    let mut with = Vec::new();
+    for (entity, symbol, time) in &events {
+        with.extend(watch.observe(entity, symbol, *time));
+    }
+    let (rest, totals) = watch.finish();
+    with.extend(rest);
+    assert_eq!(with.last().unwrap().entities_evicted, 0);
+    assert!(with.last().unwrap().exact);
+    assert_eq!(totals.ended, 1000);
+    assert_eq!(support(&with, &["PING", "PONG"]), 50);
+    assert_eq!(support(&with, &["START", "WORK", "END"]), 1000);
+    // The ending event is the last of its sequence: nothing runs on from it.
+    assert_eq!(support(&with, &["END", "START"]), 0);
+
+    // Arriving out of order within the lateness, the end still comes last:
+    // it is applied in time order, not on arrival.
+    let mut shuffled = events.clone();
+    for pair in shuffled.chunks_mut(2) {
+        pair.reverse();
+    }
+    let late = run(WatchParams { end_symbols: vec!["END".into()], lateness: 50, ..base.clone() }, &shuffled);
+    assert_eq!(support(&late, &["START", "WORK", "END"]), 1000);
+    assert_eq!(support(&late, &["PING", "PONG"]), 50);
+
+    assert!(Watch::new(WatchParams { end_symbols: vec![String::new()], ..base.clone() }).is_err());
+    assert!(Watch::new(WatchParams { end_symbols: (0..65).map(|i| i.to_string()).collect(), ..base }).is_err());
 }

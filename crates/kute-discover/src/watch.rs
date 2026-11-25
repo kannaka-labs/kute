@@ -70,11 +70,18 @@ pub struct WatchParams {
     pub min_support: u64,
     pub min_cohesion_bits: f64,
     pub max_patterns: usize,
+    /// Events that end an entity's sequence: once one is counted, the
+    /// entity is forgotten and its next event starts a new sequence. It
+    /// frees the entity's place at once, where otherwise only eviction
+    /// would. At most 64. A name folded into "other" because the
+    /// alphabet was full ends nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub end_symbols: Vec<String>,
 }
 
 impl Default for WatchParams {
     fn default() -> Self {
-        Self { live: LiveParams::default(), pane_ticks: 3600, panes: 1, lateness: 0, max_buffered: 100_000, min_support: 5, min_cohesion_bits: 1.0, max_patterns: 100 }
+        Self { live: LiveParams::default(), pane_ticks: 3600, panes: 1, lateness: 0, max_buffered: 100_000, min_support: 5, min_cohesion_bits: 1.0, max_patterns: 100, end_symbols: Vec::new() }
     }
 }
 
@@ -84,6 +91,9 @@ impl WatchParams {
         let bad = |why: &str| Err(KuteError::InvalidConfig(why.into()));
         if self.pane_ticks <= 0 {
             return bad("pane_ticks must be positive");
+        }
+        if self.end_symbols.len() > 64 || self.end_symbols.iter().any(String::is_empty) {
+            return bad("end_symbols holds at most 64 names, none empty");
         }
         if !(1..=MAX_PANES).contains(&self.panes) {
             return bad("panes must be between 1 and 64");
@@ -181,6 +191,9 @@ pub struct Totals {
     pub late_dropped: u64,
     pub forced_releases: u64,
     pub reports: u64,
+    /// Entities forgotten because one of `end_symbols` was counted.
+    #[serde(default)]
+    pub ended: u64,
 }
 
 type Held = Reverse<(i64, u64, u64, u32)>;
@@ -323,6 +336,13 @@ impl Watch {
                 break;
             }
             pane.tables[n].offer(sequence, max_candidates);
+        }
+        // The ending event is counted with what led to it, then the
+        // entity is let go. Done here, in time order, so that events of
+        // the entity still waiting in the buffer are not cut off early.
+        if !self.params.end_symbols.is_empty() && id != OTHER && self.params.end_symbols.contains(&self.names[id as usize]) {
+            self.tails.remove(&key);
+            self.totals.ended += 1;
         }
     }
 
