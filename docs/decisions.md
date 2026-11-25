@@ -601,6 +601,34 @@ on the same engine.
 
 Not done: the HTTP transport, resources and prompts, and a REST surface.
 
+## ADR-0036: Streaming discovery holds a fixed amount of state and reports what it approximated
+
+`kute_discover::live::Live` takes events one at a time (entity, symbol)
+and counts each entity's contiguous sequences, in state bounded by its
+parameters: symbols known by name, sequences counted at each length,
+entities whose recent symbols are remembered. `state_bytes_bound` is a
+function of the parameters alone, and the report carries the state in use
+beside it.
+
+Counting uses the Misra-Gries summary because its error is one-sided and
+known exactly: a count is never above the truth, and the number of times
+the table was decremented is the most it can be short. Symbols past the
+limit are folded into one, and entities past the limit lose their recent
+symbols, least recently seen first. Those two lose sequences before they
+are counted; the report says how many events were folded and how many
+entities evicted, and gives no bound on what that cost.
+
+While no limit is reached the result equals offline `discover` for
+contiguous patterns (tested: same sequences, support and cohesion). State
+can be saved and restored; a restored run continues to the same state as
+an uninterrupted one, and a checkpoint is checked against its own bounds
+before it is loaded.
+
+This is the prototype the v0.7 specification asks for (C2a, AC-708), not
+C2: there are no gapped pairs, no event time or late-event policy, no
+windows that forget, no transport, no CLI, and the 24-hour replay with
+recorded throughput has not been run. The test streams are synthetic.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

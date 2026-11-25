@@ -85,6 +85,9 @@ Added in v0.3:
   discover as Model Context Protocol tools on standard input and output.
   Read-only: it works on the vocabularies it was started with and the data
   in each call, with bounded inputs and outputs. See `docs/mcp.md`.
+* `kute_discover::live` (library only, a prototype): discovery over a
+  stream in state fixed in advance. Past its limits it approximates and
+  reports by how much; within them it equals offline discovery.
 * `kute train --stream-bytes`: training memory that does not grow with
   file size (227 MiB against 959 MiB on a 500 MB input), and a peak-memory
   figure in every training report.
