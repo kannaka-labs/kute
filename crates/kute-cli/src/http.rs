@@ -274,6 +274,20 @@ fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
         let _ = stream.flush();
     }
     let _ = stream.shutdown(std::net::Shutdown::Write);
+    // A request refused before it was read to its end leaves bytes
+    // unread, and closing over unread bytes resets the connection on
+    // some systems (seen on macOS), which can take the answer with it.
+    // So read a little of what is left and throw it away: at most 64 KiB
+    // and a quarter of a second, then close whatever the client does.
+    let started = Instant::now();
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(50)));
+    let (mut scrap, mut discarded) = ([0u8; 4096], 0usize);
+    while discarded < 65_536 && started.elapsed() < Duration::from_millis(250) {
+        match stream.read(&mut scrap) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => discarded += n,
+        }
+    }
 }
 
 fn serve_one(server: &Server, mut stream: TcpStream, options: &Options) {

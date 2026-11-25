@@ -91,8 +91,13 @@ limits takes longer, and four of them occupy every worker. There is no
 per-client rate limit. An answer is written with a deadline on each
 write, not on the whole, so a client that reads very slowly can hold a
 worker longer than the timeout. A request refused before its body is read
-(too large, wrong host) is answered and closed without reading the rest,
-which some clients report as a reset instead of showing the answer.
+(too large, wrong host) is answered, and then up to 64 KiB of what the
+client is still sending is read and discarded for at most a quarter of
+a second before the close, so that the answer is not lost to a reset
+(it was, on macOS, until this was added). A client that sends more than
+that after being refused may still see a reset instead of the answer.
+The same wait, at most 50 ms, is spent on a client that has its answer
+and does not close.
 Connections that send nothing hold a worker until
 the timeout; with every worker and the queue held, new connections are
 told `busy` until some time out.
