@@ -462,3 +462,39 @@ fn delivery_is_bounded_and_repeats_are_not_delivered_twice() {
     assert!(matches!(small.handle(message(2).0)[0], Message::Ack { .. }));
     assert_eq!(code(&small.handle(message(3).0)), ErrorCode::Busy);
 }
+
+/// A compressed container can hold thousands of times its size in ids. A
+/// peer must refuse one that declares more tokens than its unit limit on
+/// the header alone, before it decompresses anything: here two kilobytes
+/// would otherwise cost eight megabytes, and the same shape scales to
+/// gigabytes inside one frame.
+#[test]
+fn a_container_is_refused_on_its_declared_size_before_it_is_inflated() {
+    let vocabulary = train("test:protocol:inflate", &CYCLE);
+    let mut receiver = ready_peer(Policy { max_decoded_units: 1000, ..Policy::default() });
+    let digest = receiver.add_vocabulary(vocabulary.clone()).unwrap();
+    let mut sender = Peer::new("a", Engine::new(), Policy::default());
+    sender.add_vocabulary(vocabulary).unwrap();
+    let (Message::EncodedMessage { container, .. }, _) = sender.encode_message(1, &digest, &events(&CYCLE), UnknownPolicy::Strict).unwrap() else {
+        panic!("expected an encoded message");
+    };
+    let mut sequence = kute::TokenSequence::from_bytes(&container).unwrap();
+    sequence.ids = vec![sequence.ids[0]; 2_000_000];
+    let bomb = sequence.to_bytes_compressed().unwrap();
+    assert!(bomb.len() < 4096, "{} bytes", bomb.len());
+
+    // The reader itself: refused by the count in the header.
+    let refused = kute::TokenSequence::from_bytes_bounded(&bomb, 1000).unwrap_err();
+    assert!(matches!(refused, KuteError::LimitExceeded(_)), "{refused}");
+    assert!(refused.to_string().contains("declares 2000000 tokens"), "{refused}");
+    assert_eq!(kute::TokenSequence::from_bytes_bounded(&bomb, 2_000_000).unwrap().ids.len(), 2_000_000);
+
+    // The peer, for a message and for a translation request.
+    for request in [Message::EncodedMessage { id: 9, container: bomb.clone() }, Message::Translate { id: 9, container: bomb.clone(), to_digest: digest.clone() }] {
+        match &receiver.handle(request)[0] {
+            Message::Error { code: ErrorCode::TooLarge, message } => assert!(message.contains("declares 2000000 tokens"), "{message}"),
+            other => panic!("expected TOO_LARGE on the declared size, got {other:?}"),
+        }
+    }
+    assert!(receiver.take_inbox().is_empty());
+}

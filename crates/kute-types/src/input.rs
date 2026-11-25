@@ -218,7 +218,19 @@ impl TokenSequence {
 
     /// Parse a `.kute` container of either format. Rejects truncated,
     /// oversized or trailing data.
+    ///
+    /// A compressed container can hold about four thousand times its own
+    /// size in ids. For a container from a party you do not trust, use
+    /// [`TokenSequence::from_bytes_bounded`].
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        Self::from_bytes_bounded(bytes, u64::MAX)
+    }
+
+    /// As [`TokenSequence::from_bytes`], but a container that declares more
+    /// than `max_tokens` tokens is refused before any id is read or
+    /// decompressed, so the caller decides how much memory a container may
+    /// claim.
+    pub fn from_bytes_bounded(bytes: &[u8], max_tokens: u64) -> Result<Self> {
         let bad = |why: &str| KuteError::InvalidInput(format!("not a valid .kute token sequence: {why}"));
         if bytes.len() < MAGIC.len() + 4 {
             return Err(bad("missing KUTE magic"));
@@ -237,6 +249,9 @@ impl TokenSequence {
         let header_end = pos.checked_add(header_len).filter(|&e| e <= bytes.len()).ok_or_else(|| bad("truncated header"))?;
         let header: ContainerHeader = serde_json::from_slice(&bytes[pos..header_end]).map_err(|e| bad(&format!("header: {e}")))?;
         pos = header_end;
+        if header.count > max_tokens {
+            return Err(KuteError::LimitExceeded(format!("the container declares {} tokens; the limit is {max_tokens}", header.count)));
+        }
         if header.escapes.len() > MAX_ESCAPES || header.escapes.iter().any(|s| s.is_empty() || s.len() > crate::vocab::MAX_SYMBOL_BYTES) {
             return Err(bad("escape table too large, or an escaped symbol is empty or oversized"));
         }

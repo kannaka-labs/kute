@@ -403,6 +403,96 @@ mod tests {
         }
     }
 
+    /// The same comparison with a token length limit, the way the trainers
+    /// call it: `allow` refuses a pair whose token would be too long, and a
+    /// refused pair stays refused while its neighbours go on merging.
+    #[test]
+    fn training_with_a_length_limit_matches_reference() {
+        let mut state = 0x853c49e6748fea9bu64;
+        let mut rand = move |m: u32| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state % m as u64) as u32
+        };
+        let mut refused_somewhere = 0;
+        for round in 0..2000 {
+            let alphabet = 1 + rand(4);
+            let n = 1 + rand(16) as usize;
+            let mut words: Vec<Vec<u32>> = (0..n).map(|_| (0..rand(40)).map(|_| rand(alphabet)).collect()).collect();
+            // The same word more than once, as separate entries.
+            if n > 1 && rand(3) == 0 {
+                words[n - 1] = words[0].clone();
+            }
+            let counts: Vec<u64> = (0..n).map(|_| rand(4) as u64).collect();
+            let min_frequency = 1 + rand(3) as i64;
+            let max = 1 + rand(80);
+            let limit = 2 + rand(6) as usize;
+
+            let mut lengths = vec![1usize; alphabet as usize];
+            let fast = train_merges(words.clone(), &counts, alphabet, max, min_frequency as u64, |l, r| {
+                let len = lengths[l as usize] + lengths[r as usize];
+                if len > limit {
+                    return false;
+                }
+                lengths.push(len);
+                true
+            });
+
+            // Textbook: recount everything, take the best pair not refused.
+            let mut lengths = vec![1usize; alphabet as usize];
+            let mut banned: std::collections::BTreeSet<Pair> = Default::default();
+            let mut slow: Vec<LearnedMerge> = Vec::new();
+            'steps: while (slow.len() as u32) < max {
+                let mut pair_counts: std::collections::BTreeMap<Pair, i64> = Default::default();
+                for (w, &c) in words.iter().zip(&counts) {
+                    for p in w.windows(2) {
+                        *pair_counts.entry((p[0], p[1])).or_insert(0) += c as i64;
+                    }
+                }
+                let mut order: Vec<(i64, Reverse<Pair>)> = pair_counts.iter().filter(|(_, &c)| c > 0).map(|(&p, &c)| (c, Reverse(p))).collect();
+                order.sort_unstable_by(|a, b| b.cmp(a));
+                let mut chosen = None;
+                for (count, Reverse(pair)) in order {
+                    if banned.contains(&pair) {
+                        continue;
+                    }
+                    if count < min_frequency {
+                        break 'steps;
+                    }
+                    let len = lengths[pair.0 as usize] + lengths[pair.1 as usize];
+                    if len > limit {
+                        banned.insert(pair);
+                        refused_somewhere += 1;
+                        continue;
+                    }
+                    lengths.push(len);
+                    chosen = Some((pair, count));
+                    break;
+                }
+                let Some((pair, count)) = chosen else { break };
+                let id = alphabet + slow.len() as u32;
+                slow.push(LearnedMerge { left: pair.0, right: pair.1, id, count: count as u64 });
+                for w in words.iter_mut() {
+                    let mut out = Vec::with_capacity(w.len());
+                    let mut i = 0;
+                    while i < w.len() {
+                        if i + 1 < w.len() && (w[i], w[i + 1]) == pair {
+                            out.push(id);
+                            i += 2;
+                        } else {
+                            out.push(w[i]);
+                            i += 1;
+                        }
+                    }
+                    *w = out;
+                }
+            }
+            assert_eq!(fast, slow, "round {round}");
+        }
+        assert!(refused_somewhere > 1000, "the limit should refuse pairs often: {refused_somewhere}");
+    }
+
     #[test]
     fn fast_apply_matches_reference() {
         let mut state = 0x9e3779b97f4a7c15u64;
