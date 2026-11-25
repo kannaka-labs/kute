@@ -672,6 +672,30 @@ real processes change in other ways and by other amounts. One vocabulary
 size per table, one evolution step, one run per seed. Nothing here
 measures what an evolved vocabulary is worth to anything downstream.
 
+## Shadow comparison on the drifting data (synthetic, after v0.7.0)
+
+`shadow_drift.py` takes the frozen and evolved vocabularies of the ten
+drifting and ten stationary runs above and puts each evolved vocabulary
+to `kute shadow` as a candidate against its frozen parent, on that run's
+100,000 held-out events, asking for a net improvement of 1% with one
+distribution (report `results/shadow-drift-synthetic.json`).
+
+| data | approved at horizon 1 | 10 | 100 | 1,000 | compressed size, evolved over frozen | tokens, evolved over frozen |
+|---|---:|---:|---:|---:|---|---|
+| drifting | 0 of 10 | 5 | 5 | 5 | 0.927 to 1.156 | 0.699 to 0.846 |
+| stationary | 0 of 10 | 0 | 0 | 0 | 1.000 to 1.001 | 0.997 to 0.999 |
+
+On data that did not change, the evolved vocabulary was never approved.
+On data that drifted, every evolved vocabulary emitted 15% to 30% fewer
+tokens, and half of them still produced larger output and were rejected
+at every horizon. At horizon 1 nothing is approved: a vocabulary file of
+about 1.7 kB costs more than it saves on a single container of about
+20 kB. Token count would have approved all ten.
+
+Synthetic data, and the held-out events of each run are the ones the
+earlier section already reported on, so this adds the decision rule and
+no new evidence about evolution itself.
+
 ## Against Hugging Face `tokenizers` on text (v0.5.0)
 
 `benchmarks/hf_repeat.py` calls both libraries from Python in one process,

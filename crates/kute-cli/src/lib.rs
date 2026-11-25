@@ -5,6 +5,7 @@
 
 pub mod http;
 pub mod live;
+pub mod shadow;
 pub mod mcp;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -154,6 +155,41 @@ enum Command {
         /// Most bytes one decode call gives back.
         #[arg(long, default_value_t = 4_194_304)]
         max_output_bytes: u64,
+    },
+    /// Try a candidate vocabulary beside the one in use, on data neither
+    /// was made from, and decide whether it has earned its place. Encodes
+    /// every input with both; publishes and replaces nothing.
+    Shadow {
+        /// The vocabulary in use.
+        #[arg(long)]
+        parent: PathBuf,
+        /// The vocabulary proposed in its place.
+        #[arg(long)]
+        candidate: PathBuf,
+        /// Held-out inputs, each encoded as one message.
+        #[arg(long, required = true, num_args = 1..)]
+        input: Vec<PathBuf>,
+        /// What to do with a symbol a vocabulary lacks: `escape` or `strict`.
+        #[arg(long, default_value = "escape")]
+        unknown: String,
+        /// Least net saving to approve, as a share of the parent's bytes.
+        #[arg(long, default_value_t = 0.01)]
+        min_improvement: f64,
+        /// Traffic the candidate will carry, as a multiple of the inputs.
+        #[arg(long, default_value_t = 1.0)]
+        horizon: f64,
+        /// Times the candidate vocabulary file has to be sent.
+        #[arg(long, default_value_t = 1)]
+        distributions: u64,
+        /// Most the candidate may slow encoding, as a ratio.
+        #[arg(long, default_value_t = 2.0)]
+        max_slowdown: f64,
+        /// Timed passes over the inputs; the median is used.
+        #[arg(long, default_value_t = 3)]
+        passes: usize,
+        /// Exit with status 1 when the candidate is rejected.
+        #[arg(long)]
+        fail_on_reject: bool,
     },
     /// Discovery over events as they arrive, by event time, in windows
     /// that forget: JSON Lines in, one report per closed window out.
@@ -1144,6 +1180,14 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             let bounds = kute_discover::live::LiveParams { max_length, max_symbols, max_candidates, max_entities, ..Default::default() };
             let params = kute_discover::watch::WatchParams { live: bounds, pane_ticks: pane, panes, lateness, max_buffered, min_support, min_cohesion_bits, max_patterns };
             live::run(live::Options { input, symbol_field, time_field, group_field, params, checkpoint, checkpoint_every, resume, skip_bad_lines })
+        }
+        Command::Shadow { parent, candidate, input, unknown, min_improvement, horizon, distributions, max_slowdown, passes, fail_on_reject } => {
+            let (report, approved) = shadow::run(&engine, &shadow::Options { parent, candidate, inputs: input, unknown, min_improvement, horizon, distributions, max_slowdown, passes })?;
+            print(&report)?;
+            if fail_on_reject && !approved {
+                return Err(KuteError::Backend("the candidate was rejected".into()));
+            }
+            Ok(())
         }
         Command::Events { action } => match action {
             EventsAction::Pack { input, output, symbol_field, time_field, group_field, codec } => {

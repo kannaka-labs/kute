@@ -732,6 +732,32 @@ backpressure. Reports are delivered at least once across a restart.
 NATS and MQTT adapters, which the specification lists as optional, are
 not built. Durations of patterns and gapped pairs remain offline only.
 
+## ADR-0040: A candidate vocabulary is judged in shadow, on net bytes, and nothing is approved automatically
+
+Measurements on HDFS and on synthetic drifting data showed that an
+evolved vocabulary can emit fewer tokens and larger output. `kute shadow`
+(specification D1) encodes held-out inputs with the vocabulary in use
+and with a candidate and gives a decision with its evidence;
+`docs/shadow.md` describes the terms.
+
+The quantity judged is net bytes: compressed containers, scaled by the
+traffic the candidate is expected to carry, less the cost of sending
+the candidate's file. Token count is reported and not judged, because
+it is not what is stored or sent. The horizon and the number of
+distributions are the caller's to state; the command cannot know them,
+and the default (the inputs once, one distribution) is deliberately
+unfavourable to the candidate.
+
+The command decides and does nothing else. Publishing, monitoring and
+rolling back are existing commands and the properties vocabularies
+already have (immutable, identified by digest, a child never
+invalidating its parent), written down as a procedure rather than built
+as a controller. An automatic loop would need a policy for who may
+approve, which belongs with the permission model that does not exist
+yet.
+
+Memory, task quality and predictive utility are not measured.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
