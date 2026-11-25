@@ -426,6 +426,33 @@ the way through it. Not covered: numbers are still held as doubles or
 64-bit integers, so there is no exact decimal type, and `-0` is kept as a
 negative zero as before.
 
+## ADR-0030: The runtime's vocabulary is sealed where it is loaded
+
+A `Vocabulary` value is plain data with public fields, and its `digest()`
+returns the digest that was recorded. Code can change a field afterwards
+and the value will go on reporting the old digest. Making the fields
+private would break every caller that builds or inspects vocabularies, so
+the value stays open and the boundary is put where it matters: a tokenizer.
+
+`Registry::tokenizer_for`, which `Engine::tokenizer` and every binding go
+through, now checks after the algorithm's own `load` that the vocabulary
+the tokenizer holds carries a digest and that the digest is the hash of
+its content. A tokenizer hands out only shared references to what it
+holds, so from then on the two cannot part. The five built-in algorithms
+already refused a changed vocabulary; the check makes that a property of
+the runtime instead of each algorithm, plug-ins included.
+
+What this costs: one more hash of the vocabulary per load, about 17 ms for
+32,768 tokens on the development laptop (191 ms against 174 ms for a whole
+`kute encode` of a short file). It is paid once per tokenizer, not per
+message. In Python a `Vocabulary` object is frozen and compiles its
+tokenizer on first use, so one object is a persistent session.
+
+What it does not do: an unsealed `Vocabulary` passed around as a value is
+still only as trustworthy as the code that made it, and `digest()` on it
+is a record, not a proof. Code that receives one from outside should call
+`validate()` or load it.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

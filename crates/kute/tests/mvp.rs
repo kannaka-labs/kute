@@ -793,3 +793,103 @@ fn every_evolved_sequence_is_one_token_over_many_parents() {
         }
     }
 }
+
+/// AC-706/A1: whatever is done to a `Vocabulary` value, a tokenizer either
+/// refuses it or reports the digest of the content it encodes with.
+#[test]
+fn a_loaded_vocabulary_always_reports_the_digest_of_its_content() {
+    let engine = Engine::new();
+    let events = AdapterConfig::default();
+    let log = "{\"event\":\"A\"}
+{\"event\":\"B\"}
+{\"event\":\"A\"}
+{\"event\":\"B\"}
+".repeat(6);
+    let cases: Vec<(&str, &str, Vec<u8>, u32)> = vec![
+        ("bpe", "text", TEXT.repeat(3).into_bytes(), 300),
+        ("bytes", "binary", TEXT.as_bytes().to_vec(), 256),
+        ("char", "text", TEXT.as_bytes().to_vec(), 300),
+        ("dictionary", "jsonl-events", log.clone().into_bytes(), 16),
+        ("sequence-bpe", "jsonl-events", log.into_bytes(), 16),
+    ];
+    for (algorithm, adapter, data, size) in cases {
+        let vocab = engine.train(algorithm, adapter, &events, &[data], &config(&format!("test:seal:{algorithm}"), size)).unwrap();
+        let recorded = vocab.digest().unwrap();
+        assert_eq!(recorded, vocab.compute_digest().unwrap(), "{algorithm}");
+
+        // Loaded as trained: the tokenizer reports that digest.
+        let t = engine.tokenizer(vocab.clone()).unwrap();
+        assert_eq!(t.vocabulary().unwrap().digest().unwrap(), recorded, "{algorithm}");
+
+        // Changed after sealing, digest left in place: refused, whichever field.
+        let mut changes: Vec<(&str, Vocabulary)> = Vec::new();
+        let mut v = vocab.clone();
+        v.manifest.generator = "someone else".into();
+        changes.push(("generator", v));
+        let mut v = vocab.clone();
+        v.statistics.insert("made_up".into(), 1);
+        changes.push(("statistics", v));
+        let mut v = vocab.clone();
+        v.tokens.last_mut().unwrap().frequency = Some(123_456_789);
+        changes.push(("token frequency", v));
+        let mut v = vocab.clone();
+        v.provenance.corpus_fingerprints.push("sha256:00".into());
+        changes.push(("provenance", v));
+        for (what, changed) in changes {
+            assert_eq!(changed.digest().unwrap(), recorded, "{algorithm} {what}: the value still reports the old digest");
+            let err = engine.tokenizer(changed.clone()).err().unwrap_or_else(|| panic!("{algorithm}: a changed {what} was loaded"));
+            assert!(matches!(err, kute::KuteError::Integrity(_)), "{algorithm} {what}: {err}");
+
+            // The same change with the digest removed is a different
+            // vocabulary: it loads, under its own digest.
+            let mut unsealed = changed;
+            unsealed.integrity = None;
+            let t = engine.tokenizer(unsealed.clone()).unwrap();
+            let held = t.vocabulary().unwrap();
+            assert_eq!(held.digest().unwrap(), unsealed.compute_digest().unwrap(), "{algorithm} {what}");
+            assert_ne!(held.digest().unwrap(), recorded, "{algorithm} {what}");
+        }
+    }
+}
+
+/// The check is the registry's, so an algorithm whose `load` validates
+/// nothing still cannot run under a digest that is not its content's.
+#[test]
+fn the_registry_checks_identity_even_when_an_algorithm_does_not() {
+    use kute::{CanonicalInput, CorpusSource, TokenSequence, TokenizerCapabilities};
+    #[derive(Default)]
+    struct Careless(Option<Vocabulary>);
+    impl Tokenizer for Careless {
+        fn train(&mut self, _: &mut dyn CorpusSource, _: &TrainingConfig) -> kute::Result<Vocabulary> {
+            unimplemented!()
+        }
+        fn load(&mut self, vocabulary: Vocabulary) -> kute::Result<()> {
+            self.0 = Some(vocabulary);
+            Ok(())
+        }
+        fn encode(&self, _: &CanonicalInput) -> kute::Result<TokenSequence> {
+            unimplemented!()
+        }
+        fn decode(&self, _: &TokenSequence) -> kute::Result<CanonicalInput> {
+            unimplemented!()
+        }
+        fn vocabulary(&self) -> Option<&Vocabulary> {
+            self.0.as_ref()
+        }
+        fn capabilities(&self) -> TokenizerCapabilities {
+            unimplemented!()
+        }
+    }
+    let mut engine = Engine::new();
+    engine.registry_mut().register_algorithm("careless", || Box::new(Careless::default())).unwrap();
+    let mut vocab = text_vocab(&engine);
+    vocab.manifest.algorithm = "careless".into();
+    // stale digest: refused
+    assert!(matches!(engine.tokenizer(vocab.clone()).err().unwrap(), kute::KuteError::Integrity(_)));
+    // no digest, and the algorithm did not record one: refused
+    vocab.integrity = None;
+    assert!(matches!(engine.tokenizer(vocab.clone()).err().unwrap(), kute::KuteError::Integrity(_)));
+    // sealed over its real content: accepted
+    vocab.seal().unwrap();
+    assert!(engine.tokenizer(vocab).is_ok());
+}

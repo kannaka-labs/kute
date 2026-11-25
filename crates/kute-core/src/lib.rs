@@ -212,9 +212,27 @@ impl Registry {
     }
 
     /// A tokenizer with `vocabulary` installed, chosen by the manifest.
+    /// A tokenizer with `vocabulary` installed.
+    ///
+    /// This is the sealed boundary of the runtime. A `Vocabulary` value is
+    /// plain data with public fields, and its `digest()` reports what was
+    /// recorded; code may have changed the content since. What a tokenizer
+    /// returned from here holds cannot be changed (it hands out only shared
+    /// references), and it is checked here, whatever the algorithm's own
+    /// `load` did: it carries a digest, and that digest is the hash of its
+    /// content. So `tokenizer.vocabulary().digest()` always names the
+    /// vocabulary that is doing the encoding.
     pub fn tokenizer_for(&self, vocabulary: Vocabulary) -> Result<Box<dyn Tokenizer>> {
         let mut t = self.tokenizer(&vocabulary.manifest.algorithm)?;
         t.load(vocabulary)?;
+        let held = t.vocabulary().ok_or_else(|| KuteError::InvalidVocabulary("the tokenizer holds no vocabulary after loading one".into()))?;
+        let Some(integrity) = &held.integrity else {
+            return Err(KuteError::Integrity("the tokenizer loaded a vocabulary without recording its digest".into()));
+        };
+        let actual = held.compute_digest()?;
+        if actual != integrity.digest {
+            return Err(KuteError::Integrity(format!("recorded digest {} does not match content digest {actual}", integrity.digest)));
+        }
         Ok(t)
     }
 

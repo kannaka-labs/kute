@@ -167,3 +167,35 @@ def test_discover_finds_a_planted_pattern():
     records = [["START", "HEAT", "HOLD", "DONE"] + [f"noise{i % 7}"] for i in range(40)]
     found = kute.discover(records, min_support=10)
     assert any(p["symbols"] == ["START", "HEAT", "HOLD", "DONE"] for p in found["patterns"]), found["patterns"][:3]
+
+
+def test_one_vocabulary_object_is_a_persistent_session(engine, vocab, tmp_path):
+    """A Vocabulary compiles its tokenizer once and cannot be changed, so many
+    short messages through one object give what a fresh load gives for each."""
+    path = tmp_path / "session.kvf"
+    vocab.save(path)
+    messages = ["", "a", "The engine reads the event log.", "unseen: zyzzyva", "混合 text 🙂", "tabs\tand\r\nlines"] * 20
+
+    persistent = [engine.encode(m, vocabulary=vocab) for m in messages]
+    reloaded = [Engine().encode(m, vocabulary=Vocabulary.load(path)) for m in messages]
+    assert persistent == reloaded
+    assert engine.encode_batch(messages, vocabulary=vocab) == persistent
+    assert [engine.decode(t, vocabulary=vocab) for t in persistent] == messages
+    assert Vocabulary.load(path).digest == vocab.digest
+
+    # Nothing about the object can be reassigned, so its digest keeps naming
+    # the vocabulary that encodes.
+    for name in ["digest", "id", "version", "algorithm"]:
+        with pytest.raises(AttributeError):
+            setattr(vocab, name, "changed")
+    assert Vocabulary.load(path).digest == vocab.digest
+
+
+def test_a_changed_vocabulary_file_is_refused(vocab, tmp_path):
+    path = tmp_path / "v.kvf"
+    vocab.save(path)
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["manifest"]["generator"] = "someone else"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    with pytest.raises(ValueError, match="digest"):
+        Vocabulary.load(path)
