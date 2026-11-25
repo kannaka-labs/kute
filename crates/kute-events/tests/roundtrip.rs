@@ -155,3 +155,98 @@ fn the_limit_is_checked_before_anything_is_inflated() {
     forged.extend_from_slice(&container[start..]);
     assert!(unpack(&forged, 1000).is_err());
 }
+
+/// A container written by hand, with whatever the columns say.
+fn forged(events: u64, canonical: &[u8], columns: &[(&str, Kind, &[u8])]) -> Vec<u8> {
+    use std::io::Write;
+    let mut body = Vec::new();
+    let mut described = Vec::new();
+    for (name, kind, raw) in columns {
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        encoder.write_all(raw).unwrap();
+        let stored = encoder.finish().unwrap();
+        described.push(kute_events::Column { name: name.to_string(), kind: *kind, raw: raw.len() as u64, stored: stored.len() as u64 });
+        body.extend(stored);
+    }
+    let header = kute_events::Header {
+        format: 1,
+        layout: Layout { symbol_field: "s".into(), time_field: None, group_field: Some("g".into()) },
+        events,
+        canonical_bytes: canonical.len() as u64,
+        sha256: kute_types::sha256_tagged(canonical),
+        byte_exact: true,
+        time_order: None,
+        columns: described,
+    };
+    let header = serde_json::to_vec(&header).unwrap();
+    let mut out = kute_events::MAGIC.to_vec();
+    out.extend((header.len() as u32).to_le_bytes());
+    out.extend(header);
+    out.extend(body);
+    out
+}
+
+/// What a container's tables may cost is bounded by its events, and a
+/// shape is what `pack` would have written. A container made by hand that
+/// breaks either is refused: it does not take memory far beyond its size,
+/// and it does not stop the program.
+#[test]
+fn a_forged_container_cannot_cost_more_than_its_events_or_stop_the_program() {
+    let record = b"{\"g\":1,\"s\":\"A\"}\n";
+    let honest: [(&str, Kind, &[u8]); 6] = [
+        ("@names", Kind::Json, b"\"A\""),
+        ("@shapes", Kind::Json, b"[\"g\",\"s\"]"),
+        ("@shape", Kind::Varint, &[0]),
+        ("@entities", Kind::Json, b"1"),
+        ("@entity", Kind::Varint, &[0]),
+        ("@symbols", Kind::Varint, &[0]),
+    ];
+    assert_eq!(unpack(&forged(1, record, &honest), 1 << 20).unwrap(), record, "the hand-made container is a real one");
+
+    let refused = |what: &str, column: usize, raw: &[u8]| {
+        let mut columns: Vec<(&str, Kind, &[u8])> = honest.to_vec();
+        columns[column].2 = raw;
+        let error = unpack(&forged(1, record, &columns), 1 << 20).expect_err(what).to_string();
+        assert!(error.contains("event container"), "{what}: {error}");
+    };
+    // The event name twice in one record: each use takes the next name of
+    // the entity, and the second ran past the end of the column.
+    refused("the name field twice in a shape", 1, b"[\"g\",\"s\",\"s\"]");
+    refused("a shape out of order", 1, b"[\"s\",\"g\"]");
+    // Tables of nothing but line breaks: sixteen bytes of table and more
+    // for every byte of column, from a column that compresses a thousandfold.
+    let breaks = vec![b'\n'; 1 << 20];
+    refused("names nobody uses", 0, &breaks);
+    refused("entities nobody belongs to", 3, &breaks);
+    refused("shapes nobody has", 1, &breaks);
+    // One shape naming far more fields than a container may have.
+    let many = format!("[{}]", (0..10_000).map(|i| format!("\"k{i:05}\"")).collect::<Vec<_>>().join(","));
+    refused("a shape of ten thousand fields", 1, many.as_bytes());
+    // More names than the declared bytes could hold, within the count of events.
+    let wide = format!("[{}]", (0..100).map(|i| format!("\"k{i:03}\"")).collect::<Vec<_>>().join(","));
+    refused("a shape wider than the record", 1, wide.as_bytes());
+}
+
+/// Bytes that no record uses are not carried along unseen.
+#[test]
+fn a_container_with_something_left_over_is_refused() {
+    let source = b"{\"g\":1,\"n\":5,\"s\":\"A\"}\n{\"g\":1,\"n\":6,\"s\":\"B\"}\n";
+    let (container, packed) = pack(source, &Layout { symbol_field: "s".into(), time_field: None, group_field: Some("g".into()) }).unwrap();
+    assert_eq!(unpack(&container, 1 << 20).unwrap(), source);
+
+    // Bytes slipped in after one column's compressed data.
+    let (mut header, start) = header(&container).unwrap();
+    let first = header.columns[0].stored as usize;
+    header.columns[0].stored += 3;
+    let text = serde_json::to_vec(&header).unwrap();
+    let old_header = container.len() - packed.header.columns.iter().map(|c| c.stored as usize).sum::<usize>();
+    assert_eq!(old_header, start);
+    let mut changed = kute_events::MAGIC.to_vec();
+    changed.extend((text.len() as u32).to_le_bytes());
+    changed.extend(text);
+    changed.extend(&container[start..start + first]);
+    changed.extend(b"xyz");
+    changed.extend(&container[start + first..]);
+    let error = unpack(&changed, 1 << 20).unwrap_err().to_string();
+    assert!(error.contains("after its compressed data"), "{error}");
+}

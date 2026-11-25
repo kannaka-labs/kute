@@ -90,6 +90,14 @@ needed to read one.
   before any column is inflated; the columns together are refused past
   twice that plus 1 MiB, by their declared sizes, and each is inflated
   only to its declared size.
+* A table (names, entities, shapes) with more entries than the container
+  has events is refused before it is read into memory, and so is a shape
+  that names a field twice or more fields than the result could hold.
+  What unpacking keeps for each event is some tens of bytes, so for a
+  container of very short records memory can reach several times
+  `--max-bytes`; for records of a hundred bytes or more it stays under it.
+* Bytes that no record uses (after a column's compressed data, or values
+  left in a column) make a container invalid.
 * A container cannot be read from the middle or searched without
   unpacking it.
 * The event names in a container are not tokenized with a vocabulary,

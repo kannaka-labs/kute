@@ -449,6 +449,33 @@ fn sorted(value: &Value) -> Value {
     }
 }
 
+/// The field names of one shape, refused past [`MAX_COLUMNS`] while they
+/// are being read and not after.
+struct ShapeKeys(Vec<String>);
+
+impl<'de> Deserialize<'de> for ShapeKeys {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        struct Keys;
+        impl<'de> serde::de::Visitor<'de> for Keys {
+            type Value = ShapeKeys;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "a list of at most {MAX_COLUMNS} field names")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> std::result::Result<ShapeKeys, A::Error> {
+                let mut names = Vec::new();
+                while let Some(name) = seq.next_element::<String>()? {
+                    if names.len() >= MAX_COLUMNS {
+                        return Err(serde::de::Error::custom("more field names than a container may have"));
+                    }
+                    names.push(name);
+                }
+                Ok(ShapeKeys(names))
+            }
+        }
+        deserializer.deserialize_seq(Keys)
+    }
+}
+
 /// Read the header of a container without reading its columns.
 pub fn header(container: &[u8]) -> Result<(Header, usize)> {
     if container.len() < MAGIC.len() + 4 || &container[..MAGIC.len()] != MAGIC {
@@ -472,10 +499,15 @@ pub fn header(container: &[u8]) -> Result<(Header, usize)> {
 /// Unpack a container into canonical JSON Lines, refusing before any
 /// column is inflated if the result would be longer than `max_bytes`.
 ///
-/// Memory while unpacking is bounded by `max_bytes` for the result plus
-/// the columns, and the columns together are refused past twice
-/// `max_bytes` plus 1 MiB. The result is checked against the length and
-/// the SHA-256 in the header.
+/// Memory while unpacking: the result, at most `max_bytes`; the columns,
+/// refused together past twice `max_bytes` plus 1 MiB; and what is kept
+/// for each event to find its name, entity and shape, which is some tens
+/// of bytes an event. A header may declare one event for every ten bytes
+/// of result, so the worst case is several times `max_bytes`; for records
+/// of a hundred bytes or more it is less than `max_bytes`. Tables are
+/// refused when they have more entries than there are events, and shapes
+/// when they name more fields than the result could hold. The result is
+/// checked against the length and the SHA-256 in the header.
 pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
     let (header, mut at) = header(container)?;
     if header.canonical_bytes > max_bytes {
@@ -494,9 +526,13 @@ pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
     for column in &header.columns {
         let stored = usize::try_from(column.stored).ok().filter(|&n| n <= container.len() - at).ok_or_else(|| damaged(format!("column {} runs past the end", column.name)))?;
         let mut bytes = Vec::new();
-        ZlibDecoder::new(&container[at..at + stored]).take(column.raw + 1).read_to_end(&mut bytes).map_err(|e| damaged(format!("column {}: {e}", column.name)))?;
+        let mut decoder = ZlibDecoder::new(&container[at..at + stored]);
+        decoder.by_ref().take(column.raw.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| damaged(format!("column {}: {e}", column.name)))?;
         if bytes.len() as u64 != column.raw {
             return Err(damaged(format!("column {} does not inflate to its declared size", column.name)));
+        }
+        if decoder.total_in() != column.stored {
+            return Err(damaged(format!("column {} has bytes after its compressed data", column.name)));
         }
         at += stored;
         if raw.insert(column.name.as_str(), (column.kind, bytes)).is_some() {
@@ -513,11 +549,21 @@ pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
             None => Err(damaged(format!("no column {name}"))),
         }
     };
+    let events = usize::try_from(header.events).map_err(|_| damaged("too many events"))?;
+    // A table has an entry only for something an event used, so it cannot
+    // have more entries than there are events. Counted before the entries
+    // are collected: a column of nothing but line breaks would otherwise
+    // become sixteen bytes of table for each byte of column.
     let table = |name: &str| -> Result<Vec<&[u8]>> {
         let bytes = take(name, Kind::Json)?;
-        Ok(if bytes.is_empty() { Vec::new() } else { bytes.split(|&b| b == b'\n').collect() })
+        if bytes.is_empty() {
+            return Ok(Vec::new());
+        }
+        if bytes.iter().filter(|&&b| b == b'\n').count() >= events {
+            return Err(damaged(format!("column {name} has more entries than there are events")));
+        }
+        Ok(bytes.split(|&b| b == b'\n').collect())
     };
-    let events = usize::try_from(header.events).map_err(|_| damaged("too many events"))?;
     let numbers = |name: &'static str, limit: usize| -> Result<Vec<usize>> {
         let mut reader = Varints { bytes: take(name, Kind::Varint)?, at: 0, column: name };
         let mut out = Vec::with_capacity(events.min(1 << 20));
@@ -531,12 +577,36 @@ pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
 
     let names = table("@names")?;
     let shape_texts = table("@shapes")?;
-    let mut shapes: Vec<Vec<(Vec<u8>, String)>> = Vec::with_capacity(shape_texts.len());
+    // Field names are kept once and shapes refer to them, so what the
+    // shapes cost is counted in field uses, and those are bounded by the
+    // bytes the records must take: a field is at least `"":0` and a comma.
+    let mut keys: Vec<(Vec<u8>, String)> = Vec::new();
+    let mut key_index: HashMap<String, u32> = HashMap::new();
+    let mut shapes: Vec<Vec<u32>> = Vec::with_capacity(shape_texts.len());
+    let mut uses_left = header.canonical_bytes / 5 + 1;
     for text in shape_texts {
-        let keys: Vec<String> = serde_json::from_slice(text).map_err(|e| damaged(format!("a shape is not a list of field names: {e}")))?;
-        let mut shape = Vec::with_capacity(keys.len());
-        for key in keys {
-            shape.push((serde_json::to_vec(&key)?, key));
+        let ShapeKeys(names) = serde_json::from_slice(text).map_err(|e| damaged(format!("a shape is not a list of field names: {e}")))?;
+        // Sorted and without repeats, as `pack` writes them: a field named
+        // twice would be read twice from its column.
+        if names.windows(2).any(|pair| pair[0] >= pair[1]) {
+            return Err(damaged("a shape's field names are not sorted, or one repeats"));
+        }
+        uses_left = uses_left.checked_sub(names.len() as u64).ok_or_else(|| damaged("the shapes name more fields than the declared bytes can hold"))?;
+        let mut shape = Vec::with_capacity(names.len());
+        for name in names {
+            let id = match key_index.get(&name) {
+                Some(&id) => id,
+                None => {
+                    if keys.len() >= MAX_COLUMNS {
+                        return Err(damaged("too many different field names"));
+                    }
+                    let id = keys.len() as u32;
+                    keys.push((serde_json::to_vec(&name)?, name.clone()));
+                    key_index.insert(name, id);
+                    id
+                }
+            };
+            shape.push(id);
         }
         shapes.push(shape);
     }
@@ -600,7 +670,8 @@ pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
     for i in 0..events {
         let entity = if layout.group_field.is_some() { entity_of[i] } else { 0 };
         out.push(b'{');
-        for (k, (key_text, key)) in shapes[shape_of[i]].iter().enumerate() {
+        for (k, &key_id) in shapes[shape_of[i]].iter().enumerate() {
+            let (key_text, key) = &keys[key_id as usize];
             if k > 0 {
                 out.push(b',');
             }
@@ -640,6 +711,19 @@ pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
         out.extend_from_slice(b"}\n");
         if out.len() > capacity {
             return Err(over());
+        }
+    }
+    // Nothing may be left in a column that no record asked for.
+    if let Some(reader) = &time {
+        reader.done()?;
+    }
+    for (field, reader) in &mut readers {
+        let spent = match reader {
+            Reader::Json(values) => values.next().is_none(),
+            Reader::Delta(values, _) => values.done().is_ok(),
+        };
+        if !spent {
+            return Err(damaged(format!("column f:{field} holds more values than the records use")));
         }
     }
     if out.len() != capacity || sha256_tagged(&out) != header.sha256 {
