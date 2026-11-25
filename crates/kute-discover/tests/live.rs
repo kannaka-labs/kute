@@ -195,3 +195,34 @@ fn a_checkpoint_restores_the_same_state() {
         assert!(Live::restore(text.replacen(from, to, 1).as_bytes()).is_err(), "{to} was accepted");
     }
 }
+
+/// A checkpoint whose numbers cannot have come from a stream is refused:
+/// a count above what was offered, more offered than there were events, a
+/// last-seen mark from the future, or an event count no stream reaches.
+/// Accepted, each of these makes the next event or report overflow.
+#[test]
+fn a_checkpoint_with_impossible_counts_is_refused() {
+    let mut live = Live::new(LiveParams { max_length: 3, ..LiveParams::default() }).unwrap();
+    for i in 0..40 {
+        live.observe("device", CYCLE[i % 4]);
+    }
+    let saved = live.checkpoint().unwrap();
+    assert!(Live::restore(&saved).is_ok());
+    let honest: serde_json::Value = serde_json::from_slice(&saved).unwrap();
+    type Damage = Box<dyn Fn(&mut serde_json::Value)>;
+    let damage: [(&str, Damage); 6] = [
+        ("a count above what was offered", Box::new(|v| v["tables"][1]["counts"][0][1] = serde_json::json!(u64::MAX))),
+        ("more offered than events", Box::new(|v| v["tables"][0]["offered"] = serde_json::json!(41))),
+        ("more decrements than the offers allow", Box::new(|v| v["tables"][0]["decrements"] = serde_json::json!(40))),
+        ("an entity seen after the last event", Box::new(|v| v["entities"][0][2] = serde_json::json!(41))),
+        ("more folded than events", Box::new(|v| v["folded"] = serde_json::json!(41))),
+        ("an event count no stream reaches", Box::new(|v| v["events"] = serde_json::json!(u64::MAX))),
+    ];
+    for (what, change) in damage {
+        let mut bad = honest.clone();
+        change(&mut bad);
+        let bytes = serde_json::to_vec(&bad).unwrap();
+        assert_ne!(bytes, saved, "{what}: the change did not apply");
+        assert!(Live::restore(&bytes).is_err(), "{what} was accepted");
+    }
+}
