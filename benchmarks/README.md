@@ -433,6 +433,55 @@ and its late half looks much like its early half, so this says nothing about
 data that drifts. Delta encoding, which the directive lists for this row, has
 nothing to work on here: the events are names without values.
 
+## The same matrix on data that drifts (synthetic)
+
+The HDFS run could not say what a frozen vocabulary costs when the data
+changes, because that data does not change. `benchmarks/evolution_drift.py`
+makes data that does. **It is synthetic**, generated from a seed: events
+come in fixed procedures of three to seven event names, with noise between
+them; halfway through the training events the set of procedures changes
+(12 of 25 kept, 18 new ones, 15 new event names), and the held-out events
+come from after the change. The control is the same generator with no
+change. `evolution_matrix.py` is run unchanged on each, for ten seeds;
+100,000 held-out events per run. Every row decoded to its input.
+
+Frozen vocabulary of 160 tokens, means over ten seeds with the least and
+greatest in brackets, relative to the frozen vocabulary of the same run
+(report `results/evolution-drift-synthetic-160.json`):
+
+| vocabulary | tokens in vocabulary | drifting: tokens out | drifting: bytes | no drift: tokens out | no drift: bytes |
+|---|---:|---:|---:|---:|---:|
+| frozen on the early half | 160 | 1 | 1 | 1 | 1 |
+| evolved: frozen plus up to 32 discovered patterns | 224 / 196 | 0.77 (0.70 to 0.85) | 0.94 (0.92 to 0.97) | 1.00 | 1.00 |
+| retrained on everything, size of frozen | 160 | 0.81 (0.76 to 0.85) | 0.94 (0.93 to 0.96) | 1.00 | 1.00 |
+| retrained on everything, size of evolved | 224 / 196 | 0.56 (0.52 to 0.63) | 0.85 (0.84 to 0.88) | 0.92 | 0.99 |
+| dictionary, one token per event name | 55 / 40 | 2.47 | 1.21 | 5.34 | 1.49 |
+
+What this shows, on this generator:
+
+- With drift, the frozen vocabulary met event names it had never seen (15
+  per run, carried by escape) and cost 6% more bytes and about a quarter
+  more tokens than either remedy.
+- Evolving it, without changing any existing token id, did about as well
+  as retraining at the frozen size: 23% fewer tokens and 6% fewer bytes
+  than frozen. Retraining at the size the evolved vocabulary reached was
+  better still (15% fewer bytes), so evolving is not free: it spends its
+  added tokens less well than training from scratch does.
+- Without drift, evolving and retraining changed nothing, as on HDFS.
+
+**Evolving can make things worse.** At a frozen size of 192 the evolved
+vocabulary reached 246 to 277 tokens (report
+`results/evolution-drift-synthetic.json`). In the five seeds where it
+passed 256, a token id no longer fit one byte and the evolved vocabulary
+cost up to 16% more bytes than the frozen one, with fewer tokens; over the
+ten seeds it averaged 4% more bytes (0.93 to 1.16) and 23% fewer tokens.
+`kute evolve` does not warn when a step crosses that line.
+
+Limits: synthetic data from one generator, whose drift is a clean switch;
+real processes change in other ways and by other amounts. One vocabulary
+size per table, one evolution step, one run per seed. Nothing here
+measures what an evolved vocabulary is worth to anything downstream.
+
 ## Against Hugging Face `tokenizers` on text (v0.5.0)
 
 `benchmarks/hf_repeat.py` calls both libraries from Python in one process,
