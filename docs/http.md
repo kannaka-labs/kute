@@ -82,8 +82,10 @@ The other side is `kute fetch`:
 if it is the digest asked for and the vocabulary passes its own test
 vectors; with `--trusted-key`, only if one of those keys signed it, as
 `kute verify` checks. It needs a stated `Content-Length`, takes at most
-`--max-bytes` (256 MiB unless told), and gives the whole exchange
-`--timeout` seconds (60). `--list` prints what the registry says it
+`--max-bytes` (64 MiB unless told; 256 MiB in 0.9.0), and gives the
+whole exchange `--timeout` seconds (60), looking the name up included
+(since 0.9.1). The whole file is held and read before its digest is
+known, so `--max-bytes` is what a registry can make the client hold. `--list` prints what the registry says it
 holds and checks nothing.
 
 What this is and is not:
@@ -94,6 +96,14 @@ What this is and is not:
   and that is all the protection there is: the connection is plain
   HTTP, so both can see what was asked for and what was sent, and can
   refuse or stall. `https://` addresses are refused, not built.
+* The file is written with whatever signatures arrived in it. A
+  signature is outside what the digest covers, so a registry can add
+  one, and a file with the right digest can carry a signature nobody
+  made honestly. With `--trusted-key` one signature from a key you
+  trust has been checked; without it none has, and the report says how
+  many the file carries and that they are claims until `kute verify` is
+  run. They are kept and not removed because a signature you did not
+  check today is the one you may check tomorrow.
 * The digest has to come from somewhere you trust. The listing is the
   registry's own account. A digest read from the listing and fetched
   without `--trusted-key` proves only that the registry sent what it
@@ -103,9 +113,88 @@ What this is and is not:
   means what that option says: no TLS and no authentication, and anyone
   who can reach it can take every file it holds. Use `--registry-only`
   there.
-* No uploads, no accounts, no search, no federation between registries,
-  no expiry or revocation. The registry holds the files named when it
-  started and no others.
+* No uploads, no accounts, no search, no expiry or revocation. The
+  registry holds the files named when it started and, if it was given
+  upstreams, copies of what it has fetched from them (below).
+
+### Registries that ask other registries (0.9.1)
+
+A registry can be told of others, and a client can be told of several.
+
+    kute serve --registry-only --vocab ours.kvf \
+               --upstream http://10.0.0.5:8787 --upstream http://10.0.0.6:8787
+    kute fetch --from http://a:8787 --from http://b:8787 \
+               --digest sha256:... --output got.kvf --trusted-key <BASE64>
+
+On the registry: asked for a digest it does not hold, it asks each
+`--upstream` in the order given for that digest, checks what arrives as
+`kute fetch` does (it parses, the digest recomputed from its content is
+the one asked for, its test vectors pass), keeps it in memory and gives
+it. An upstream that fails, stalls or sends something else is passed
+over. With `--upstream-trusted-key`, a file is kept only if one of
+those keys signed it; without, the file is passed on with whatever
+signatures it came with, checked by nobody.
+
+On the client: `--from` may be repeated. The registries are asked in
+order and the first whose answer passes every check, the signature
+included, is used. The report names it under `registry` and lists the
+ones before it under `registries_passed_over`, each with why. If none
+gives the file nothing is written and each one's reason is printed.
+`--timeout` and `--max-bytes` are for each registry, so the longest wait
+is their number times `--timeout`. `--list` with several prints a row
+for each, a registry that cannot be reached being its row.
+
+What bounds it:
+
+* One registry further and no more. A registry asking another sends the
+  header `Kute-Registry-Via`, and a registry that sees it answers from
+  what it holds or has kept, and asks nobody. So registries that name
+  each other, or themselves, cannot pass a question round, and a
+  question cannot be made to travel a chain. Anyone can send that
+  header; all it does is make a registry do less.
+* One question upstream at a time. While a registry is waiting on an
+  upstream, a second caller asking for something it does not hold is
+  told 503 with `Retry-After: 1` and may try again. Files it holds, and the listing,
+  are given without waiting. A caller asking for digests nobody has can
+  therefore delay other callers' upstream fetches, and cannot stop the
+  registry answering for what it has. One worker is occupied for up to
+  the number of upstreams times `--upstream-timeout` (10 s each).
+* A digest every upstream answered 404 for is remembered as absent for
+  60 seconds (the last 1024 of them), and is not asked for again in
+  that time. An upstream that failed is not counted as having said no.
+* An upstream that failed, stalled or sent something that did not pass
+  is left alone for 30 seconds, and questions go straight to the next
+  one. So a slow upstream costs its timeout once in that time, not on
+  every question, and a caller repeating questions cannot use it to
+  keep the registry busy. While it rests, what only it holds is 404.
+* `--upstream-max-bytes` (16 MiB) is the largest file taken, and
+  `--upstream-cache-bytes` (64 MiB) is all that is kept; the oldest
+  files go first. A file too large to keep is still given, and asked
+  for again next time.
+* Only the digest is sent upstream, to the addresses the operator
+  named. A caller cannot make a registry connect anywhere else.
+
+What it does not do:
+
+* It does not make any registry more trusted. An upstream is trusted
+  exactly as a registry is by a client: not for content, and for
+  nothing else either. A file that came through three registries is
+  checked by the client just as one that came from one.
+* A registry without `--upstream-trusted-key` can be given, by an
+  upstream, the right content with its signatures removed or with
+  others added, and it will keep and give that copy until it restarts
+  or the copy is pushed out. A client that requires a signature refuses
+  such a copy and can name another registry. A registry that should
+  only ever pass on signed files needs `--upstream-trusted-key`.
+* The listing does not include what upstreams hold, or what has been
+  fetched from them: it is what the registry was started with, and
+  beside it `upstreams`, the addresses it asks. No registry repeats
+  another's listing, so there is no listing to believe at second hand.
+* Nothing is written to disk, nothing is refreshed, and nothing is
+  announced: a registry learns of a vocabulary only by being asked for
+  its digest. There is no discovery of registries, no mirroring of a
+  whole registry, and no agreement between registries about anything.
+* Upstream connections are plain HTTP, as every other connection here.
 
 ## Errors
 

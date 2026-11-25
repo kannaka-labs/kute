@@ -120,4 +120,7 @@ Reviewed by reading every place a received vocabulary is kept or used;
 no way past the check was found. That is one reader, not a proof.
 
 These are the first two steps of the specification's B8. A read-only
-registry followed (`docs/http.md`). Federation is not built.
+registry followed (`docs/http.md`), and in 0.9.1 registries that ask
+other registries for a digest. Neither changes what a signature means:
+a file is believed because of the key that signed it, not the
+registries it came through.

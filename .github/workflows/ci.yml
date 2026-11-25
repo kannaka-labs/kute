@@ -66,6 +66,24 @@ jobs:
       - name: Check
         run: cargo check --workspace --all-targets --locked
 
+  studio-browser:
+    name: Studio in a browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Drive the page in headless Chrome
+        # The runner's Chrome cannot start its sandbox; the page's own
+        # policy, which is what the test checks, does not depend on it.
+        env:
+          KUTE_STUDIO_BROWSER: require
+          KUTE_STUDIO_BROWSER_NO_SANDBOX: "1"
+        run: cargo test -p kute-cli --test studio_browser --locked -- --nocapture
+
   rustbpe-backend:
     name: rustbpe reference backend
     runs-on: ubuntu-latest

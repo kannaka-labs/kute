@@ -40,7 +40,7 @@ fn failed(what: impl Into<String>) -> KuteError {
 }
 
 /// Host and port, and the path the registry's routes are under.
-fn parse_url(url: &str) -> kute::Result<(String, String)> {
+pub fn parse_url(url: &str) -> kute::Result<(String, String)> {
     let bad = |why: &str| KuteError::InvalidConfig(format!("registry address {url:?}: {why}"));
     if url.starts_with("https://") {
         return Err(bad("https is not built. What is fetched is checked against its digest whatever carried it, but a plain connection shows the network what was asked for and what was sent"));
@@ -62,12 +62,40 @@ fn parse_url(url: &str) -> kute::Result<(String, String)> {
 }
 
 /// One GET. Returns the status and the body, which is at most `max_bytes`.
-fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration) -> kute::Result<(u16, Vec<u8>)> {
+/// Sent by a registry asking another on a caller's behalf. A registry
+/// that sees it answers from what it holds and asks nobody further, so
+/// a question travels one registry beyond the one it was put to and
+/// registries that name each other cannot pass it round.
+pub const VIA_HEADER: &str = "Kute-Registry-Via";
+
+/// Name lookups allowed to be unanswered at once in this process.
+const MAX_LOOKUPS: usize = 16;
+
+fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
     let deadline = Instant::now() + timeout;
     let left = || deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(|| failed("no complete answer in time"));
+    // Looking a name up has no deadline of its own in the standard
+    // library, so it is done on another thread and waited for only as
+    // long as the exchange has. A lookup that outlasts the wait leaves
+    // its thread behind until the resolver of the system gives up. `kute
+    // fetch` ends soon after; a registry asking upstream runs for hours,
+    // so the number left behind at once is capped.
+    static LOOKUPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    use std::sync::atomic::Ordering::SeqCst;
+    if LOOKUPS.fetch_add(1, SeqCst) >= MAX_LOOKUPS {
+        LOOKUPS.fetch_sub(1, SeqCst);
+        return Err(failed(format!("{authority} was not looked up: {MAX_LOOKUPS} earlier lookups are still unanswered")));
+    }
+    let (found, lookup) = std::sync::mpsc::channel();
+    let name = authority.to_string();
+    std::thread::spawn(move || {
+        let _ = found.send(name.to_socket_addrs().map(|addresses| addresses.collect::<Vec<_>>()));
+        LOOKUPS.fetch_sub(1, SeqCst);
+    });
+    let addresses = lookup.recv_timeout(left()?).map_err(|_| failed(format!("{authority} was not looked up in time")))?.map_err(|e| failed(format!("{authority}: {e}")))?;
     let mut stream = None;
     let mut last = None;
-    for address in authority.to_socket_addrs().map_err(|e| failed(format!("{authority}: {e}")))? {
+    for address in addresses {
         match TcpStream::connect_timeout(&address, left()?) {
             Ok(s) => {
                 stream = Some(s);
@@ -78,7 +106,8 @@ fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration) -> kute::
     }
     let mut stream = stream.ok_or_else(|| failed(format!("could not connect to {authority}: {}", last.map_or("no address".to_string(), |e| e.to_string()))))?;
     stream.set_write_timeout(Some(left()?))?;
-    stream.write_all(format!("GET {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\nConnection: close\r\n\r\n").as_bytes())?;
+    let via = if via { format!("{VIA_HEADER}: 1\r\n") } else { String::new() };
+    stream.write_all(format!("GET {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\n{via}Connection: close\r\n\r\n").as_bytes())?;
     let mut buffer: Vec<u8> = Vec::with_capacity(4096);
     let mut chunk = [0u8; 16 * 1024];
     let head_end = loop {
@@ -140,36 +169,54 @@ fn refusal(status: u16, body: &[u8]) -> KuteError {
     failed(format!("answered {status}{}", said.map_or(String::new(), |m| format!(": {m}"))))
 }
 
-/// What the registry says it holds. Nothing in it is checked: it is the
+/// What each registry says it holds. Nothing in it is checked: it is the
 /// other side's account, and a file is checked when it is fetched.
-pub fn list(from: &str, timeout: Duration) -> kute::Result<Value> {
-    let (authority, base) = parse_url(from)?;
-    let (status, body) = get(&authority, &format!("{base}{LIST_PATH}"), MAX_LISTING_BYTES, timeout)?;
-    if status != 200 {
-        return Err(refusal(status, &body));
+///
+/// One registry is reported as it was before there could be several, and
+/// a failure to reach it is an error. Several are reported one row each,
+/// a failure being that registry's row.
+pub fn list(from: &[String], timeout: Duration) -> kute::Result<Value> {
+    let one = |registry: &str| -> kute::Result<Value> {
+        let (authority, base) = parse_url(registry)?;
+        let (status, body) = get(&authority, &format!("{base}{LIST_PATH}"), MAX_LISTING_BYTES, timeout, false)?;
+        if status != 200 {
+            return Err(refusal(status, &body));
+        }
+        let listing: Value = serde_json::from_slice(&body).map_err(|_| failed("the listing is not JSON"))?;
+        Ok(json!({ "registry": registry, "says_it_holds": listing["vocabularies"], "says_it_asks": listing["upstreams"] }))
+    };
+    if let [registry] = from {
+        let mut row = one(registry)?;
+        row["checked"] = json!("nothing: this is what the registry says. A vocabulary is checked when it is fetched by digest.");
+        return Ok(row);
     }
-    let listing: Value = serde_json::from_slice(&body).map_err(|_| failed("the listing is not JSON"))?;
+    for registry in from {
+        parse_url(registry)?;
+    }
+    let rows: Vec<Value> = from.iter().map(|registry| one(registry).unwrap_or_else(|e| json!({ "registry": registry, "error": e.to_string() }))).collect();
     Ok(json!({
-        "registry": from,
-        "says_it_holds": listing["vocabularies"],
-        "checked": "nothing: this is what the registry says. A vocabulary is checked when it is fetched by digest.",
+        "registries": rows,
+        "checked": "nothing: this is what each registry says. A vocabulary is checked when it is fetched by digest.",
     }))
 }
 
-/// Fetch the vocabulary with this digest, check it, and write it.
-#[allow(clippy::too_many_arguments)]
-pub fn fetch(engine: &Engine, from: &str, digest: &str, output: &Path, trusted: &[String], force: bool, max_bytes: u64, timeout: Duration) -> kute::Result<Value> {
-    if !is_digest(digest) {
-        return Err(KuteError::InvalidConfig(format!("{digest:?} is not a digest: expected sha256: and 64 lowercase hex digits")));
+/// What asking one registry for one digest came to.
+pub enum Taken {
+    /// The vocabulary with that digest, checked, and the bytes it came in.
+    Found(Box<kute::Vocabulary>, usize),
+    /// The registry answered 404: it does not have it. In its words.
+    Absent(String),
+}
+
+/// Ask one registry for the vocabulary with this digest and check what
+/// arrives: it parses, it is valid, its content has that digest, and its
+/// own test vectors pass. Signatures are not looked at here.
+pub fn take(engine: &Engine, registry: &str, digest: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<Taken> {
+    let (authority, base) = parse_url(registry)?;
+    let (status, body) = get(&authority, &format!("{base}{LIST_PATH}/{digest}"), max_bytes, timeout, via)?;
+    if status == 404 {
+        return Ok(Taken::Absent(refusal(status, &body[..body.len().min(MAX_LISTING_BYTES as usize)]).to_string()));
     }
-    // Before anything is asked for: a key that cannot be read, or an
-    // output that may not be written, is this side's mistake.
-    let gate = if trusted.is_empty() { None } else { Some(sign::gate(trusted)?) };
-    if output.exists() && !force {
-        return Err(KuteError::InvalidConfig(format!("{} exists; pass --force to replace it", output.display())));
-    }
-    let (authority, base) = parse_url(from)?;
-    let (status, body) = get(&authority, &format!("{base}{LIST_PATH}/{digest}"), max_bytes, timeout)?;
     if status != 200 {
         return Err(refusal(status, &body[..body.len().min(MAX_LISTING_BYTES as usize)]));
     }
@@ -178,29 +225,70 @@ pub fn fetch(engine: &Engine, from: &str, digest: &str, output: &Path, trusted: 
     // The digest of what arrived, not the one the file states.
     let arrived = vocabulary.compute_digest()?;
     if arrived != digest {
-        return Err(KuteError::Integrity(format!("the registry sent a vocabulary with digest {arrived}, not the one asked for; nothing was written")));
+        return Err(KuteError::Integrity(format!("the registry sent a vocabulary with digest {arrived}, not the one asked for")));
     }
     let report = engine.verify(&vocabulary)?;
     if !report.ok() {
-        return Err(KuteError::Integrity(format!("the vocabulary fails its own test vectors: {}; nothing was written", report.failures.join("; "))));
+        return Err(KuteError::Integrity(format!("the vocabulary fails its own test vectors: {}", report.failures.join("; "))));
     }
-    if let Some(gate) = &gate {
-        gate(&vocabulary).map_err(|why| KuteError::Integrity(format!("the vocabulary is not kept: {why}; nothing was written")))?;
+    Ok(Taken::Found(Box::new(vocabulary), body.len()))
+}
+
+/// Fetch the vocabulary with this digest from the first of the
+/// registries that gives it and passes every check, and write it. The
+/// registries are asked in the order given; one that fails, lies or
+/// does not have it costs its share of the time and nothing else.
+#[allow(clippy::too_many_arguments)]
+pub fn fetch(engine: &Engine, from: &[String], digest: &str, output: &Path, trusted: &[String], force: bool, max_bytes: u64, timeout: Duration) -> kute::Result<Value> {
+    if !is_digest(digest) {
+        return Err(KuteError::InvalidConfig(format!("{digest:?} is not a digest: expected sha256: and 64 lowercase hex digits")));
     }
-    vocab::save(&vocabulary, output, force)?;
-    Ok(json!({
-        "registry": from,
-        "digest": digest,
-        "digest_recomputed_from_content": true,
-        "id": vocabulary.id().as_str(),
-        "version": vocabulary.version().to_string(),
-        "tokens": vocabulary.len(),
-        "bytes_received": body.len(),
-        "test_vectors_pass": true,
-        "signature": if gate.is_some() { "a trusted key signed exactly this content" } else { "not checked: no --trusted-key was given" },
-        "output": output,
-        "means": "the file is the content this digest names. Whether that content is the one you wanted depends on where the digest came from; who made it is known only if a signature was checked.",
-    }))
+    // Before anything is asked for: a key that cannot be read, an
+    // address that cannot be, or an output that may not be written, is
+    // this side's mistake.
+    let gate = if trusted.is_empty() { None } else { Some(sign::gate(trusted)?) };
+    if output.exists() && !force {
+        return Err(KuteError::InvalidConfig(format!("{} exists; pass --force to replace it", output.display())));
+    }
+    for registry in from {
+        parse_url(registry)?;
+    }
+    let mut passed_over: Vec<Value> = Vec::new();
+    for registry in from {
+        let why = match take(engine, registry, digest, max_bytes, timeout, false) {
+            Ok(Taken::Found(vocabulary, bytes)) => match gate.as_ref().map_or(Ok(()), |gate| gate(&vocabulary)) {
+                Ok(()) => {
+                    let signatures = vocabulary.integrity.as_ref().map_or(0, |i| i.signatures.len());
+                    vocab::save(&vocabulary, output, force)?;
+                    return Ok(json!({
+                        "registry": registry,
+                        "registries_passed_over": passed_over,
+                        "digest": digest,
+                        "digest_recomputed_from_content": true,
+                        "id": vocabulary.id().as_str(),
+                        "version": vocabulary.version().to_string(),
+                        "tokens": vocabulary.len(),
+                        "bytes_received": bytes,
+                        "test_vectors_pass": true,
+                        "signature": if gate.is_some() { "a trusted key signed exactly this content" } else { "not checked: no --trusted-key was given" },
+                        // The file is written with whatever signatures arrived. Only one
+                        // that a trusted key was seen to hold has been checked; the rest
+                        // are entries anyone could have added, the registry included.
+                        "signatures_in_the_file": signatures,
+                        "signatures_in_the_file_means": if gate.is_some() { "at least one is from a trusted key; any others were not checked" } else { "none was checked: they are claims until `kute verify` is run with keys you trust" },
+                        "output": output,
+                        "means": "the file is the content this digest names. Whether that content is the one you wanted depends on where the digest came from; who made it is known only if a signature was checked.",
+                    }));
+                }
+                Err(why) => format!("the vocabulary is not kept: {why}"),
+            },
+            Ok(Taken::Absent(said)) => said,
+            Err(e) => e.to_string(),
+        };
+        passed_over.push(json!({ "registry": registry, "why": why }));
+    }
+    let said: Vec<String> = passed_over.iter().map(|p| format!("{}: {}", p["registry"].as_str().unwrap_or(""), p["why"].as_str().unwrap_or(""))).collect();
+    Err(KuteError::Integrity(format!("nothing was written. {}", said.join(" | "))))
 }
 
 #[cfg(test)]
