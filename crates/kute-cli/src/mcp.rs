@@ -103,6 +103,11 @@ impl Server {
         }
     }
 
+    /// The engine vocabularies are checked with.
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
     /// For the registry routes of the HTTP service: what is held, with
     /// the key names of the signatures each file carries. The signatures
     /// are listed as the files state them and are not checked here; the

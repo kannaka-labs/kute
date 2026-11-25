@@ -1190,12 +1190,67 @@ The specification's B8 asks for a registry after signing. Chosen for
 
 Not built: uploads, accounts, search, federation, mirrors, expiry,
 revocation, TLS. Federation in particular needs a decision about whose
-listing is believed, which nothing here has needed yet.
+listing is believed, which nothing here has needed yet. (Federation
+followed in 0.9.1: ADR-0055.)
 
 Checked by tests against sockets that send another vocabulary, the
 right one with its signature removed, altered content, a body cut
 short, no stated length, a length past the limit, something that is
 not HTTP, and a stall; in each nothing is written.
+
+## ADR-0055: Federation is a registry asking named upstreams for a digest, one registry further and no more
+
+Status: accepted.
+
+ADR-0054 left federation out because it "needs a decision about whose
+listing is believed". The decision taken: nobody's. What registries
+exchange is files by digest, which need no belief, and no registry
+repeats another's listing.
+
+* `kute serve --registry --upstream URL` (repeatable): a digest not
+  held is asked for upstream, checked exactly as `kute fetch` checks
+  (the same function, `registry::take`), kept in memory within a fixed
+  size, and given. `kute fetch --from` is repeatable and uses the first
+  registry whose answer passes every check.
+* One registry further. The request upstream carries
+  `Kute-Registry-Via`; a registry that sees it does not ask its own
+  upstreams. Considered and not chosen: a hop count (a number a
+  registry in the middle can reset, and a reason to let a question
+  travel), and loop detection by listing the registries passed (it
+  tells every registry on the way who asked whom). Depth one cannot
+  loop and cannot be amplified, and an operator who wants more reach
+  names more upstreams. A registry that has kept a file does give it to
+  a registry that asks, so a file can move outward one registry per
+  request made for it; that is copying, not a chain of live questions.
+* One question upstream at a time, 503 to a second caller. Considered:
+  a queue (callers asking for digests nobody has would fill it and hold
+  every worker), and several at once (the same, later). With one, the
+  service always has workers for what it holds.
+* Absence is remembered for a minute; failure is not remembered.
+* The listing is unchanged but for naming the upstreams. A fetched file
+  is not added to it: the listing says what the operator put there.
+* Signatures: the digest does not cover them (ADR-0044), so an upstream
+  can remove or add them without the content check noticing.
+  `--upstream-trusted-key` makes the registry require one; without it
+  the registry passes on what came and the client's own check is the
+  only one, which was already true of a single registry.
+
+Not built: discovery of registries, mirroring, anything written to
+disk, refresh or expiry of kept files, TLS, a registry vouching for
+another. The failure this leaves: a registry with no key of its own,
+and a dishonest upstream named first, keeps a copy without its
+signatures and gives that until restarted; clients that require a
+signature get a refusal from it and must ask elsewhere.
+
+Checked by tests with real `kute serve` processes and sockets: a chain
+of three (the far one is refused, the near one served, a kept file is
+given with the upstream gone); two registries naming each other and
+one naming itself; an upstream sending another vocabulary, and one
+sending the right content unsigned, with and without a key required;
+a silent upstream (the second caller gets 503 at once, held files are
+given meanwhile, the deadline holds); the size limit and a cache too
+small to keep a file; and a client given a dead address, a liar, a
+registry without the file and an honest one, in that order.
 
 ## Deferred
 

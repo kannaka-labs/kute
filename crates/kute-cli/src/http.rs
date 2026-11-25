@@ -50,6 +50,129 @@ pub struct Options {
     /// Answer the five operations. Off, the service is a registry and
     /// nothing else: no caller can make it compute.
     pub operations: bool,
+    /// Other registries to ask for a vocabulary this one does not hold.
+    pub federation: Option<Arc<Federation>>,
+}
+
+/// Asking other registries, and what that may cost this one.
+///
+/// A vocabulary this registry does not hold is asked for upstream, in
+/// the order the upstreams were named, checked as `kute fetch` checks
+/// one (parsed, valid, the digest recomputed, test vectors run), and
+/// kept in memory to be given again. Every bound is here: one question
+/// upstream at a time, however many callers ask; a deadline and a size
+/// limit on each; a cache of fixed size; and a short memory of digests
+/// nobody had, so that asking for them again costs nothing.
+pub struct Federation {
+    pub upstreams: Vec<String>,
+    /// Longest wait for one upstream.
+    pub timeout: Duration,
+    /// Largest file taken from an upstream.
+    pub max_bytes: u64,
+    /// Most bytes of upstream files kept. The oldest go first.
+    pub cache_bytes: u64,
+    /// What an upstream file must pass, beyond being the content its
+    /// digest names: a signature from a key this registry trusts. With
+    /// none, a file is passed on whoever signed it or nobody.
+    check: Option<UpstreamCheck>,
+    asking: Mutex<()>,
+    kept: Mutex<std::collections::VecDeque<(String, Arc<[u8]>)>>,
+    absent: Mutex<std::collections::VecDeque<(String, Instant)>>,
+}
+
+pub type UpstreamCheck = Box<dyn Fn(&kute::Vocabulary) -> Result<(), String> + Send + Sync>;
+
+impl std::fmt::Debug for Federation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Federation").field("upstreams", &self.upstreams).field("check", &self.check.is_some()).finish_non_exhaustive()
+    }
+}
+
+/// How long a digest that no upstream had is remembered as absent.
+const ABSENT_FOR: Duration = Duration::from_secs(60);
+/// How many such digests are remembered.
+const ABSENT_KEPT: usize = 1024;
+
+fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+impl Federation {
+    pub fn new(upstreams: Vec<String>, timeout: Duration, max_bytes: u64, cache_bytes: u64, check: Option<UpstreamCheck>) -> kute::Result<Self> {
+        for upstream in &upstreams {
+            crate::registry::parse_url(upstream)?;
+        }
+        Ok(Self { upstreams, timeout, max_bytes, cache_bytes, check, asking: Mutex::new(()), kept: Default::default(), absent: Default::default() })
+    }
+
+    fn cached(&self, digest: &str) -> Option<Arc<[u8]>> {
+        locked(&self.kept).iter().find(|(d, _)| d == digest).map(|(_, file)| file.clone())
+    }
+
+    /// The file with this digest from the cache or, when `ask` is set,
+    /// from the first upstream that gives it. `Ok(None)` when nobody has it.
+    fn find(&self, engine: &kute::Engine, digest: &str, ask: bool) -> Result<Option<Arc<[u8]>>, Reply> {
+        if let Some(file) = self.cached(digest) {
+            return Ok(Some(file));
+        }
+        if !ask {
+            return Ok(None);
+        }
+        {
+            let mut absent = locked(&self.absent);
+            absent.retain(|(_, when)| when.elapsed() < ABSENT_FOR);
+            if absent.iter().any(|(d, _)| d == digest) {
+                return Ok(None);
+            }
+        }
+        // One question upstream at a time. A caller who arrives meanwhile
+        // is told to come back, and its worker is free at once: callers
+        // asking for digests nobody has cannot hold every worker.
+        let _asking = match self.asking.try_lock() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return Err(problem(503, "Service Unavailable", "busy", "this registry is asking another for a vocabulary; try again")),
+        };
+        if let Some(file) = self.cached(digest) {
+            return Ok(Some(file));
+        }
+        let mut every_upstream_said_no = true;
+        for upstream in &self.upstreams {
+            match crate::registry::take(engine, upstream, digest, self.max_bytes, self.timeout, true) {
+                Ok(crate::registry::Taken::Found(vocabulary, _)) => {
+                    // The right content without a signature this registry
+                    // requires is not kept: the next upstream may have it signed.
+                    if self.check.as_ref().is_some_and(|check| check(&vocabulary).is_err()) {
+                        every_upstream_said_no = false;
+                        continue;
+                    }
+                    // Written out again here, not passed on as it came.
+                    let Ok(file) = kute::vocab::to_vec(&vocabulary) else { continue };
+                    let file: Arc<[u8]> = file.into();
+                    if file.len() as u64 <= self.cache_bytes {
+                        let mut kept = locked(&self.kept);
+                        kept.push_back((digest.to_string(), file.clone()));
+                        while kept.iter().map(|(_, f)| f.len() as u64).sum::<u64>() > self.cache_bytes {
+                            kept.pop_front();
+                        }
+                    }
+                    return Ok(Some(file));
+                }
+                Ok(crate::registry::Taken::Absent(_)) => {}
+                // An upstream that failed or sent something else is passed
+                // over, and is not taken as having said the file is absent.
+                Err(_) => every_upstream_said_no = false,
+            }
+        }
+        if every_upstream_said_no {
+            let mut absent = locked(&self.absent);
+            if absent.len() >= ABSENT_KEPT {
+                absent.pop_front();
+            }
+            absent.push_back((digest.to_string(), Instant::now()));
+        }
+        Ok(None)
+    }
 }
 
 /// The Studio page: three files compiled into the binary. The page loads
@@ -67,7 +190,7 @@ const STUDIO_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 's
 
 impl Default for Options {
     fn default() -> Self {
-        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true }
+        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true, federation: None }
     }
 }
 
@@ -96,6 +219,8 @@ struct Request {
     host: Option<String>,
     content_type: Option<String>,
     body: Vec<u8>,
+    /// Another registry is asking on a caller's behalf.
+    via: bool,
 }
 
 fn loopback_name(host: &str) -> bool {
@@ -143,7 +268,7 @@ fn read_request(stream: &mut TcpStream, options: &Options) -> Result<Request, Re
     if method.is_empty() || !target.starts_with('/') || !matches!(version, "HTTP/1.0" | "HTTP/1.1") || first.next().is_some() {
         return Err(bad("the request line is not HTTP/1.x"));
     }
-    let (mut host, mut content_type, mut length, mut chunked) = (None, None, None, false);
+    let (mut host, mut content_type, mut length, mut chunked, mut via) = (None, None, None, false, false);
     for line in lines {
         let (name, value) = line.split_once(':').ok_or_else(|| bad("a header line has no colon"))?;
         // A name is a token: no space before the colon, no continuation
@@ -173,6 +298,7 @@ fn read_request(stream: &mut TcpStream, options: &Options) -> Result<Request, Re
                 length = Some(n);
             }
             "transfer-encoding" => chunked = true,
+            "kute-registry-via" => via = true,
             _ => {}
         }
     }
@@ -203,7 +329,7 @@ fn read_request(stream: &mut TcpStream, options: &Options) -> Result<Request, Re
             Err(_) => return Err(late()),
         }
     }
-    Ok(Request { method: method.to_string(), path, host, content_type, body })
+    Ok(Request { method: method.to_string(), path, host, content_type, body, via })
 }
 
 fn route(server: &Server, request: &Request, options: &Options) -> Reply {
@@ -244,7 +370,13 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         if request.method != "GET" {
             return Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "vocabularies are read with GET; nothing can be sent to this registry") };
         }
-        let Some(digest) = operation.strip_prefix("vocabularies/") else { return ok(server.registry_list()) };
+        let Some(digest) = operation.strip_prefix("vocabularies/") else {
+            let mut listing = server.registry_list();
+            // Who else this registry asks. What they hold is theirs to say.
+            listing["upstreams"] = json!(options.federation.as_ref().map(|f| f.upstreams.clone()).unwrap_or_default());
+            listing["upstream_files_need_a_trusted_signature"] = json!(options.federation.as_ref().is_some_and(|f| f.check.is_some()));
+            return ok(listing);
+        };
         // Only a digest reaches the lookup: a file is named by the hash
         // of its content and by nothing else.
         if !crate::registry::is_digest(digest) {
@@ -253,7 +385,19 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         return match server.registry_file(digest) {
             Some(Ok(file)) => Reply { file: Some(file.into_boxed_slice()), ..ok(Value::Null) },
             Some(Err(_)) => problem(500, "Internal Server Error", "internal", "the vocabulary could not be written out"),
-            None => problem(404, "Not Found", "not_found", "no vocabulary with that digest is held here"),
+            None => {
+                // Not held here. A registry asking for another is answered
+                // from what is here and kept, and no further.
+                let found = match &options.federation {
+                    Some(federation) => federation.find(server.engine(), digest, !request.via),
+                    None => Ok(None),
+                };
+                match found {
+                    Ok(Some(file)) => Reply { file: Some(file.to_vec().into_boxed_slice()), ..ok(Value::Null) },
+                    Ok(None) => problem(404, "Not Found", "not_found", "no vocabulary with that digest is held here"),
+                    Err(reply) => reply,
+                }
+            }
         };
     }
     if !OPERATIONS.contains(&operation) || !options.operations {

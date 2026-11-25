@@ -88,6 +88,26 @@ All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
 
+## Changes since v0.9.0 that need action
+
+- **`kute fetch --max-bytes` defaults to 64 MiB, not 256 MiB.** A
+  vocabulary file larger than that now needs the option.
+- **`kute fetch` reports and errors are worded for several registries.**
+  The report gains `registries_passed_over` (empty with one registry)
+  and, since the same release, `signatures_in_the_file` and
+  `signatures_in_the_file_means`. A failure now reads `nothing was
+  written. <registry>: <why>` for each registry asked; the reason
+  inside is worded as before. With one `--from`, `--list` prints what
+  it did, plus `says_it_asks`; with several it prints `registries`, a
+  row each.
+- **The registry listing has two new fields**, `upstreams` and
+  `upstream_files_need_a_trusted_signature`. A registry started without
+  `--upstream` behaves as in 0.9.0.
+- **Rust, `kute-cli` as a library:** `registry::fetch` and
+  `registry::list` take `&[String]` where they took `&str`, and
+  `http::Options` has a new field, `federation` (`None` is the service
+  as it was; `..Default::default()` already gives that).
+
 ## Changes since v0.8.1 that need action
 
 - **`kute_protocol::Message::SymbolPropose` has a new field,

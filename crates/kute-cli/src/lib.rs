@@ -370,6 +370,27 @@ enum Command {
         /// answered, so no caller can make this process compute.
         #[arg(long, conflicts_with = "studio")]
         registry_only: bool,
+        /// Another registry (http://host:port) to ask for a vocabulary
+        /// this one does not hold. What comes back is checked as `kute
+        /// fetch` checks it, kept in memory, and given on. Repeatable;
+        /// asked in the order given. Needs --registry or --registry-only.
+        #[arg(long, value_name = "URL")]
+        upstream: Vec<String>,
+        /// Keep an upstream file only if a key named here signed it: a
+        /// public key (ed25519:...) or a key file. Repeatable. Without
+        /// it an upstream file is checked against its digest and its
+        /// test vectors, and passed on whoever signed it or nobody.
+        #[arg(long, value_name = "KEY")]
+        upstream_trusted_key: Vec<String>,
+        /// Seconds to wait for one upstream.
+        #[arg(long, default_value_t = 10)]
+        upstream_timeout: u64,
+        /// Largest file taken from an upstream.
+        #[arg(long, default_value_t = 16_777_216)]
+        upstream_max_bytes: u64,
+        /// Most bytes of upstream files kept in memory; the oldest go first.
+        #[arg(long, default_value_t = 67_108_864)]
+        upstream_cache_bytes: u64,
         /// Most bytes of input in one encode or discover call.
         #[arg(long, default_value_t = 1_048_576)]
         max_input_bytes: u64,
@@ -389,9 +410,11 @@ enum Command {
     /// those keys signed it. Plain HTTP: the registry and the network are
     /// not trusted with the content, and can see it.
     Fetch {
-        /// The registry, as http://host:port.
-        #[arg(long)]
-        from: String,
+        /// A registry, as http://host:port. Repeatable: they are asked
+        /// in the order given, and the first that gives the vocabulary
+        /// and passes every check is used. --timeout is for each.
+        #[arg(long, required = true)]
+        from: Vec<String>,
         /// The vocabulary wanted: sha256: and 64 hex digits.
         #[arg(long, required_unless_present = "list", conflicts_with = "list")]
         digest: Option<String>,
@@ -1521,8 +1544,22 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 _ => Err(KuteError::InvalidConfig("give --digest and --output, or --list".into())),
             }
         }
-        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
             let registry = registry || registry_only;
+            if !upstream.is_empty() && !registry {
+                return Err(KuteError::InvalidConfig("--upstream is for a registry: add --registry or --registry-only".into()));
+            }
+            // Read the addresses before listening: one that cannot be read
+            // is the operator's mistake, to be told now.
+            if upstream.is_empty() && !upstream_trusted_key.is_empty() {
+                return Err(KuteError::InvalidConfig("--upstream-trusted-key is about files from an --upstream, and none was named".into()));
+            }
+            let federation = if upstream.is_empty() {
+                None
+            } else {
+                let check: Option<http::UpstreamCheck> = if upstream_trusted_key.is_empty() { None } else { Some(Box::new(sign::gate(&upstream_trusted_key)?)) };
+                Some(std::sync::Arc::new(http::Federation::new(upstream.clone(), std::time::Duration::from_secs(upstream_timeout.max(1)), upstream_max_bytes, upstream_cache_bytes, check)?))
+            };
             let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
             let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);
             let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_body_bytes, ..Default::default() };
@@ -1537,8 +1574,8 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             if studio && !http::is_loopback(&address) {
                 return Err(KuteError::InvalidConfig("Studio is served on a loopback address only: it is a page for the person at this machine".into()));
             }
-            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "operations": !registry_only }))?;
-            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, ..Default::default() };
+            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "upstreams": upstream, "upstream_files_need_a_trusted_signature": !upstream_trusted_key.is_empty(), "operations": !registry_only }))?;
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, federation, ..Default::default() };
             http::serve(server, listener, options)
         }
         Command::Capabilities => {

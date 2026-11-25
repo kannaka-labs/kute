@@ -174,7 +174,13 @@ Added in v0.9 (what an upgrade from v0.8 has to change is in
   it only if the digest recomputed from what arrived is the one asked
   for, its test vectors pass, and (with `--trusted-key`) a key you trust
   signed it. Plain HTTP: content cannot be swapped unnoticed, and the
-  network can see it. No uploads, no federation. `docs/http.md`.
+  network can see it. No uploads. `docs/http.md`.
+* Since 0.9.1, registries can ask each other: `kute serve --registry
+  --upstream URL` fetches a digest it does not hold from a named
+  upstream, checks it as `kute fetch` does and gives it on, one registry
+  further and no more; `kute fetch --from A --from B` uses the first
+  registry whose answer passes. No registry is trusted more for it, and
+  there is no discovery or mirroring.
 * A proposal can be signed: `kute peer send --propose ... --sign-with`
   sends the proposer's signature of the vocabulary the proposal derives,
   and a peer with `--require-signature-from` now takes proposals, each
@@ -206,7 +212,7 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
-* Not built: federation between registries, uploads to one, TLS for
+* Not built: discovery or mirroring of registries, uploads to one, TLS for
   the HTTP service, expiry or revocation of keys,
   learned representations.
 
