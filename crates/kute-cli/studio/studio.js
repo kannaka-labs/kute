@@ -330,8 +330,8 @@ function tree(value, depth) {
 }
 
 function recognise(report) {
-  if (report && report.decision && report.comparison) return ["kute shadow", `Decision: ${report.decision}. ${(report.reasons || []).join("; ") || "No constraint was broken."}`, report.assumes || report.not_measured];
-  if (report && report.context_over_previous) return ["kute predict", `Looking further back saved ${fmt(report.context_over_previous.bits_per_event)} bits an event over one event of past, on ${fmt(report.held_out_events)} held-out events.`, report.note];
+  if (report && report.decision && report.comparison) return ["kute shadow", `Decision: ${report.decision}. ${(Array.isArray(report.reasons) ? report.reasons : []).join("; ") || "No constraint was broken."}`, report.assumes || report.not_measured];
+  if (report && report.context_over_previous && typeof report.context_over_previous === "object") return ["kute predict", `Looking further back saved ${fmt(report.context_over_previous.bits_per_event)} bits an event over one event of past, on ${fmt(report.held_out_events)} held-out events.`, report.note];
   if (report && Array.isArray(report.lines)) return ["kute live", `${fmt(report.lines.length)} lines: window reports and a summary.`, "Counts under bounds are lower limits; each window says whether it was exact."];
   if (report && report.synthetic === true) return ["a benchmark or example report", "The report says its data is synthetic.", null];
   return ["a JSON file", "Not a report this page recognises; shown as it is.", null];
@@ -411,9 +411,16 @@ async function start() {
     line.textContent = "The service did not answer: " + error.message;
     state.capabilities = { software: "unknown", api: "?", vocabularies: [], limits: {}, operations: [] };
   }
-  // A view can be linked to: /studio#Patterns
-  const wanted = decodeURIComponent(location.hash.slice(1));
-  await show(views[wanted] ? wanted : "Runtime");
+  // A view can be linked to: /studio#Patterns. The fragment is whatever
+  // a link says, so it may not decode, and it may name something every
+  // object has ("constructor") and not a view.
+  let wanted = "";
+  try {
+    wanted = decodeURIComponent(location.hash.slice(1));
+  } catch (error) {
+    wanted = "";
+  }
+  await show(Object.hasOwn(views, wanted) ? wanted : "Runtime");
 }
 
 start();
