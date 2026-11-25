@@ -315,6 +315,11 @@ enum Command {
         /// can use it: there is no TLS and no authentication.
         #[arg(long)]
         insecure_remote: bool,
+        /// Also serve KUTE Studio, a page for looking at what the service
+        /// holds and does, at /studio. Loopback only. The page loads
+        /// nothing from outside and calls only this service.
+        #[arg(long)]
+        studio: bool,
         /// Most bytes of input in one encode or discover call.
         #[arg(long, default_value_t = 1_048_576)]
         max_input_bytes: u64,
@@ -1281,7 +1286,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
             EventsAction::Inspect { input } => print(&kute_events::header(&std::fs::read(&input)?)?.0),
         },
-        Command::Serve { vocab: paths, listen, insecure_remote, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Serve { vocab: paths, listen, insecure_remote, studio, max_input_bytes, max_output_bytes, workers, timeout } => {
             let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
             let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);
             let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_body_bytes, ..Default::default() };
@@ -1293,8 +1298,11 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                     "{address} is not a loopback address, and this service has no TLS and no authentication; pass --insecure-remote to serve it anyway"
                 )));
             }
-            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address) }))?;
-            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), ..Default::default() };
+            if studio && !http::is_loopback(&address) {
+                return Err(KuteError::InvalidConfig("Studio is served on a loopback address only: it is a page for the person at this machine".into()));
+            }
+            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")) }))?;
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, ..Default::default() };
             http::serve(server, listener, options)
         }
         Command::Capabilities => {

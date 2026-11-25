@@ -268,3 +268,74 @@ fn an_address_that_is_not_loopback_has_to_be_asked_for() {
     let said = String::from_utf8_lossy(&out.stderr);
     assert!(said.contains("--insecure-remote") && said.contains("no authentication"), "{said}");
 }
+
+/// One GET, answer taken as it comes: the page is not JSON.
+fn page(address: &str, path: &str, host: &str) -> (u16, String, String) {
+    let mut stream = TcpStream::connect(address).unwrap();
+    stream.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+    stream.write_all(format!("GET {path} HTTP/1.1\r\nHost: {host}\r\n\r\n").as_bytes()).unwrap();
+    let mut answer = Vec::new();
+    stream.read_to_end(&mut answer).unwrap();
+    let text = String::from_utf8(answer).unwrap();
+    let (head, body) = text.split_once("\r\n\r\n").unwrap();
+    (head.split(' ').nth(1).unwrap().parse().unwrap(), head.to_string(), body.to_string())
+}
+
+#[test]
+fn studio_is_served_only_when_asked_for_and_can_reach_nothing_but_this_service() {
+    let dir = scratch("http-studio");
+    vocabularies(&dir);
+
+    // Not asked for: there is no page.
+    let plain = Service::start(&dir, &["--vocab", "text.kvf"]);
+    assert_eq!(plain.get("/studio").0, 404);
+    assert_eq!(plain.get("/studio/studio.js").0, 404);
+    drop(plain);
+
+    let service = Service::start(&dir, &["--vocab", "text.kvf", "--studio"]);
+    let mut script = String::new();
+    for (path, kind) in [("/studio", "text/html"), ("/studio/studio.css", "text/css"), ("/studio/studio.js", "text/javascript")] {
+        let (status, head, body) = page(&service.address, path, "localhost");
+        assert_eq!(status, 200, "{path}");
+        assert!(head.contains(&format!("Content-Type: {kind}; charset=utf-8")), "{head}");
+        // The browser is told what the page may do: scripts, styles and
+        // requests from this origin, and nothing else.
+        assert!(head.contains("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"), "{head}");
+        assert!(head.contains("X-Content-Type-Options: nosniff") && head.contains("Cache-Control: no-store") && head.contains("X-Frame-Options: DENY"), "{head}");
+        assert!(!head.contains("unsafe-inline") && !head.contains("Access-Control"), "{head}");
+        // Nothing in the page names another origin.
+        for outside in ["http://", "https://", "//cdn", "@import", "url("] {
+            assert!(!body.contains(outside), "{path} holds {outside:?}");
+        }
+        if path.ends_with(".js") {
+            script = body;
+        }
+    }
+    // The page has no script or style of its own in the markup, which the
+    // policy would refuse anyway.
+    let (_, _, html) = page(&service.address, "/studio", "localhost");
+    assert!(html.contains("<script src=\"/studio/studio.js\"></script>") && !html.contains("<style") && !html.contains("onclick=") && !html.contains("style=\""));
+    // The script puts text on the page as text, never as markup, and
+    // calls only the interface under /v1/.
+    for never in ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "localStorage", "sessionStorage", "document.cookie", "XMLHttpRequest", "WebSocket", "sendBeacon"] {
+        assert!(!script.contains(never), "the script uses {never}");
+    }
+    assert_eq!(script.matches("fetch(").count(), 1);
+    assert!(script.contains("fetch(\"/v1/\" + operation, init)"));
+
+    // The same door as the interface: a name that is not this machine is refused.
+    assert_eq!(page(&service.address, "/studio", "evil.example").0, 403);
+    assert_eq!(page(&service.address, "/studio/", "localhost").0, 404);
+    assert_eq!(page(&service.address, "/studio/../Cargo.toml", "localhost").0, 404);
+    let (status, head, _) = service.raw(b"POST /studio HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
+    assert_eq!(status, 405);
+    assert!(head.contains("Allow: GET"));
+    // And the interface is as it was.
+    assert_eq!(service.get("/v1/capabilities").0, 200);
+    drop(service);
+
+    // Never beyond this machine, even where the interface is allowed to be.
+    let out = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(&dir).args(["serve", "--vocab", "text.kvf", "--listen", "0.0.0.0:0", "--insecure-remote", "--studio"]).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("loopback address only"));
+}

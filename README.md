@@ -86,6 +86,11 @@ Added in v0.3:
   discover as Model Context Protocol tools on standard input and output.
   Read-only: it works on the vocabularies it was started with and the data
   in each call, with bounded inputs and outputs. See `docs/mcp.md`.
+* `kute serve --studio`: a page, built into the binary and served on
+  this machine only, for looking at vocabularies, encodings, recurring
+  sequences in a corpus you give it, and report files. It shows what
+  the service answers and lists what it cannot show. See
+  `docs/studio.md`.
 * `examples/queensync`: two scripted agents that train, observe,
   challenge and negotiate a vocabulary for their messages, with every
   byte counted, and what that showed (a general compressor with a

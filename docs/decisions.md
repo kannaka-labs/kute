@@ -818,6 +818,37 @@ advertisement.
 Not built: a signature on the vocabulary (B8), resuming after a dropped
 connection, per-message latency.
 
+## ADR-0043: Studio is a page inside the binary, over the same HTTP interface, showing only what a backend answers
+
+The specification's F2 asks for a local-first workbench in which each
+view consumes actual backend output and exposes provenance and
+limitations. `kute serve --studio` serves one; `docs/studio.md`.
+
+It is three static files compiled into `kute`, calling `/v1/` like any
+other client. No second interface was added for it: what Studio can
+show is exactly what an outside developer's page could show. No
+framework and no build step, so the page that ships is the page in the
+repository.
+
+Views exist for what the service answers (runtime, vocabulary, encode,
+compare, discover) and for report files from the command line. Peer
+status, event timing, running benchmarks and representation experiments
+have no backend operation and are listed as absent with the reason. A
+view with invented or sample data was the alternative and is what the
+specification rules out.
+
+The service is unauthenticated, so a browser page on it is a new way
+in. It is off unless asked for, refused on any address but loopback,
+and carries a content security policy of `default-src 'none'` with
+scripts, styles and requests allowed from its own origin only, which is
+why the script and style are separate files rather than inline. Text
+from the service or a file is only ever set as text. The existing host
+rule covers the page as it covers the interface.
+
+The page was driven in a headless browser through every view once.
+That check is not automated: it needs a browser, which the test suite
+does not assume. The automated tests cover what the service sends.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

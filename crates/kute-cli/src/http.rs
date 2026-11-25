@@ -42,11 +42,26 @@ pub struct Options {
     /// are answered, which keeps a web page from reaching the service
     /// through a name it controls.
     pub any_host: bool,
+    /// Serve the Studio page under `/studio`.
+    pub studio: bool,
 }
+
+/// The Studio page: three files compiled into the binary. The page loads
+/// nothing else and calls only `/v1/` on the origin it came from.
+const STUDIO: [(&str, &str, &str); 3] = [
+    ("/studio", "text/html; charset=utf-8", include_str!("../studio/index.html")),
+    ("/studio/studio.css", "text/css; charset=utf-8", include_str!("../studio/studio.css")),
+    ("/studio/studio.js", "text/javascript; charset=utf-8", include_str!("../studio/studio.js")),
+];
+
+/// What the page may do, enforced by the browser: scripts and styles from
+/// this origin only, requests to this origin only, no frames, no forms
+/// posting elsewhere, nothing else at all.
+const STUDIO_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 impl Default for Options {
     fn default() -> Self {
-        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false }
+        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false }
     }
 }
 
@@ -55,14 +70,16 @@ struct Reply {
     reason: &'static str,
     body: Value,
     allow: Option<&'static str>,
+    /// A file of the Studio page, as (content type, text), sent instead of `body`.
+    page: Option<(&'static str, &'static str)>,
 }
 
 fn problem(status: u16, reason: &'static str, code: &str, message: impl Into<String>) -> Reply {
-    Reply { status, reason, body: json!({ "error": { "code": code, "message": message.into() } }), allow: None }
+    Reply { status, reason, body: json!({ "error": { "code": code, "message": message.into() } }), allow: None, page: None }
 }
 
 fn ok(body: Value) -> Reply {
-    Reply { status: 200, reason: "OK", body, allow: None }
+    Reply { status: 200, reason: "OK", body, allow: None, page: None }
 }
 
 struct Request {
@@ -185,6 +202,12 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
     if !options.any_host && !request.host.as_deref().is_some_and(loopback_name) {
         return problem(403, "Forbidden", "forbidden_host", "this service answers only requests addressed to localhost");
     }
+    if let Some((_, content_type, text)) = STUDIO.iter().find(|(path, _, _)| options.studio && *path == request.path) {
+        if request.method != "GET" {
+            return Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "the page is read with GET") };
+        }
+        return Reply { page: Some((content_type, text)), ..ok(Value::Null) };
+    }
     let operation = match request.path.strip_prefix("/v1/") {
         Some(rest) => rest,
         None => return problem(404, "Not Found", "not_found", "the interface is under /v1/"),
@@ -229,13 +252,19 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
 }
 
 fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
-    let body = serde_json::to_vec(&reply.body).unwrap_or_else(|_| b"{}".to_vec());
+    let (content_type, body) = match reply.page {
+        Some((content_type, text)) => (content_type, text.as_bytes().to_vec()),
+        None => ("application/json", serde_json::to_vec(&reply.body).unwrap_or_else(|_| b"{}".to_vec())),
+    };
     let mut head = format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n",
+        "HTTP/1.1 {} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n",
         reply.status,
         reply.reason,
         body.len()
     );
+    if reply.page.is_some() {
+        head.push_str(&format!("Content-Security-Policy: {STUDIO_POLICY}\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\n"));
+    }
     if let Some(allow) = reply.allow {
         head.push_str(&format!("Allow: {allow}\r\n"));
     }
