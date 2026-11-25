@@ -981,6 +981,42 @@ Decided:
 Not built: a registry, key distribution, expiry, revocation, threshold
 rules (two of three keys), signing a proposal.
 
+## ADR-0048: Composed representations are identified, toleranced and measured before anything is built on them
+
+Status: accepted, research. A negative result is recorded.
+
+The specification (F1) asks for research into compositional
+representations with the phase-hash mapping kept as the baseline, an
+identity for every representation, portable tolerances, and published
+measurements including negative ones.
+
+Decided:
+
+* The three standard compositions (bundle, permute-bundle, bind-chain)
+  live in `kute_hrm::compose`, outside the engine. No command, no
+  service operation, no container carries a vector.
+* A composition's identity is a string naming algorithm and version,
+  dimension, configuration, and the base mapping and its version.
+  Vectors under different identities are not compared.
+* Portable tolerance: similarities of unit-energy vectors agree within
+  1e-4 between implementations. Pinned by a test that runs on two
+  platforms in CI.
+* Measurements compare against exact baselines that use no vectors
+  (counts, positions), and ties are split, after a first scoring that
+  counted ties as misses made the vectors look better than the exact
+  thing they approximate.
+
+Measured (`docs/representations.md`): on windows of two real logs,
+bundle equals counting and permute-bundle equals counting by position;
+bind-chain is a hash. Nothing beat exact counting.
+
+Not built, and the reason the question stays open: learned or
+co-occurrence representations, where similar tokens get similar vectors;
+any associative or predictive medium; sequence completion;
+generalization. Until one of those is built and measured against these
+baselines, no claim about the usefulness of these representations is
+made.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

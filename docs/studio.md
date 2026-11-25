@@ -49,7 +49,7 @@ backend output. Item by item:
 | evolution comparison | Compare (two vocabularies on one input); Reports for a `kute shadow` report. The page cannot evolve a vocabulary. |
 | benchmark replay | Reports shows a report made earlier. It runs nothing. |
 | peer status | Not here. |
-| representation experiments | Not here: none are built. |
+| representation experiments | Not here: the service has no operation for them. One measurement exists (`docs/representations.md`). |
 
 The Reports view refuses a file over 32 MB.
 

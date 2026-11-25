@@ -15,6 +15,8 @@
 //! improve retrieval is an open hypothesis (PRD section 12), to be tested
 //! against a baseline with this as the repeatable input.
 
+pub mod compose;
+
 use kute_core::{Representation, RepresentationBackend};
 use kute_types::{KuteError, RepresentationRef, Result, Vocabulary};
 use sha2::{Digest, Sha256};

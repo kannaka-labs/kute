@@ -1,0 +1,714 @@
+{
+  "identities": [
+    "kannaka:hrm:compose:bundle@0.1.0/dimension=256/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:bundle@0.1.0/dimension=1024/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:bundle@0.1.0/dimension=4096/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:permute-bundle@0.1.0/dimension=256/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:permute-bundle@0.1.0/dimension=1024/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:permute-bundle@0.1.0/dimension=4096/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:bind-chain@0.1.0/dimension=256/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:bind-chain@0.1.0/dimension=1024/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0",
+    "kannaka:hrm:compose:bind-chain@0.1.0/dimension=4096/rotation=1-per-position/base=kannaka:hrm:phase-hash@0.1.0"
+  ],
+  "not_measured": "any learned representation; any associative medium or dynamics; sequence completion; generalization. The memory here is a sum and retrieval is an inner product.",
+  "real": [
+    {
+      "data": "real",
+      "distinct_events": 38,
+      "distinct_windows": 1915,
+      "distinct_windows_that_are_another_reordered": 1041,
+      "events": 638947,
+      "label": "openssh",
+      "nearest_window_note": "each stored window kept as its own vector; the query is a stored window with one event replaced; credit 1 when the original is the single nearest, 1/k when it ties for nearest with k - 1 others",
+      "nearest_window_precision": [
+        {
+          "bind-chain/1024": 0.084,
+          "bind-chain/256": 0.082,
+          "bind-chain/4096": 0.084,
+          "bundle/1024": 0.992,
+          "bundle/256": 0.99,
+          "bundle/4096": 0.994,
+          "damage": "one event of six replaced by another",
+          "exact_counts": 0.994,
+          "exact_positions": 1.0,
+          "permute-bundle/1024": 1.0,
+          "permute-bundle/256": 1.0,
+          "permute-bundle/4096": 1.0,
+          "queries": 500,
+          "windows_stored": 10
+        },
+        {
+          "bind-chain/1024": 0.006,
+          "bind-chain/256": 0.004,
+          "bind-chain/4096": 0.008,
+          "bundle/1024": 0.758,
+          "bundle/256": 0.778,
+          "bundle/4096": 0.782,
+          "damage": "one event of six replaced by another",
+          "exact_counts": 0.7671,
+          "exact_positions": 0.9763,
+          "permute-bundle/1024": 0.966,
+          "permute-bundle/256": 0.978,
+          "permute-bundle/4096": 0.972,
+          "queries": 500,
+          "windows_stored": 100
+        }
+      ],
+      "recognition_auc": [
+        {
+          "bind-chain/1024": 1.0,
+          "bind-chain/256": 1.0,
+          "bind-chain/4096": 1.0,
+          "bundle/1024": 0.51,
+          "bundle/256": 0.45,
+          "bundle/4096": 0.5,
+          "exact_counts": 0.505,
+          "exact_positions": 0.635,
+          "permute-bundle/1024": 0.63,
+          "permute-bundle/256": 0.64,
+          "permute-bundle/4096": 0.63,
+          "windows_not_stored": 10,
+          "windows_stored": 10
+        },
+        {
+          "bind-chain/1024": 0.9996,
+          "bind-chain/256": 0.9293,
+          "bind-chain/4096": 1.0,
+          "bundle/1024": 0.4965,
+          "bundle/256": 0.5009,
+          "bundle/4096": 0.5013,
+          "exact_counts": 0.4997,
+          "exact_positions": 0.5535,
+          "permute-bundle/1024": 0.5494,
+          "permute-bundle/256": 0.5543,
+          "permute-bundle/4096": 0.5536,
+          "windows_not_stored": 100,
+          "windows_stored": 100
+        }
+      ],
+      "recognition_note": "all stored windows summed into one vector; the score of a window is its similarity to that sum; the figure is the share of (stored, not stored) pairs ranked rightly, 0.5 being chance",
+      "window": 6
+    },
+    {
+      "data": "real",
+      "distinct_events": 25,
+      "distinct_windows": 4288,
+      "distinct_windows_that_are_another_reordered": 3759,
+      "events": 2000000,
+      "label": "hdfs",
+      "nearest_window_note": "each stored window kept as its own vector; the query is a stored window with one event replaced; credit 1 when the original is the single nearest, 1/k when it ties for nearest with k - 1 others",
+      "nearest_window_precision": [
+        {
+          "bind-chain/1024": 0.126,
+          "bind-chain/256": 0.11,
+          "bind-chain/4096": 0.104,
+          "bundle/1024": 0.871,
+          "bundle/256": 0.879,
+          "bundle/4096": 0.879,
+          "damage": "one event of six replaced by another",
+          "exact_counts": 0.875,
+          "exact_positions": 0.997,
+          "permute-bundle/1024": 0.996,
+          "permute-bundle/256": 0.996,
+          "permute-bundle/4096": 0.994,
+          "queries": 500,
+          "windows_stored": 10
+        },
+        {
+          "bind-chain/1024": 0.004,
+          "bind-chain/256": 0.008,
+          "bind-chain/4096": 0.012,
+          "bundle/1024": 0.6693,
+          "bundle/256": 0.6507,
+          "bundle/4096": 0.6593,
+          "damage": "one event of six replaced by another",
+          "exact_counts": 0.6505,
+          "exact_positions": 0.981,
+          "permute-bundle/1024": 0.986,
+          "permute-bundle/256": 0.982,
+          "permute-bundle/4096": 0.984,
+          "queries": 500,
+          "windows_stored": 100
+        },
+        {
+          "bind-chain/1024": 0.0,
+          "bind-chain/256": 0.0,
+          "bind-chain/4096": 0.0,
+          "bundle/1024": 0.2215,
+          "bundle/256": 0.2148,
+          "bundle/4096": 0.2339,
+          "damage": "one event of six replaced by another",
+          "exact_counts": 0.2299,
+          "exact_positions": 0.8341,
+          "permute-bundle/1024": 0.84,
+          "permute-bundle/256": 0.842,
+          "permute-bundle/4096": 0.836,
+          "queries": 500,
+          "windows_stored": 1000
+        }
+      ],
+      "recognition_auc": [
+        {
+          "bind-chain/1024": 1.0,
+          "bind-chain/256": 1.0,
+          "bind-chain/4096": 1.0,
+          "bundle/1024": 0.69,
+          "bundle/256": 0.65,
+          "bundle/4096": 0.67,
+          "exact_counts": 0.68,
+          "exact_positions": 0.885,
+          "permute-bundle/1024": 0.87,
+          "permute-bundle/256": 0.88,
+          "permute-bundle/4096": 0.88,
+          "windows_not_stored": 10,
+          "windows_stored": 10
+        },
+        {
+          "bind-chain/1024": 1.0,
+          "bind-chain/256": 0.9246,
+          "bind-chain/4096": 1.0,
+          "bundle/1024": 0.5564,
+          "bundle/256": 0.5565,
+          "bundle/4096": 0.5572,
+          "exact_counts": 0.5585,
+          "exact_positions": 0.6271,
+          "permute-bundle/1024": 0.634,
+          "permute-bundle/256": 0.6279,
+          "permute-bundle/4096": 0.6318,
+          "windows_not_stored": 100,
+          "windows_stored": 100
+        },
+        {
+          "bind-chain/1024": 0.8321,
+          "bind-chain/256": 0.6929,
+          "bind-chain/4096": 0.9758,
+          "bundle/1024": 0.4919,
+          "bundle/256": 0.4906,
+          "bundle/4096": 0.4914,
+          "exact_counts": 0.4897,
+          "exact_positions": 0.5037,
+          "permute-bundle/1024": 0.5005,
+          "permute-bundle/256": 0.4985,
+          "permute-bundle/4096": 0.5027,
+          "windows_not_stored": 1000,
+          "windows_stored": 1000
+        }
+      ],
+      "recognition_note": "all stored windows summed into one vector; the score of a window is its similarity to that sum; the figure is the share of (stored, not stored) pairs ranked rightly, 0.5 being chance",
+      "window": 6
+    }
+  ],
+  "seed": "fixed in the source",
+  "synthetic": {
+    "alphabet": 64,
+    "chance_of_finding_a_token_by_luck": 0.0156,
+    "constituent_recovery": [
+      {
+        "algorithm": "bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 256,
+        "found": 0.9675,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 256,
+        "found": 0.66,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 256,
+        "found": 1.0,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 64
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 2
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 4
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 8
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 16
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 32
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 4096,
+        "found": 1.0,
+        "sequence_length": 64
+      }
+    ],
+    "constituent_recovery_note": "bundle: the token found is somewhere in the sequence (it cannot say where). permute-bundle: the token at the asked position. bind-chain: the token at the asked position, given every other constituent.",
+    "cost": [
+      {
+        "_": true,
+        "algorithm": "bundle",
+        "bytes_per_vector": 2048,
+        "dimension": 256,
+        "microseconds_per_similarity": 0.722,
+        "microseconds_to_compose_six_tokens": 2.8245
+      },
+      {
+        "_": true,
+        "algorithm": "permute-bundle",
+        "bytes_per_vector": 2048,
+        "dimension": 256,
+        "microseconds_per_similarity": 0.7427,
+        "microseconds_to_compose_six_tokens": 3.0265
+      },
+      {
+        "_": true,
+        "algorithm": "bind-chain",
+        "bytes_per_vector": 2048,
+        "dimension": 256,
+        "microseconds_per_similarity": 0.8025,
+        "microseconds_to_compose_six_tokens": 3.78
+      },
+      {
+        "_": true,
+        "algorithm": "bundle",
+        "bytes_per_vector": 8192,
+        "dimension": 1024,
+        "microseconds_per_similarity": 2.8476,
+        "microseconds_to_compose_six_tokens": 12.29
+      },
+      {
+        "_": true,
+        "algorithm": "permute-bundle",
+        "bytes_per_vector": 8192,
+        "dimension": 1024,
+        "microseconds_per_similarity": 3.2099,
+        "microseconds_to_compose_six_tokens": 13.0935
+      },
+      {
+        "_": true,
+        "algorithm": "bind-chain",
+        "bytes_per_vector": 8192,
+        "dimension": 1024,
+        "microseconds_per_similarity": 2.767,
+        "microseconds_to_compose_six_tokens": 12.19
+      },
+      {
+        "_": true,
+        "algorithm": "bundle",
+        "bytes_per_vector": 32768,
+        "dimension": 4096,
+        "microseconds_per_similarity": 10.8932,
+        "microseconds_to_compose_six_tokens": 46.0665
+      },
+      {
+        "_": true,
+        "algorithm": "permute-bundle",
+        "bytes_per_vector": 32768,
+        "dimension": 4096,
+        "microseconds_per_similarity": 17.832,
+        "microseconds_to_compose_six_tokens": 66.352
+      },
+      {
+        "_": true,
+        "algorithm": "bind-chain",
+        "bytes_per_vector": 32768,
+        "dimension": 4096,
+        "microseconds_per_similarity": 11.6693,
+        "microseconds_to_compose_six_tokens": 49.002
+      }
+    ],
+    "data": "synthetic: made-up tokens drawn uniformly; measures the arithmetic only",
+    "noise_tolerance": [
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8,
+        "signal_to_noise_db": 10
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8,
+        "signal_to_noise_db": 0
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 0.99,
+        "sequence_length": 8,
+        "signal_to_noise_db": -10
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "found": 0.27,
+        "sequence_length": 8,
+        "signal_to_noise_db": -20
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8,
+        "signal_to_noise_db": 10
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8,
+        "signal_to_noise_db": 0
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 1.0,
+        "sequence_length": 8,
+        "signal_to_noise_db": -10
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "found": 0.93,
+        "sequence_length": 8,
+        "signal_to_noise_db": -20
+      }
+    ],
+    "order_sensitivity": [
+      {
+        "algorithm": "bundle",
+        "dimension": 256,
+        "mean_similarity_to_the_same_tokens_reordered": 1.0
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 256,
+        "mean_similarity_to_the_same_tokens_reordered": -0.002
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 256,
+        "mean_similarity_to_the_same_tokens_reordered": 0.0034
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 1024,
+        "mean_similarity_to_the_same_tokens_reordered": 1.0
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 1024,
+        "mean_similarity_to_the_same_tokens_reordered": -0.002
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 1024,
+        "mean_similarity_to_the_same_tokens_reordered": -0.0018
+      },
+      {
+        "algorithm": "bundle",
+        "dimension": 4096,
+        "mean_similarity_to_the_same_tokens_reordered": 1.0
+      },
+      {
+        "algorithm": "permute-bundle",
+        "dimension": 4096,
+        "mean_similarity_to_the_same_tokens_reordered": -0.0013
+      },
+      {
+        "algorithm": "bind-chain",
+        "dimension": 4096,
+        "mean_similarity_to_the_same_tokens_reordered": 0.0013
+      }
+    ]
+  },
+  "what": "composition of token representations (specification F1): order sensitivity, constituent recovery, noise tolerance, capacity, retrieval and cost"
+}

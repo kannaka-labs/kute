@@ -380,7 +380,7 @@ views["Not here"] = async (root) => {
       ["Peer status", "kute peer is a separate process, one connection at a time, and reports when it ends.", "The JSON that kute peer serve and kute peer send print."],
       ["Pattern timing", "The discover operation of the service takes symbols without times.", "kute discover with --time-field; kute live."],
       ["Running a benchmark again", "The service is read-only and runs nothing but its five operations.", "The scripts in benchmarks/; open their reports under Reports."],
-      ["Representation experiments", "No representation research is built yet (specification F1).", "Nowhere."],
+      ["Representation experiments", "The service has no operation for them. One measurement exists, and its result is negative.", "docs/representations.md; its report opens under Reports as plain JSON."],
       ["Training and evolving", "The service cannot create or change a vocabulary.", "kute train, kute evolve, kute shadow."],
     ])));
 };

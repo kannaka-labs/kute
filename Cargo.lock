@@ -443,6 +443,7 @@ version = "0.7.0"
 dependencies = [
  "kute-core",
  "kute-types",
+ "serde_json",
  "sha2",
 ]
 

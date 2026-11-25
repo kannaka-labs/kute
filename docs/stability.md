@@ -63,7 +63,8 @@ someone building on it knows what a new release may do to them.
 | `kute-discover::live` | experimental | A prototype. Its counts are estimates with a stated error; see ADR-0036. |
 | `kute-bench` | experimental | A tool for this repository, published so that reports can be reproduced. |
 | Python package `kute-engine` (`kute.Engine`, `kute.Vocabulary`, `kute.discover`) | provisional | Tracks the Rust `kute` crate. |
-| HRM adapter contract and plugin | experimental | An interface and one reference mapping. Nothing has been measured about its usefulness. |
+| HRM adapter contract and plugin | experimental | An interface and one reference mapping. |
+| `kute_hrm::compose` (bundle, permute-bundle, bind-chain) | experimental, research | Measured once, with a negative result: `docs/representations.md`. May be removed. |
 | `backends/rustbpe` | experimental | A reference backend for comparison. |
 
 Minimum supported Rust is 1.85 and is checked in CI. Raising it is a minor

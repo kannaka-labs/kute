@@ -117,6 +117,9 @@ Added in v0.3:
   `docs/events.md`.
 * An experiment on layered vocabularies with local ids, which found no
   reason to add them: `docs/layered.md`.
+* A first measurement of composed token representations (sum, rotated
+  sum, binding) on real event logs, which did no better than exact
+  counting: `docs/representations.md`.
 * `kute signals pack|unpack|inspect`: a sequence of numbers kept exactly,
   or within an error bound that is checked on every value and stated in
   the file. Standard techniques; the contract is the point. See
