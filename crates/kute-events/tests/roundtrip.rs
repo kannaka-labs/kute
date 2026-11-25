@@ -251,6 +251,20 @@ fn a_container_with_something_left_over_is_refused() {
     assert!(error.contains("after its compressed data"), "{error}");
 }
 
+/// A build without Zstandard writes zlib, reads it back, and says what
+/// is missing when asked for the other.
+#[cfg(not(feature = "zstd"))]
+#[test]
+fn without_zstandard_pack_writes_zlib_and_the_other_codec_is_refused_by_name() {
+    let source = "{\"event\":\"a\",\"id\":\"n\",\"t\":1}\n".repeat(50);
+    let (container, report) = pack(source.as_bytes(), &layout()).unwrap();
+    assert!(report.header.columns.iter().all(|c| c.codec == kute_events::Codec::Zlib));
+    assert_eq!(unpack(&container, LIMIT).unwrap(), source.as_bytes());
+    let refused = kute_events::pack_with(source.as_bytes(), &layout(), kute_events::Codec::Zstd).unwrap_err().to_string();
+    assert!(refused.contains("zstd"), "{refused}");
+}
+
+#[cfg(feature = "zstd")]
 #[test]
 fn both_codecs_give_the_same_records_and_an_unknown_one_is_refused() {
     let mut source = String::new();

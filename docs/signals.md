@@ -63,7 +63,12 @@ Standard techniques, none of them new:
    twice the bound.
 2. Take differences between neighbours zero, one or two times, whichever
    stores smallest by trial.
-3. Write them as variable-length integers and compress with zstd.
+3. Write them as variable-length integers and compress: with Zstandard,
+   or with zlib (`--codec zlib`, and the default in a build without the
+   `zstd` feature; since 0.8.1). The header names the codec when it is
+   zlib; a header that names none is Zstandard, as 0.8.0 wrote it. A
+   0.8.0 reader does not know the field and reports a zlib container as
+   damaged. The figures below are for Zstandard.
 4. Keep beside it, as raw bits with their positions, every value the
    scheme cannot give back: NaN, infinities, a value with no short
    decimal form, a value too large for the step.

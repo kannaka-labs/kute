@@ -60,11 +60,19 @@ codec it does not know.
 | codec | a column is | written by |
 |---|---|---|
 | `zstd` | one Zstandard frame, window at most 128 MiB, no checksum of its own | `pack`, by default |
-| `zlib` | one zlib stream | `pack --codec zlib` |
+| `zlib` | one zlib stream | `pack --codec zlib`, and `pack` in a build without Zstandard |
 
 `zstd` is the smaller; `zlib` is for a container that must be readable
 with nothing but a zlib library. Both unpack to the same records and the
 same digest.
+
+Zstandard is a build feature, `zstd`, on unless turned off (since
+0.8.1). It is the one part of `kute-events` that compiles C. A build
+without it (`default-features = false` for the library,
+`cargo install kute-cli --no-default-features` for the command) is Rust
+only, writes zlib columns by default, and refuses a Zstandard container
+with an error that names the feature. The figures in this document are
+for Zstandard columns unless a row says zlib.
 
 | column | kind | holds |
 |---|---|---|

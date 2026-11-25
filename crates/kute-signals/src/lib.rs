@@ -14,7 +14,8 @@
 //! How: values are turned into whole numbers (a decimal scale found in
 //! the data, or steps of twice the error bound), differences are taken
 //! (order 0, 1 or 2, whichever stores smallest), written as varints and
-//! compressed with zstd. Values that do not fit the scheme are kept as
+//! compressed, with Zstandard (the `zstd` feature, on by default) or
+//! with zlib. Values that do not fit the scheme are kept as
 //! raw bits beside it. A signal with no decimal scale is stored exactly
 //! as its bytes, arranged by byte position.
 //!
@@ -36,6 +37,7 @@ pub const MAGIC: &[u8; 9] = b"KUTE-SG1\n";
 /// Most values in one container.
 pub const MAX_VALUES: u64 = 1 << 31;
 const MAX_HEADER_BYTES: usize = 64 * 1024;
+#[cfg_attr(not(feature = "zstd"), allow(dead_code))]
 const ZSTD_WINDOW_LOG: u32 = 27;
 /// Whole numbers are kept below this size so that turning them back into
 /// `f64` is exact with room to spare.
@@ -61,8 +63,57 @@ pub enum Scheme {
     Bits,
 }
 
+/// How the parts are compressed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Codec {
+    /// One zlib stream a part.
+    Zlib,
+    /// One Zstandard frame a part, with a window of at most 128 MiB.
+    /// Written and read only by a build with the `zstd` feature. A
+    /// header that names no codec means this one.
+    #[default]
+    Zstd,
+}
+
+#[cfg(not(feature = "zstd"))]
+const NO_ZSTD: &str = "this build has no Zstandard: build with the `zstd` feature, or use zlib";
+
+impl Codec {
+    pub fn parse(name: &str) -> Result<Self> {
+        match name {
+            "zlib" => Ok(Self::Zlib),
+            "zstd" => Ok(Self::Zstd),
+            other => Err(KuteError::InvalidConfig(format!("unknown codec {other:?}; use zstd or zlib"))),
+        }
+    }
+
+    /// What [`pack`] writes: Zstandard when this build has it, zlib
+    /// when it does not.
+    pub const fn preferred() -> Self {
+        if cfg!(feature = "zstd") {
+            Self::Zstd
+        } else {
+            Self::Zlib
+        }
+    }
+
+    /// Whether this build reads and writes the codec.
+    pub const fn available(self) -> bool {
+        matches!(self, Self::Zlib) || cfg!(feature = "zstd")
+    }
+
+    fn is_zstd(&self) -> bool {
+        *self == Self::Zstd
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Header {
+    /// Absent in a container whose parts are Zstandard, so that those are
+    /// the bytes the first release wrote.
+    #[serde(default, skip_serializing_if = "Codec::is_zstd")]
+    pub codec: Codec,
     pub values: u64,
     pub scheme: Scheme,
     /// `exact`, or `bounded`.
@@ -141,11 +192,29 @@ fn unzigzag(n: u64) -> i64 {
     ((n >> 1) as i64) ^ -((n & 1) as i64)
 }
 
+#[cfg_attr(not(feature = "zstd"), allow(dead_code))]
 fn window_log(raw: u64) -> u32 {
     (u64::BITS - raw.saturating_sub(1).leading_zeros()).clamp(10, ZSTD_WINDOW_LOG)
 }
 
-fn compress(raw: &[u8], level: i32) -> Result<Vec<u8>> {
+fn compress(raw: &[u8], level: i32, codec: Codec) -> Result<Vec<u8>> {
+    if codec == Codec::Zlib {
+        // The levels asked for are Zstandard's: 19 for what is kept, 3 for a trial.
+        let level = if level >= 19 { flate2::Compression::best() } else { flate2::Compression::new(4) };
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), level);
+        encoder.write_all(raw)?;
+        return Ok(encoder.finish()?);
+    }
+    zstd_compress(raw, level)
+}
+
+#[cfg(not(feature = "zstd"))]
+fn zstd_compress(_: &[u8], _: i32) -> Result<Vec<u8>> {
+    Err(KuteError::InvalidConfig(NO_ZSTD.into()))
+}
+
+#[cfg(feature = "zstd")]
+fn zstd_compress(raw: &[u8], level: i32) -> Result<Vec<u8>> {
     let window = window_log(raw.len() as u64);
     let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), level)?;
     encoder.window_log(window)?;
@@ -157,16 +226,29 @@ fn compress(raw: &[u8], level: i32) -> Result<Vec<u8>> {
 }
 
 /// Inflate exactly `raw` bytes from one frame, and nothing more.
-fn expand(stored: &[u8], raw: u64, part: &str) -> Result<Vec<u8>> {
+fn expand(stored: &[u8], raw: u64, part: &str, codec: Codec) -> Result<Vec<u8>> {
     let bad = |why: String| damaged(format!("{part}: {why}"));
     let mut bytes = Vec::new();
-    let mut decoder = zstd::stream::read::Decoder::with_buffer(stored).map_err(|e| bad(e.to_string()))?.single_frame();
-    decoder.window_log_max(window_log(raw)).map_err(|e| bad(e.to_string()))?;
-    decoder.by_ref().take(raw.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| bad(e.to_string()))?;
+    let spare = match codec {
+        Codec::Zlib => {
+            let mut decoder = flate2::read::ZlibDecoder::new(stored);
+            decoder.by_ref().take(raw.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| bad(e.to_string()))?;
+            stored.len() as u64 - decoder.total_in()
+        }
+        #[cfg(not(feature = "zstd"))]
+        Codec::Zstd => return Err(KuteError::InvalidConfig(format!("{part}: the container is Zstandard; {NO_ZSTD}"))),
+        #[cfg(feature = "zstd")]
+        Codec::Zstd => {
+            let mut decoder = zstd::stream::read::Decoder::with_buffer(stored).map_err(|e| bad(e.to_string()))?.single_frame();
+            decoder.window_log_max(window_log(raw)).map_err(|e| bad(e.to_string()))?;
+            decoder.by_ref().take(raw.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| bad(e.to_string()))?;
+            decoder.finish().len() as u64
+        }
+    };
     if bytes.len() as u64 != raw {
         return Err(bad("does not inflate to its declared size".into()));
     }
-    if !decoder.finish().is_empty() {
+    if spare != 0 {
         return Err(bad("has bytes after its compressed data".into()));
     }
     Ok(bytes)
@@ -284,11 +366,18 @@ fn assemble(header: &Header, parts: [&[u8]; 3]) -> Result<Vec<u8>> {
 }
 
 pub fn pack(values: &[f64], mode: Mode) -> Result<(Vec<u8>, Report)> {
+    pack_with(values, mode, Codec::preferred())
+}
+
+/// [`pack`] with the codec chosen. `zlib` writes a container that needs
+/// nothing but a zlib reader; `zstd` needs a build with the `zstd`
+/// feature, here and in the reader.
+pub fn pack_with(values: &[f64], mode: Mode, codec: Codec) -> Result<(Vec<u8>, Report)> {
     if values.len() as u64 > MAX_VALUES {
         return Err(KuteError::LimitExceeded(format!("a signal container holds at most {MAX_VALUES} values")));
     }
     match mode {
-        Mode::Exact => pack_as(values, mode, true),
+        Mode::Exact => pack_as(values, mode, codec, true),
         Mode::Bounded { max_error } => {
             if !(max_error.is_finite() && max_error > 0.0) {
                 return Err(KuteError::InvalidConfig("max_error must be a positive number".into()));
@@ -296,20 +385,20 @@ pub fn pack(values: &[f64], mode: Mode) -> Result<(Vec<u8>, Report)> {
             // Exact values keep any bound. When the bound is finer than the
             // signal's own resolution, steps of it cost more than the
             // values themselves; the smaller of the two is written.
-            let exact = pack_as(values, mode, true)?;
+            let exact = pack_as(values, mode, codec, true)?;
             // A bound so large that twice it is not a number has no step.
             // Exact values keep it.
             if !(2.0 * max_error).is_finite() {
                 return Ok(exact);
             }
-            let stepped = pack_as(values, mode, false)?;
+            let stepped = pack_as(values, mode, codec, false)?;
             Ok(if exact.0.len() < stepped.0.len() { exact } else { stepped })
         }
     }
 }
 
 /// One layout: the values as they are (`as_they_are`), or in steps of the bound.
-fn pack_as(values: &[f64], mode: Mode, as_they_are: bool) -> Result<(Vec<u8>, Report)> {
+fn pack_as(values: &[f64], mode: Mode, codec: Codec, as_they_are: bool) -> Result<(Vec<u8>, Report)> {
     let (contract, stated) = match mode {
         Mode::Exact => ("exact", None),
         Mode::Bounded { max_error } => ("bounded", Some(max_error)),
@@ -331,10 +420,11 @@ fn pack_as(values: &[f64], mode: Mode, as_they_are: bool) -> Result<(Vec<u8>, Re
             for byte in 0..8 {
                 planes.extend(values.iter().map(|v| v.to_bits().to_le_bytes()[byte]));
             }
-            let stored = compress(&planes, 19)?;
+            let stored = compress(&planes, 19, codec)?;
             // The two parts this scheme does not use are still frames, empty ones.
-            let empty = compress(&[], 19)?;
+            let empty = compress(&[], 19, codec)?;
             let header = Header {
+                codec,
                 values: values.len() as u64,
                 scheme: Scheme::Bits,
                 contract: contract.into(),
@@ -357,7 +447,7 @@ fn pack_as(values: &[f64], mode: Mode, as_they_are: bool) -> Result<(Vec<u8>, Re
                 let mut numbers = w.numbers.clone();
                 difference(&mut numbers, order);
                 let raw = varints(&numbers);
-                let trial = compress(&raw, 3)?.len();
+                let trial = compress(&raw, 3, codec)?.len();
                 if best.as_ref().is_none_or(|(size, _, _)| trial < *size) {
                     best = Some((trial, order, raw));
                 }
@@ -370,13 +460,14 @@ fn pack_as(values: &[f64], mode: Mode, as_they_are: bool) -> Result<(Vec<u8>, Re
                 previous = at;
                 bits.extend_from_slice(&value.to_le_bytes());
             }
-            let parts = [compress(&raw_main, 19)?, compress(&positions, 19)?, compress(&bits, 19)?];
+            let parts = [compress(&raw_main, 19, codec)?, compress(&positions, 19, codec)?, compress(&bits, 19, codec)?];
             // What a reader will obtain: hash that, not what was given.
             let mut obtained: Vec<f64> = w.numbers.iter().map(|&k| rebuild(k, w.scheme, w.scale)).collect();
             for &(at, value) in &w.kept {
                 obtained[at as usize] = f64::from_bits(value);
             }
             let header = Header {
+                codec,
                 values: values.len() as u64,
                 scheme: w.scheme,
                 contract: contract.into(),
@@ -475,7 +566,7 @@ pub fn unpack(container: &[u8], max_values: u64) -> Result<Vec<f64>> {
             return Err(damaged("a part is larger than its values allow"));
         }
         let size = usize::try_from(header.stored[i]).ok().filter(|s| *s <= container.len() - at).ok_or_else(|| damaged("a part runs past the end"))?;
-        parts[i] = expand(&container[at..at + size], header.raw[i], ["values", "positions", "kept values"][i])?;
+        parts[i] = expand(&container[at..at + size], header.raw[i], ["values", "positions", "kept values"][i], header.codec)?;
         at += size;
     }
     if at != container.len() {
@@ -540,15 +631,23 @@ mod tests {
 
     #[test]
     fn parts_of_any_size_come_back_and_no_more_than_declared() {
-        for raw in [vec![], vec![7u8, 1, 1, 1], vec![0; 32], (0..5000).map(|i| (i * 7) as u8).collect()] {
-            let stored = compress(&raw, 19).unwrap();
-            assert_eq!(expand(&stored, raw.len() as u64, "part").unwrap(), raw);
-            if !raw.is_empty() {
-                assert!(expand(&stored, raw.len() as u64 - 1, "part").is_err());
+        for codec in [Codec::Zlib, Codec::Zstd].into_iter().filter(|c| c.available()) {
+            for raw in [vec![], vec![7u8, 1, 1, 1], vec![0; 32], (0..5000).map(|i| (i * 7) as u8).collect()] {
+                let mut stored = compress(&raw, 19, codec).unwrap();
+                assert_eq!(expand(&stored, raw.len() as u64, "part", codec).unwrap(), raw);
+                if !raw.is_empty() {
+                    assert!(expand(&stored, raw.len() as u64 - 1, "part", codec).is_err());
+                }
+                assert!(expand(&stored, raw.len() as u64 + 1, "part", codec).is_err());
+                stored.push(0);
+                assert!(expand(&stored, raw.len() as u64, "part", codec).is_err(), "bytes after the data");
             }
-            assert!(expand(&stored, raw.len() as u64 + 1, "part").is_err());
+            assert!(expand(&[], 0, "part", codec).is_err());
         }
-        assert!(expand(&[], 0, "part").is_err());
+        if !Codec::Zstd.available() {
+            assert!(compress(b"abc", 19, Codec::Zstd).unwrap_err().to_string().contains("zstd"));
+            assert!(expand(b"abc", 3, "part", Codec::Zstd).unwrap_err().to_string().contains("zstd"));
+        }
     }
 
     #[test]

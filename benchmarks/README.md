@@ -964,6 +964,17 @@ KUTE 1.94 s (1.87 to 1.96), `tokenizers` 7.73 s (7.68 to 7.92), encoding
 0.138 s against 0.789 s for a batch of lines, the same token counts. Four
 times to train, as on 0.6.0.
 
+The laptop run was repeated once more with the released 0.8.0 package
+from PyPI (report
+`results/tokenizers-enwik8-10runs-matched-isolated-v0.8.0.json`): KUTE
+trained in 4.35 s (3.58 to 6.69) and `tokenizers` in 67.2 s (64.1 to
+77.1); encoding 0.30 s (0.26 to 0.38) against 3.88 s (3.42 to 5.25) for a
+batch of lines; the same token counts, and one vocabulary digest over the
+ten runs. The trainer's source is the same in 0.8.0 as in 0.7.0, and the
+medians agree with both earlier laptop runs. The ranges are again wider
+than in the 0.6.0 run, so the machine was not as quiet; the 0.6.0 run
+stays the clean one for the laptop.
+
 What can be said: with one training per process, KUTE trained this
 vocabulary about 4 times faster on a 24-thread desktop and about 16 times
 faster on an 8-thread laptop, each with narrow ranges over ten runs.
