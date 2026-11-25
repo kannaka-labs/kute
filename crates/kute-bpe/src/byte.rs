@@ -586,4 +586,50 @@ mod tests {
         assert_eq!(whole.statistics.get("unique_chunks"), apart.statistics.get("unique_chunks"));
         assert!(whole.merges.len() > 20, "{}", whole.merges.len());
     }
+
+    /// The pieces between cut points split into the chunks the whole text
+    /// splits into, in the same order, for text built to put every kind of
+    /// boundary next to a line feed, and for lengths just under, at and just
+    /// over the size at which counting goes parallel.
+    #[test]
+    fn cut_pieces_chunk_as_the_whole_does() {
+        let regex = compile(kute_types::Pretokenizer::Gpt4.pattern()).unwrap();
+        let parts = [
+            "alpha", "Beta", "x", "don't", "'s", "'ll", "42", "1234567", "naïve", "日本", "é", "--", "...", "!", "'", "\"", " ", "  ", "\t",
+            "\u{a0}", "\u{2028}", "\u{85}", "\n", "\n\n", "\r\n", "\r", " \n", "\n ", "\t\n", ".\n", "!\n\n", "'\n", "9\n", "é\n", " \r\n",
+        ];
+        let mut state = 0x9e3779b97f4a7c15u64;
+        for round in 0..6 {
+            let target = match round {
+                0 => PARALLEL_MIN_BYTES - 1,
+                1 => PARALLEL_MIN_BYTES,
+                2 => PARALLEL_MIN_BYTES + 1,
+                _ => PARALLEL_MIN_BYTES * 2 + (xorshift(&mut state) % 4096) as usize,
+            };
+            let mut text = String::new();
+            while text.len() < target {
+                text.push_str(parts[(xorshift(&mut state) % parts.len() as u64) as usize]);
+            }
+            // Trim to the exact length on a character boundary, then pad with letters.
+            while text.len() > target {
+                text.pop();
+            }
+            while text.len() < target {
+                text.push('a');
+            }
+            let bytes = text.as_bytes();
+            let mut whole: Vec<&[u8]> = Vec::new();
+            for_each_chunk(regex.as_ref(), bytes, |c| whole.push(c));
+            let cuts = parallel_cuts(bytes);
+            assert!(cuts.len() > 3, "round {round}: the text should be cut");
+            let mut apart: Vec<&[u8]> = Vec::new();
+            for c in cuts.windows(2) {
+                for_each_chunk(regex.as_ref(), &bytes[c[0]..c[1]], |c| apart.push(c));
+            }
+            if let Some(i) = (0..whole.len().min(apart.len())).find(|&i| whole[i] != apart[i]) {
+                panic!("round {round}: chunk {i} is {:?} in the whole text and {:?} in the pieces", String::from_utf8_lossy(whole[i]), String::from_utf8_lossy(apart[i]));
+            }
+            assert_eq!(whole.len(), apart.len(), "round {round}");
+        }
+    }
 }
