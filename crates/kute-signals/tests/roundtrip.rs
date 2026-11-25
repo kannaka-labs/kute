@@ -2,7 +2,7 @@
 //! means within the bound, and a container that would give anything else
 //! is refused. Synthetic data.
 
-use kute_signals::{header, pack, unpack, Mode, Scheme, MAGIC};
+use kute_signals::{header, pack, pack_with, unpack, Codec, Mode, Scheme, MAGIC};
 
 struct Rng(u64);
 
@@ -181,4 +181,45 @@ fn a_container_that_would_give_other_values_is_refused() {
     assert!(unpack(&lying, u64::MAX).is_err());
     assert!(unpack(&lying, 1 << 20).is_err());
     assert!(unpack(b"KUTE-EV1\n\0\0\0\0", 10).is_err());
+}
+
+/// The codec is a choice about bytes, not about values: zlib parts give
+/// the same values and the same hash, the header says which it is, and a
+/// header that says the wrong one is refused.
+#[test]
+fn zlib_parts_give_the_same_values_and_the_header_names_them() {
+    let values = meter(20_000, 11);
+    for mode in [Mode::Exact, Mode::Bounded { max_error: 0.01 }] {
+        let (zlib, with_zlib) = pack_with(&values, mode, Codec::Zlib).unwrap();
+        assert_eq!(header(&zlib).unwrap().codec, Codec::Zlib);
+        let back = unpack(&zlib, values.len() as u64).unwrap();
+        let (default, with_default) = pack(&values, mode).unwrap();
+        assert_eq!(with_default.header.codec, Codec::preferred());
+        assert_eq!(with_zlib.header.values_sha256, with_default.header.values_sha256);
+        assert!(same_bits(&back, &unpack(&default, values.len() as u64).unwrap()));
+
+        // The header as text: a Zstandard container names no codec, as in
+        // the first release; a zlib one does.
+        let head = |container: &[u8]| {
+            let length = u32::from_le_bytes(container[MAGIC.len()..MAGIC.len() + 4].try_into().unwrap()) as usize;
+            String::from_utf8(container[MAGIC.len() + 4..MAGIC.len() + 4 + length].to_vec()).unwrap()
+        };
+        assert!(head(&zlib).contains("\"codec\":\"zlib\""));
+        if Codec::Zstd.available() {
+            assert!(!head(&default).contains("codec"));
+            assert!(zlib != default);
+        } else {
+            assert_eq!(zlib, default);
+            assert!(pack_with(&values, mode, Codec::Zstd).unwrap_err().to_string().contains("zstd"));
+        }
+
+        // The same parts under a header that claims the other codec.
+        let text = head(&zlib).replace("\"codec\":\"zlib\",", "");
+        let mut forged = MAGIC.to_vec();
+        forged.extend_from_slice(&(text.len() as u32).to_le_bytes());
+        forged.extend_from_slice(text.as_bytes());
+        forged.extend_from_slice(&zlib[MAGIC.len() + 4 + head(&zlib).len()..]);
+        assert!(unpack(&forged, values.len() as u64).is_err());
+    }
+    assert!(Codec::parse("lzma").is_err());
 }

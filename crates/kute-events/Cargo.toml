@@ -19,4 +19,11 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 flate2.workspace = true
-zstd.workspace = true
+zstd = { workspace = true, optional = true }
+
+[features]
+default = ["zstd"]
+# Zstandard columns: smaller containers, and a C compiler to build.
+# Without it the crate is Rust only, writes zlib columns, and refuses a
+# container whose columns are Zstandard.
+zstd = ["dep:zstd"]

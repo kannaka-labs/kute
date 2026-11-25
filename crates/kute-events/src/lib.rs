@@ -75,11 +75,30 @@ pub enum Kind {
 pub enum Codec {
     /// One zlib stream.
     Zlib,
-    /// One Zstandard frame, with a window of at most 128 MiB.
+    /// One Zstandard frame, with a window of at most 128 MiB. Written
+    /// and read only by a build with the `zstd` feature.
     Zstd,
 }
 
+#[cfg(not(feature = "zstd"))]
+const NO_ZSTD: &str = "this build has no Zstandard: build with the `zstd` feature, or use zlib";
+
 impl Codec {
+    /// What [`pack`] writes: Zstandard when this build has it, zlib
+    /// when it does not.
+    pub const fn preferred() -> Self {
+        if cfg!(feature = "zstd") {
+            Self::Zstd
+        } else {
+            Self::Zlib
+        }
+    }
+
+    /// Whether this build reads and writes the codec.
+    pub const fn available(self) -> bool {
+        matches!(self, Self::Zlib) || cfg!(feature = "zstd")
+    }
+
     pub fn parse(name: &str) -> Result<Self> {
         match name {
             "zlib" => Ok(Self::Zlib),
@@ -89,6 +108,7 @@ impl Codec {
     }
 }
 
+#[cfg_attr(not(feature = "zstd"), allow(dead_code))]
 /// The largest Zstandard window written, and the largest accepted: 2^27.
 const ZSTD_WINDOW_LOG: u32 = 27;
 
@@ -202,6 +222,7 @@ fn deflate(raw: &[u8]) -> Result<Vec<u8>> {
     Ok(encoder.finish()?)
 }
 
+#[cfg_attr(not(feature = "zstd"), allow(dead_code))]
 /// The zstd window for a column of `raw` bytes: enough to cover it,
 /// within what a reader accepts.
 fn window_log(raw: u64) -> u32 {
@@ -211,6 +232,9 @@ fn window_log(raw: u64) -> u32 {
 fn compress(raw: &[u8], codec: Codec) -> Result<Vec<u8>> {
     match codec {
         Codec::Zlib => deflate(raw),
+        #[cfg(not(feature = "zstd"))]
+        Codec::Zstd => Err(KuteError::InvalidConfig(NO_ZSTD.into())),
+        #[cfg(feature = "zstd")]
         Codec::Zstd => {
             // A window that covers the column, up to the largest a reader
             // accepts, with long-distance matching once the window is
@@ -232,6 +256,9 @@ fn compress(raw: &[u8], codec: Codec) -> Result<Vec<u8>> {
 fn rough(raw: &[u8], codec: Codec) -> Result<usize> {
     Ok(match codec {
         Codec::Zlib => deflate(raw)?.len(),
+        #[cfg(not(feature = "zstd"))]
+        Codec::Zstd => return Err(KuteError::InvalidConfig(NO_ZSTD.into())),
+        #[cfg(feature = "zstd")]
         Codec::Zstd => zstd::bulk::compress(raw, 6)?.len(),
     })
 }
@@ -248,6 +275,9 @@ fn expand(stored: &[u8], column: &Column) -> Result<Vec<u8>> {
             decoder.by_ref().take(limit).read_to_end(&mut bytes).map_err(|e| bad(e.to_string()))?;
             stored.len() as u64 - decoder.total_in()
         }
+        #[cfg(not(feature = "zstd"))]
+        Codec::Zstd => return Err(KuteError::InvalidConfig(format!("column {} is Zstandard; {NO_ZSTD}", column.name))),
+        #[cfg(feature = "zstd")]
         Codec::Zstd => {
             let mut decoder = zstd::stream::read::Decoder::with_buffer(stored).map_err(|e| bad(e.to_string()))?.single_frame();
             // No more window than the writer would have asked for a
@@ -333,11 +363,12 @@ pub struct Packed {
 /// else that is not a JSON object with the fields the layout requires is
 /// an error naming the line. Nothing is dropped or rounded.
 pub fn pack(source: &[u8], layout: &Layout) -> Result<(Vec<u8>, Packed)> {
-    pack_with(source, layout, Codec::Zstd)
+    pack_with(source, layout, Codec::preferred())
 }
 
 /// [`pack`] with the codec chosen. `zlib` writes a container that needs
-/// nothing but a zlib reader; `zstd` writes a smaller one.
+/// nothing but a zlib reader; `zstd` writes a smaller one and needs a
+/// build with the `zstd` feature, here and in the reader.
 pub fn pack_with(source: &[u8], layout: &Layout, codec: Codec) -> Result<(Vec<u8>, Packed)> {
     if layout.symbol_field.is_empty() {
         return Err(KuteError::InvalidConfig("the symbol field must be named".into()));
@@ -830,6 +861,15 @@ mod tests {
         Column { name: "f:x".into(), kind: Kind::Json, codec: Codec::Zstd, raw, stored: stored as u64 }
     }
 
+    #[cfg(not(feature = "zstd"))]
+    #[test]
+    fn without_zstandard_a_zstandard_column_is_refused_by_name() {
+        assert!(!Codec::Zstd.available() && Codec::preferred() == Codec::Zlib);
+        assert!(compress(b"abc", Codec::Zstd).unwrap_err().to_string().contains("zstd"));
+        assert!(expand(b"abc", &column(3, 3)).unwrap_err().to_string().contains("zstd"));
+    }
+
+    #[cfg(feature = "zstd")]
     #[test]
     fn a_frame_asking_for_more_window_than_its_column_needs_is_refused() {
         // Three bytes, in a frame whose header asks for a 128 MiB window.

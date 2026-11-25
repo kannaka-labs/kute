@@ -7,4 +7,8 @@ every record back in the order of the source, in canonical JSON.
 
 Experimental. The container format (`KUTE-EV1`) may change.
 
+Columns are compressed with Zstandard, which compiles C, or with zlib.
+`default-features = false` gives a crate that is Rust only, writes zlib
+and refuses Zstandard containers.
+
 Part of [KUTE](https://github.com/kannaka-labs/kute).

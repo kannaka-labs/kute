@@ -407,9 +407,11 @@ enum EventsAction {
         #[arg(long, value_name = "FIELD")]
         group_field: Option<String>,
         /// How columns are compressed: zstd, or zlib for a container that
-        /// needs only a zlib reader.
-        #[arg(long, default_value = "zstd")]
-        codec: String,
+        /// needs only a zlib reader. The default is zstd when this build
+        /// has it (the `zstd` feature, on unless turned off) and zlib
+        /// when it does not.
+        #[arg(long)]
+        codec: Option<String>,
     },
     /// Write the records back as canonical JSON Lines, in source order.
     Unpack {
@@ -438,6 +440,10 @@ enum SignalsAction {
         /// exactly. Values that are not finite are still kept exactly.
         #[arg(long, value_name = "ERROR")]
         max_error: Option<f64>,
+        /// How the parts are compressed: zstd or zlib. The default is
+        /// zstd when this build has it and zlib when it does not.
+        #[arg(long)]
+        codec: Option<String>,
         /// Take this column of each line, counting from 1.
         #[arg(long, requires = "delimiter")]
         column: Option<usize>,
@@ -1375,7 +1381,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
         Command::Events { action } => match action {
             EventsAction::Pack { input, output, symbol_field, time_field, group_field, codec } => {
                 let layout = kute_events::Layout { symbol_field, time_field, group_field };
-                let (container, report) = kute_events::pack_with(&std::fs::read(&input)?, &layout, kute_events::Codec::parse(&codec)?)?;
+                let (container, report) = kute_events::pack_with(&std::fs::read(&input)?, &layout, codec.as_deref().map_or(Ok(kute_events::Codec::preferred()), kute_events::Codec::parse)?)?;
                 std::fs::write(&output, &container)?;
                 print(&json!({ "output": output, "report": report }))
             }
@@ -1397,7 +1403,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             EventsAction::Inspect { input } => print(&kute_events::header(&std::fs::read(&input)?)?.0),
         },
         Command::Signals { action } => match action {
-            SignalsAction::Pack { input, output, max_error, column, delimiter, skip_lines } => {
+            SignalsAction::Pack { input, output, max_error, codec, column, delimiter, skip_lines } => {
                 let text = std::fs::read_to_string(&input)?;
                 let mut values = Vec::new();
                 let mut missing = 0u64;
@@ -1415,7 +1421,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                     }
                 }
                 let mode = max_error.map_or(kute_signals::Mode::Exact, |max_error| kute_signals::Mode::Bounded { max_error });
-                let (container, report) = kute_signals::pack(&values, mode)?;
+                let (container, report) = kute_signals::pack_with(&values, mode, codec.as_deref().map_or(Ok(kute_signals::Codec::preferred()), kute_signals::Codec::parse)?)?;
                 std::fs::write(&output, &container)?;
                 print(&json!({ "output": output, "input_bytes": text.len(), "missing_values": missing, "report": report }))
             }

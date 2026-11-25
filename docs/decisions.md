@@ -1045,6 +1045,31 @@ across a year boundary. Results that used its times were redone:
 the prediction report (its sign changed) and the live figures. Results
 that use only the order of lines (the representation windows) stand.
 
+## ADR-0050: Zstandard is a feature, on by default
+
+Status: accepted.
+
+`kute-events` and `kute-signals` took Zstandard as a plain dependency
+in 0.8.0, which made two otherwise Rust-only libraries compile C. The
+reviewer asked for zlib by default with Zstandard optional.
+
+Decided: a feature `zstd` in `kute-events`, `kute-signals` and
+`kute-cli`, on by default. Off, the libraries are Rust only, `pack`
+writes zlib, and a Zstandard container is refused with an error naming
+the feature. `Codec::preferred()` says which a build writes. The signal
+container gains a codec in its header, written only when it is zlib, so
+Zstandard containers are the bytes 0.8.0 wrote.
+
+Rejected: off by default. A default build of 0.8.1 would then refuse
+every container 0.8.0 wrote, in a patch release, and the published
+sizes would no longer be what the default command gives. And it would
+not free the command line from a C compiler: `ring`, for TLS, has
+needed one since 0.7.0. (The 0.8.0 notes said the need was new; that
+was wrong and is corrected.) The default can be turned in a release
+that is allowed to break.
+
+Not done: a Rust-only Zstandard reader for builds without the feature.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

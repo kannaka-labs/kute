@@ -37,6 +37,24 @@ jobs:
         # must not hide whether the others pass on this system.
         run: cargo test --workspace --locked --no-fail-fast
 
+  without-zstd:
+    name: event and signal containers without Zstandard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: The two libraries are Rust only without the feature
+        run: |
+          ! cargo tree -p kute-events --no-default-features --locked -e normal,build --prefix none | grep -E '^(cc|zstd)'
+          ! cargo tree -p kute-signals --no-default-features --locked -e normal,build --prefix none | grep -E '^(cc|zstd)'
+      - name: Clippy
+        run: cargo clippy -p kute-events -p kute-signals -p kute-cli --no-default-features --all-targets --locked
+      - name: Test
+        run: cargo test -p kute-events -p kute-signals -p kute-cli --no-default-features --locked --no-fail-fast
+
   msrv:
     name: minimum supported Rust (1.85)
     runs-on: ubuntu-latest

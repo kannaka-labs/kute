@@ -89,10 +89,17 @@ not covered.
 
 ## Changes since v0.7.0 that need action
 
-- **Building `kute-cli` needs a C compiler.** The event and signal
-  containers (`kute-events`, `kute-signals`) use Zstandard through the
-  `zstd` crate, which compiles C. The other libraries and the Python
-  package do not.
+- **`kute-events` and `kute-signals` compile C by default**, for
+  Zstandard through the `zstd` crate. Since 0.8.1 that is a feature,
+  `zstd`, on unless turned off: with `default-features = false` the two
+  libraries are Rust only, write zlib, and refuse a Zstandard container
+  by name. Corrected in 0.8.1: this note said in 0.8.0 that building
+  `kute-cli` had come to need a C compiler. It already did in 0.7.0,
+  through `ring` for TLS, and still does with the feature off.
+- **A signal container may name its codec** (0.8.1). One written with
+  zlib carries `"codec":"zlib"` in its header; 0.8.0 does not know the
+  field and reports such a container as damaged. Containers written
+  with Zstandard are byte for byte what 0.8.0 wrote.
 - **A vocabulary file may carry signatures**, and one with more than 16,
   or with an overlong field in one, is refused. Signatures are outside
   the digest: signing changes no digest, and the engine checks none

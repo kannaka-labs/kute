@@ -174,8 +174,10 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   `kute live` as a command with `--end-on` and `--idle`, `kute shadow`,
   `kute predict`, `kute keygen/sign/verify`, `kute peer serve
   --require-signature-from`, and `examples/queensync`.
-* Building the command line now needs a C compiler, for Zstandard in
-  the event and signal containers.
+* The event and signal containers use Zstandard, which compiles C.
+  Since 0.8.1 it is a feature (`zstd`, on unless turned off): without
+  it the two libraries are Rust only and write zlib. The command line
+  needs a C compiler either way, as it has since v0.7, for TLS.
 * Results that went against KUTE, kept: on scripted agent messages zlib
   with a preset dictionary is smaller than KUTE tokens by a fifth;
   layered vocabularies gave no reason to add them; composed

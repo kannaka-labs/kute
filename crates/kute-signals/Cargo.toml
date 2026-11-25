@@ -17,4 +17,12 @@ kute-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-zstd.workspace = true
+flate2.workspace = true
+zstd = { workspace = true, optional = true }
+
+[features]
+default = ["zstd"]
+# Zstandard parts: smaller containers, and a C compiler to build.
+# Without it the crate is Rust only, writes zlib parts, and refuses a
+# container whose parts are Zstandard.
+zstd = ["dep:zstd"]
