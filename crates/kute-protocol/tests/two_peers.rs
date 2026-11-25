@@ -589,3 +589,45 @@ fn a_conflicting_proposal_is_a_conflict_and_the_inbox_counts_what_it_keeps() {
     small.add_vocabulary(vocabulary).unwrap();
     assert_eq!(code(&small.handle(message)), ErrorCode::Busy);
 }
+
+/// A symbol may be a kilobyte long, and an escaped symbol is chosen by the
+/// sender. A message of a few hundred bytes that repeats one long escaped
+/// symbol stays under a limit counted in symbols and still decodes to
+/// megabytes, so the bytes of the names are bounded as well: by the inbox
+/// budget for a message and by the frame for a translation.
+#[test]
+fn long_symbols_are_bounded_by_their_bytes_not_only_their_count() {
+    let vocabulary = train("test:protocol:long-symbols", &CYCLE);
+    let limit = 100_000;
+    let policy = Policy { max_decoded_units: limit, max_inbox_bytes: 1 << 20, max_frame_bytes: 1 << 20, translate: true, ..Policy::default() };
+    let mut receiver = ready_peer(policy);
+    let digest = receiver.add_vocabulary(vocabulary.clone()).unwrap();
+    let mut sender = Peer::new("a", Engine::new(), Policy::default());
+    sender.add_vocabulary(vocabulary.clone()).unwrap();
+    let long = events(&["X".repeat(1024).as_str()]);
+    let (Message::EncodedMessage { container, .. }, _) = sender.encode_message(1, &digest, &long, UnknownPolicy::Escape).unwrap() else {
+        panic!("expected an encoded message");
+    };
+    let mut sequence = kute::TokenSequence::from_bytes(&container).unwrap();
+    assert_eq!(sequence.escapes.len(), 1);
+    // 10,000 symbols, a tenth of the limit; ten megabytes of names.
+    sequence.ids = vec![sequence.ids[0]; 10_000];
+    assert_eq!(kute::decoded_units(&vocabulary, &sequence).unwrap(), 10_000);
+    assert_eq!(kute::decoded_bytes_at_least(&vocabulary, &sequence).unwrap(), 10_240_000);
+    let small = sequence.to_bytes_compressed().unwrap();
+    assert!(small.len() < 4096, "{} bytes", small.len());
+
+    let engine = Engine::new();
+    let tokenizer = engine.tokenizer(vocabulary).unwrap();
+    let refused = engine.decode_raw_within(tokenizer.as_ref(), &sequence, limit, 1 << 20).unwrap_err();
+    assert!(matches!(refused, KuteError::LimitExceeded(_)), "{refused}");
+    for request in [Message::EncodedMessage { id: 5, container: small.clone() }, Message::Translate { id: 5, container: small.clone(), to_digest: digest.clone() }] {
+        match &receiver.handle(request)[0] {
+            Message::Error { code: ErrorCode::TooLarge, message } => assert!(message.contains("at least 10240000 bytes"), "{message}"),
+            other => panic!("expected TOO_LARGE on the bytes, got {other:?}"),
+        }
+    }
+    assert!(receiver.take_inbox().is_empty());
+    // The same symbol sent once is delivered.
+    assert!(matches!(receiver.handle(Message::EncodedMessage { id: 6, container })[0], Message::Ack { .. }));
+}

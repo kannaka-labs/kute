@@ -355,3 +355,29 @@ pub fn decoded_units(vocabulary: &Vocabulary, tokens: &TokenSequence) -> Result<
     }
     Ok(total)
 }
+
+/// A lower bound on the bytes `tokens` decodes to. For a byte vocabulary it
+/// is the decoded length. For a symbol vocabulary it is the total length of
+/// the symbol names, before the adapter writes them out, which only adds to
+/// it. A symbol may be up to 1024 bytes long, so the number of symbols
+/// ([`decoded_units`]) says little about the bytes; this does.
+pub fn decoded_bytes_at_least(vocabulary: &Vocabulary, tokens: &TokenSequence) -> Result<u64> {
+    let size = |payload: &TokenPayload| match payload {
+        TokenPayload::Bytes(b) => b.len() as u64,
+        TokenPayload::Symbols(s) => s.iter().map(|symbol| symbol.len() as u64).sum(),
+    };
+    let sizes: Vec<u64> = vocabulary.tokens.iter().map(|t| size(&t.payload)).collect();
+    let mut total: u64 = 0;
+    for &id in &tokens.ids {
+        let id = id as usize;
+        let bytes = if id < sizes.len() {
+            sizes[id]
+        } else if id - sizes.len() < tokens.escapes.len() {
+            tokens.escapes[id - sizes.len()].len() as u64
+        } else {
+            return Err(KuteError::UnknownToken(id as u32));
+        };
+        total = total.saturating_add(bytes);
+    }
+    Ok(total)
+}

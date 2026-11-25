@@ -151,7 +151,7 @@ impl Server {
         let held = self.find(&sequence.vocabulary_digest).map_err(|_| {
             format!("the container was encoded under {} {} ({}), which is not held", sequence.vocabulary_id, sequence.vocabulary_version, sequence.vocabulary_digest)
         })?;
-        let bytes = self.engine.decode_raw_bounded(held.tokenizer.as_ref(), &sequence, self.limits.max_output_bytes).map_err(fail)?;
+        let bytes = self.engine.decode_raw_within(held.tokenizer.as_ref(), &sequence, self.limits.max_output_bytes, self.limits.max_output_bytes).map_err(fail)?;
         if bytes.len() as u64 > self.limits.max_output_bytes {
             return Err(format!("the container decodes to {} bytes; the limit is {}", bytes.len(), self.limits.max_output_bytes));
         }
