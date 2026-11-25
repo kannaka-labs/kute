@@ -310,14 +310,12 @@ impl Server {
     /// Answer one request. `None` for a notification, which gets no answer.
     pub fn handle(&self, request: &Value) -> Option<Value> {
         let id = request.get("id").cloned();
-        let error = |code: i64, message: String| Some(json!({ "jsonrpc": "2.0", "id": id.clone().unwrap_or(Value::Null), "error": { "code": code, "message": message } }));
+        let error_id = id.clone().unwrap_or(Value::Null);
+        let error = |code: i64, message: String| Some(json!({ "jsonrpc": "2.0", "id": error_id.clone(), "error": { "code": code, "message": message } }));
         let Some(method) = request.get("method").and_then(Value::as_str) else {
             return error(-32600, "not a JSON-RPC request: no method".into());
         };
-        let id = match &id {
-            Some(id) => id.clone(),
-            None => return None, // a notification
-        };
+        let id = id?; // without an id it is a notification
         let empty = json!({});
         let params = request.get("params").unwrap_or(&empty);
         let result = match method {
