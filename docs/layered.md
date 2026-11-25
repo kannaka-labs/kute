@@ -92,7 +92,15 @@ What it shows:
 What it costs once: the flat vocabulary is 147,575 bytes in the compact
 binary form (3.3 MB as JSON); the domain table is 39,016. Before
 compression the flat vocabulary repays the difference after about 2.4 MB
-of domain text. After zlib it takes about 140 MB.
+of domain text against the domain table alone, and after about 10 MB
+against the stronger layered row (session over domain: 27,191 bytes
+behind flat on this 2.5 MB, for 108,559 bytes of vocabulary). After
+zlib it takes about 140 MB.
+
+One row of the table deserves a sentence of its own: the text through
+zlib alone is 549,302 bytes, and the base vocabulary's tokens through
+zlib are 561,302. Tokenizing with a vocabulary from the wrong domain
+and then compressing is worse than compressing without it.
 
 ## What this does not show
 
@@ -115,3 +123,16 @@ KVF stays flat (ADR-0046). The child-of-a-parent relation that `kute
 evolve` and `kute peer send --propose` already give is the only layering
 in the engine: a proposal of 32 additions crossed the wire in 2,068
 bytes in `examples/queensync` against 86,766 for the vocabulary.
+
+That layering is not a row in the table above, and could not be:
+`kute evolve` is defined for event vocabularies (`sequence-bpe`), and
+refuses a text one (`bpe`), which is what this experiment used. So the
+one alternative that would lower the token count without a new flat
+vocabulary, a base extended with the domain's commonest runs, is
+unmeasured on text, and the decision to stay flat rests on the rows
+that were measured. Whether evolution should exist for text
+vocabularies is a separate question this does not answer.
+
+On ids ranked by frequency: the saving need not touch the vocabulary's
+digest. A permutation carried by the container would do. It has been
+measured on this one vocabulary only and is not built.
