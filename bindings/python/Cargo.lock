@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "kute-adapters"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "kute-algorithms"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -241,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bench"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "flate2",
  "kute-engine",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bpe"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "fancy-regex",
  "kute-core",
@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "kute-core"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "kute-types",
  "sha2",
@@ -274,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "kute-discover"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "kute-engine"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "kute-adapters",
  "kute-algorithms",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "kute-events"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "flate2",
  "kute-adapters",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "kute-python"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "kute-bench",
  "kute-discover",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "kute-signals"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "flate2",
  "kute-types",
@@ -338,7 +338,7 @@ dependencies = [
 
 [[package]]
 name = "kute-types"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "base64",
  "flate2",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "kute-vocab"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "flate2",
  "kute-types",

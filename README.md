@@ -4,7 +4,7 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.8, experimental. Formats and APIs may change before 1.0;
+Status: v0.9, experimental. Formats and APIs may change before 1.0;
 [docs/stability.md](docs/stability.md) says which, and how.
 
 ## Measured against Hugging Face `tokenizers`
@@ -166,6 +166,28 @@ Added in v0.5:
 * Python: `Engine.train(..., resume_from=, embed_test_vectors=)` and
   `kute.discover(records)`.
 
+Added in v0.9 (what an upgrade from v0.8 has to change is in
+[docs/stability.md](docs/stability.md)):
+
+* A read-only registry: `kute serve --registry` gives the files of the
+  vocabularies it holds, by digest, and `kute fetch` takes one and keeps
+  it only if the digest recomputed from what arrived is the one asked
+  for, its test vectors pass, and (with `--trusted-key`) a key you trust
+  signed it. Plain HTTP: content cannot be swapped unnoticed, and the
+  network can see it. No uploads, no federation. `docs/http.md`.
+* A proposal can be signed: `kute peer send --propose ... --sign-with`
+  sends the proposer's signature of the vocabulary the proposal derives,
+  and a peer with `--require-signature-from` now takes proposals, each
+  only if the vocabulary it derives itself verifies. In the QueenSync
+  example a refusal costs about 2 kB on the socket this way and about
+  93 kB when the file is sent whole. `docs/signing.md`.
+* Pattern timing over HTTP and MCP: `discover` takes a time for each
+  symbol and says how long each pattern took. Studio shows it, and its
+  Reports view reads what `kute peer serve` and `kute peer send` print.
+* Python: `Vocabulary.evolve`, and the event and signal containers
+  (`kute.events_pack`, `kute.signals_pack` and their unpack and inspect).
+* Rust edition 2024 (the minimum compiler was already 1.85).
+
 Added in v0.8 (each has a doc under `docs/` and a record in
 `docs/decisions.md`; what an upgrade from v0.7 has to change is in
 [docs/stability.md](docs/stability.md)):
@@ -223,8 +245,7 @@ development directive of November 2026, v0.6 covers its items D02 to D05
 and D06 to D12 (D06 without a clean timing run); Studio, representation research and integrations
 (D13 to D15) are not built. Of the requirements document's "v0.2" (REST
 service, registry, MCP), v0.7 has the MCP server and v0.8 the REST
-service; a read-only registry is on the development branch after
-v0.8.1 (`docs/http.md`). Measured against the v0.7 development
+service and v0.9 a read-only registry (`docs/http.md`). Measured against the v0.7 development
 specification, every item has a first pass in v0.8; three of them (layered
 vocabularies, composed representations, QueenSync) ended in a negative
 result.

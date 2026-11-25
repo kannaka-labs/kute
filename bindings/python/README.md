@@ -38,7 +38,7 @@ found = kute.discover([["START", "HEAT", "DONE"], ...], min_support=5)
 found["patterns"]   # recurring runs and gapped pairs, strongest first
 ```
 
-After 0.8.1 (not yet released):
+Added in 0.9:
 
 ```python
 # Whole event records, by column. Every field comes back.

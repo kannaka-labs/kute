@@ -58,7 +58,7 @@ take from the file. So:
   checks a file; `kute peer serve --require-signature-from` checks what
   the other side sends (below).
 * **No chain of keys, no expiry, no revocation.** A registry exists
-  after 0.8.1 (`kute serve --registry`, `kute fetch`; `docs/http.md`)
+  since 0.9 (`kute serve --registry`, `kute fetch`; `docs/http.md`)
   and distributes files, not trust: `kute fetch --trusted-key` checks a
   signature exactly as `kute verify` does, against keys you pass. The list
   of keys you trust is the `--trusted-key` options you pass. To stop
@@ -95,7 +95,11 @@ What it leaves alone:
   with no signature is refused before anything is derived. One with a
   signature that does not hold costs the peer the derivation, which is
   bounded by the same limits as any proposal. What the peer keeps is
-  the file `kute evolve` and `kute sign` would have made. (Before 0.9
+  the file `kute evolve` and `kute sign` would have made. A peer with
+  no such requirement attaches whatever signatures a proposal carries
+  without looking at them, and a later proposal for the same vocabulary
+  replaces them: there, the signatures on a held copy are whoever
+  proposed last, and mean nothing until someone verifies them. (Before 0.9
   the two options could not be combined, and a signed vocabulary had to
   be sent whole.)
 * It is a second lock, not a replacement for the first. Who may connect
