@@ -38,7 +38,7 @@ someone building on it knows what a new release may do to them.
 |---|---|---|
 | `train`, `encode`, `decode`, `inspect`, `convert`, `export`, `evolve`, `benchmark`, `capabilities`: names and existing flags | provisional | Flags may be added. |
 | JSON printed on standard output | provisional | Keys may be added; a consumer should ignore keys it does not know. |
-| Exit status: 0 for success, 1 for any failure | held | Finer exit codes do not exist yet; the error text on standard error is for people and is not a contract. |
+| Exit status: 0 for success, 1 when a command fails, 2 when the command line itself is wrong (unknown command or flag, missing argument) | held | Finer exit codes do not exist yet; the error text on standard error is for people and is not a contract. |
 | `discover` | provisional | The report's fields are still settling. |
 | `peer serve`, `peer send`, `peer fingerprint` | provisional | Follows the protocol's class. |
 | `mcp` | experimental | See `docs/mcp.md`. |
@@ -95,3 +95,7 @@ not covered.
 - **Strict JSON input** rejects duplicate keys and numbers that cannot be
   represented exactly, which earlier releases accepted and rounded. The
   adapter option `strict=false` restores the earlier behaviour (ADR-0029).
+- **A few JSON numbers canonicalize differently.** Decimals are now parsed
+  so that they survive a round trip exactly; a number whose last digit
+  earlier releases changed is now kept. Documents containing such numbers
+  give different canonical bytes, and so different tokens, than under 0.6.

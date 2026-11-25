@@ -6,7 +6,7 @@ members = ["crates/*", "plugins/hrm"]
 exclude = ["bindings/python", "backends/rustbpe"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 rust-version = "1.85"
@@ -17,17 +17,17 @@ keywords = ["tokenizer", "bpe", "tokenization", "vocabulary"]
 categories = ["text-processing", "encoding"]
 
 [workspace.dependencies]
-kute-types = { path = "crates/kute-types", version = "0.6.0" }
-kute-core = { path = "crates/kute-core", version = "0.6.0" }
-kute-vocab = { path = "crates/kute-vocab", version = "0.6.0" }
-kute-bpe = { path = "crates/kute-bpe", version = "0.6.0" }
-kute-algorithms = { path = "crates/kute-algorithms", version = "0.6.0" }
-kute-adapters = { path = "crates/kute-adapters", version = "0.6.0" }
-kute-bench = { path = "crates/kute-bench", version = "0.6.0" }
-kute-hrm = { path = "plugins/hrm", version = "0.6.0" }
-kute-discover = { path = "crates/kute-discover", version = "0.6.0" }
-kute-protocol = { path = "crates/kute-protocol", version = "0.6.0" }
-kute = { package = "kute-engine", path = "crates/kute", version = "0.6.0" }
+kute-types = { path = "crates/kute-types", version = "0.7.0" }
+kute-core = { path = "crates/kute-core", version = "0.7.0" }
+kute-vocab = { path = "crates/kute-vocab", version = "0.7.0" }
+kute-bpe = { path = "crates/kute-bpe", version = "0.7.0" }
+kute-algorithms = { path = "crates/kute-algorithms", version = "0.7.0" }
+kute-adapters = { path = "crates/kute-adapters", version = "0.7.0" }
+kute-bench = { path = "crates/kute-bench", version = "0.7.0" }
+kute-hrm = { path = "plugins/hrm", version = "0.7.0" }
+kute-discover = { path = "crates/kute-discover", version = "0.7.0" }
+kute-protocol = { path = "crates/kute-protocol", version = "0.7.0" }
+kute = { package = "kute-engine", path = "crates/kute", version = "0.7.0" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

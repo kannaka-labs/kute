@@ -8,7 +8,8 @@ repository states. What changed for someone upgrading from 0.6 is in
 
 ## Gates and their evidence
 
-Every test named here runs in CI on Linux and Windows on every commit.
+The Rust tests named here run in CI on Linux and Windows on every commit.
+The Python tests and `conformance/kvf_digest.py` run on Linux only.
 Reports are files under `benchmarks/results` with the command that made
 them in `benchmarks/README.md`.
 
@@ -19,7 +20,7 @@ them in `benchmarks/README.md`.
 | AC-703 | Evolution-rule negotiation rejects incompatible proposals | `two_peers.rs`: `a_proposal_under_another_evolution_rule_is_refused_before_derivation`, `an_initiator_does_not_propose_to_a_peer_with_another_rule`. | |
 | AC-704 | Three materially different external datasets | enwik8 (prose), HDFS_v1 (event traces), CPython 3.12.7 `Lib` (source code); `benchmarks/README.md`, "External datasets". A fourth, an OpenSSH server log, is used by `examples/log-archive`. | The code corpus has sizes only: no timing, no other tokenizer. |
 | AC-705 | Comparison under equivalent tokenizer configurations | `benchmarks/hf_repeat.py --matched`, one training per process; reports `tokenizers-enwik8-10runs-matched-isolated.json` and `...-desktop.json`. | The two machines differ (about 4 times on 24 threads, 16 times on 8). Paging and throttling were ruled out on the laptop; why its `tokenizers` time halves with process history is not known. |
-| AC-706 | Persistent Python sessions with parity tests | `bindings/python/tests/test_kute.py`: `test_one_vocabulary_object_is_a_persistent_session`. ADR-0030. | |
+| AC-706 | Persistent Python sessions with parity tests | `bindings/python/tests/test_kute.py`: `test_one_vocabulary_object_is_a_persistent_session`. ADR-0030. | The parity tested is within Python: one long-lived vocabulary object against fresh loads. Python is not compared with the Rust API in a test; both call the same engine. |
 | AC-707 | MCP exposes encode, decode, discover, compare, inspect | `crates/kute-cli/tests/mcp.rs`; `docs/mcp.md`. ADR-0035. | Experimental. Standard input and output only. |
 | AC-708 | Streaming discovery prototype with bounded memory | `crates/kute-discover/tests/live.rs`: state stays under its stated bound over 2 million events. ADR-0036. | A prototype. Counts are estimates; occurrences cut by eviction are not inside the reported bound. Library only. |
 | AC-709 | Strict structured-data normalization | The JSON adapters refuse duplicate keys and numbers that do not survive; `untrusted_input.rs`: `damaged_structured_input_is_refused_or_canonical`. ADR-0029. | |
@@ -27,7 +28,7 @@ them in `benchmarks/README.md`.
 | AC-711 | Historical vectors pass or migrations exist | `crates/kute/tests/conformance.rs` and `conformance/kvf_digest.py` on `specifications/kvf/vectors`, including files written by v0.2.0. | v0.1.0 files are not among the vectors. |
 | AC-712 | Fuzz and property tests on untrusted input | `crates/kute/tests/untrusted_input.rs`: 8,000 damaged vocabulary files, 12,000 containers, 20,000 structured inputs, seeded. | Seeded mutation, not coverage-guided fuzzing. The maintainer accepted this for 0.7 on 2026-11-24. What it leaves open: inputs that only a coverage-guided search would reach in the vocabulary, container and JSON parsers have not been tried. |
 | AC-713 | API stability classes documented | [stability.md](stability.md) | |
-| AC-714 | One reproducible external application | `examples/log-archive`: instructions, program, recorded report. | Run by its author and on one machine so far. |
+| AC-714 | One reproducible external application | `examples/log-archive`: instructions, program, recorded report. | Reproduced by the reviewer on a second machine from the README alone, with the package from PyPI: the report was identical except for timings. |
 | AC-715 | Release documentation with limitations and reproduction | This page. | |
 
 ## Limitations

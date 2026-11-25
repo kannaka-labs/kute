@@ -4,7 +4,7 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.6, experimental. Formats and APIs may change before 1.0;
+Status: v0.7, experimental. Formats and APIs may change before 1.0;
 [docs/stability.md](docs/stability.md) says which, and how.
 
 ## Measured against Hugging Face `tokenizers`
@@ -40,7 +40,7 @@ the unreleased trainer on the `next` branch, KUTE trained in 4.2 s against
 pip install kute-engine
 ```
 
-## What works in v0.6
+## What works in v0.7
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -125,6 +125,24 @@ Added in v0.5:
 * Python: `Engine.train(..., resume_from=, embed_test_vectors=)` and
   `kute.discover(records)`.
 
+Changed in v0.7 (the gates it was built against, with the evidence for
+each and the limitations, are in [docs/release-0.7.md](docs/release-0.7.md);
+what an upgrade from v0.6 has to change is in
+[docs/stability.md](docs/stability.md)):
+
+* Peers authenticate each other with mutual TLS, give nothing away unless
+  told to, and hold to budgets on vocabularies, tokens, inbox and decoded
+  bytes. The protocol number is 2.
+* An evolved vocabulary records its parent by digest (`kute evolve-3`),
+  and `kute evolve` warns when a step makes every token id a byte wider.
+* The JSON adapters refuse duplicate keys and numbers that would not
+  survive, instead of silently choosing.
+* `kute mcp`, streaming discovery (`kute_discover::live`, a prototype),
+  and `examples/log-archive`.
+* Measured: evolution on drifting data, a source-code corpus, and the
+  comparison with `tokenizers` under a matched configuration with one
+  training per process.
+
 Changed in v0.6:
 
 * `kute evolve` builds an added sequence over the parent's own encoding, so
@@ -140,8 +158,9 @@ Changed in v0.6:
 Version numbers here are the repository's own. Measured against the
 development directive of November 2026, v0.6 covers its items D02 to D05
 and D06 to D12 (D06 without a clean timing run); Studio, representation research and integrations
-(D13 to D15) are not built. The requirements document's "v0.2" (REST
-service, registry, MCP) is not built either.
+(D13 to D15) are not built. Of the requirements document's "v0.2" (REST
+service, registry, MCP), v0.7 has the MCP server; the REST service and the
+registry are not built.
 
 ## Quick start
 
