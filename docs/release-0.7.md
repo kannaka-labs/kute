@@ -1,7 +1,8 @@
 # KUTE 0.7: what is in it, what backs it, what it does not show
 
-This page lists the acceptance gates set for 0.7 with the test or report
-behind each, then the limitations, then how to reproduce every number this
+This page lists the acceptance gates set for 0.7 (in
+[KUTE_v0.7_Development_Specification.pdf](KUTE_v0.7_Development_Specification.pdf),
+page 11) with the test or report behind each, then the limitations, then how to reproduce every number this
 repository states. What changed for someone upgrading from 0.6 is in
 [stability.md](stability.md).
 
