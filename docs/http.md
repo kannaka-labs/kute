@@ -91,9 +91,9 @@ limits takes longer, and four of them occupy every worker. There is no
 per-client rate limit. An answer is written with a deadline on each
 write, not on the whole, so a client that reads very slowly can hold a
 worker longer than the timeout. A request refused before its body is read
-(too large, wrong host) is answered, and then up to 64 KiB of what the
-client is still sending is read and discarded for at most a quarter of
-a second before the close, so that the answer is not lost to a reset
+(too large, wrong host) is answered, and then up to 1 MiB of what the
+client is still sending is read and discarded for at most half a
+second before the close, so that the answer is not lost to a reset
 (it was, on macOS, until this was added). A client that sends more than
 that after being refused may still see a reset instead of the answer.
 The same wait, at most 50 ms, is spent on a client that has its answer
