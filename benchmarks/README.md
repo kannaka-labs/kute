@@ -684,6 +684,15 @@ no pages read from disk, mains power, the Balanced plan. So the three
 ordinary explanations are ruled out: the laptop (4 cores, 8 threads,
 i7-1065G7) really does take a minute.
 
+The laptop run was repeated with the released 0.7.0 package from PyPI
+(report `results/tokenizers-enwik8-10runs-matched-isolated-v0.7.0.json`):
+KUTE trained in 4.06 s (3.95 to 6.01) and `tokenizers` in 69.9 s (65.8 to
+81.2); encoding 0.30 s against 3.70 s for a batch of lines; the same token
+counts. The ranges are wider than in the 0.6.0 run because other work ran
+on the machine for a few minutes during this one. The medians agree with
+the earlier run: nothing in 0.7.0 changed the speed of training or
+encoding.
+
 What can be said: with one training per process, KUTE trained this
 vocabulary about 4 times faster on a 24-thread desktop and about 16 times
 faster on an 8-thread laptop, each with narrow ranges over ten runs.
