@@ -480,6 +480,7 @@ dependencies = [
  "kute-engine",
  "kute-events",
  "kute-protocol",
+ "ring",
  "serde",
  "serde_json",
 ]

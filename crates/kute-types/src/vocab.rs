@@ -190,7 +190,10 @@ pub struct Signature {
 pub struct Integrity {
     pub algorithm: String,
     pub digest: String,
-    /// Reserved. KVF 0.1 defines the field but no signature scheme.
+    /// Signatures over the digest. They are outside what the digest
+    /// covers, so adding one does not change it. The engine reads and
+    /// keeps them and checks none: `kute verify` does, against keys the
+    /// caller names.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub signatures: Vec<Signature>,
 }
@@ -273,7 +276,13 @@ impl Vocabulary {
     /// Record the content digest. Call after the last modification.
     pub fn seal(&mut self) -> Result<()> {
         let digest = self.compute_digest()?;
-        self.integrity = Some(Integrity { algorithm: "sha256".into(), digest, signatures: Vec::new() });
+        // Signatures are of the digest: they stay while it stays, and go
+        // with the content they were made for.
+        let signatures = match self.integrity.take() {
+            Some(old) if old.digest == digest => old.signatures,
+            _ => Vec::new(),
+        };
+        self.integrity = Some(Integrity { algorithm: "sha256".into(), digest, signatures });
         Ok(())
     }
 
@@ -397,6 +406,9 @@ impl Vocabulary {
                     "recorded digest {} does not match content digest {actual}",
                     integrity.digest
                 )));
+            }
+            if integrity.signatures.len() > 16 || integrity.signatures.iter().any(|s| s.key_id.len() > 256 || s.algorithm.len() > 64 || s.signature.len() > 1024) {
+                return bad("more than 16 signatures, or one with an overlong field".into());
             }
         }
         Ok(())

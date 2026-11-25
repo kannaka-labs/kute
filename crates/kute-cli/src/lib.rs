@@ -6,6 +6,7 @@
 pub mod http;
 pub mod live;
 pub mod shadow;
+pub mod sign;
 pub mod mcp;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -70,6 +71,34 @@ enum Command {
     },
     /// Check structure, integrity and the embedded test vectors.
     Validate { vocab: PathBuf },
+    /// Make an Ed25519 signing key. The private half goes to the file,
+    /// unencrypted; the public half and the key's id are printed.
+    Keygen {
+        /// Where to write the private key (PEM). Must not exist.
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Add a signature to a vocabulary. Its digest does not change.
+    Sign {
+        #[arg(long)]
+        vocab: PathBuf,
+        /// A private key made by `kute keygen`.
+        #[arg(long)]
+        key: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Check a vocabulary's signatures against keys you trust. Exits 1
+    /// unless a trusted key's signature of this exact content is there.
+    Verify {
+        #[arg(long)]
+        vocab: PathBuf,
+        /// A public key as printed by `kute keygen`. Repeatable.
+        #[arg(long = "trusted-key", value_name = "BASE64", required = true)]
+        trusted_keys: Vec<String>,
+    },
     /// Compare two vocabularies by token content.
     Compare { a: PathBuf, b: PathBuf },
     /// Rewrite a vocabulary in the other file form: compact binary when the
@@ -1063,6 +1092,16 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 report["longest_learned_tokens"] = serde_json::to_value(rows)?;
             }
             print(&report)
+        }
+        Command::Keygen { output } => print(&sign::keygen(&output)?),
+        Command::Sign { vocab: vocab_path, key, output, force } => print(&sign::sign(&vocab_path, &key, &output, force)?),
+        Command::Verify { vocab: vocab_path, trusted_keys } => {
+            let (report, verified) = sign::verify(&vocab_path, &trusted_keys)?;
+            print(&report)?;
+            if !verified {
+                return Err(KuteError::Integrity("no trusted key has signed this vocabulary".into()));
+            }
+            Ok(())
         }
         Command::Validate { vocab: vocab_path } => {
             let vocabulary = vocab::load(&vocab_path)?;

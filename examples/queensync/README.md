@@ -90,10 +90,11 @@ it. Nothing here reduces what a language model is charged for.
 
 ## Not built
 
-* The vocabulary is not signed. It is identified by its digest, and in
-  a real deployment arrives over a connection authenticated with
+* The vocabulary is not signed here. It is identified by its digest,
+  and in a real deployment arrives over a connection authenticated with
   certificates on both sides (`kute peer` with TLS, tested in the
-  engine). A signature that outlives the connection is the
-  specification's B8.
+  engine). `kute sign` and `kute verify` exist (`docs/signing.md`), but
+  a peer does not yet require a signature before accepting a
+  vocabulary, so this example does not use them.
 * No resuming a batch part way after a dropped connection.
 * Latency of a single message. Each batch here is a new process.

@@ -849,6 +849,37 @@ The page was driven in a headless browser through every view once.
 That check is not automated: it needs a browser, which the test suite
 does not assume. The automated tests cover what the service sends.
 
+## ADR-0044: A vocabulary is signed over its digest with Ed25519, and trust is whatever keys the verifier names
+
+KVF 0.1 reserved a `signatures` list beside the digest and defined no
+scheme. `kute keygen`, `kute sign` and `kute verify` define one;
+`docs/signing.md`. It is the first step of the specification's B8.
+
+What is signed is a fixed context line and the digest. The digest
+already covers the whole content, so the signature does too, and the
+context line keeps it from being a signature of anything else. The
+verifier computes the digest from the content. Signatures stay outside
+what the digest covers: a signed vocabulary keeps its digest, so nothing
+that names it by digest changes, and signatures can be added by several
+parties without each invalidating the others. `seal` now keeps the
+signatures when the digest is unchanged and drops them when it is not;
+before, every save dropped them.
+
+Ed25519, by `ring`, which is already in the build for TLS. One
+algorithm and no negotiation: an unknown algorithm is reported and
+counts for nothing.
+
+Trust is not modelled. `kute verify` takes the public keys the caller
+trusts and reports against those; a key found in the file proves
+nothing and none is stored there. A registry, key chains, expiry and
+revocation are the rest of B8 and need a design of who may vouch for
+whom, which this does not attempt.
+
+Nothing enforces a signature: the engine, the peer protocol and the
+service keep signatures and check none. Requiring one before a peer
+accepts a vocabulary is the obvious next use and is not built. The
+private key is an unencrypted file.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
