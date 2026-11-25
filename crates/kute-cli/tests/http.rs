@@ -201,6 +201,17 @@ fn what_is_not_a_proper_request_is_refused_within_bounds() {
     let huge = service.raw(format!("{json_head}Content-Length: 999999999999\r\n\r\n").as_bytes());
     assert_eq!((huge.0, code(&huge).as_str()), (413, "too_large"));
     assert!(started.elapsed() < Duration::from_secs(1), "refused on the declared length, without waiting for the body");
+    // The same refusal when the body is already on its way. The service
+    // stops reading at the header; closing on the unread bytes would reset
+    // the connection, and the reset can take the answer with it (seen as
+    // "connection reset by peer" on macOS and as an aborted connection on
+    // Windows, about one try in five with 200 kB sent, before the service read on a little). The answer must arrive every time.
+    let mut sent_with_body = format!("{json_head}Content-Length: 999999999999\r\n\r\n").into_bytes();
+    sent_with_body.extend(std::iter::repeat_n(b'x', 200_000));
+    for attempt in 0..20 {
+        let answered = service.raw(&sent_with_body);
+        assert_eq!((answered.0, code(&answered).as_str()), (413, "too_large"), "attempt {attempt}");
+    }
     let broken = service.raw(format!("{json_head}Content-Length: 5\r\n\r\n{{\"a\":").as_bytes());
     assert_eq!((broken.0, code(&broken).as_str()), (400, "bad_json"));
     assert_eq!(service.raw(format!("{json_head}Content-Length: 2\r\n\r\n{{}}extra").as_bytes()).0, 400);
