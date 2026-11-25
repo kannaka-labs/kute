@@ -306,23 +306,25 @@ pub fn evaluate(stream: &EventStream, params: &PredictParams) -> Result<PredictR
     let (mut counted_events, mut counted_entities) = (0u64, 0u64);
     // Records are in time order within themselves, so each splits at one index.
     let splits: Vec<usize> = stream.records.iter().map(|r| r.times.partition_point(|&t| t < cut_time)).collect();
+    // Every name that occurred before the cut, in any record, is known
+    // before any held-out event is given its id. Done in one pass with
+    // the counting, a record listed early would have its held-out events
+    // marked unknown for names that a later record used before the cut.
+    for (record, &split) in stream.records.iter().zip(&splits) {
+        for symbol in &record.symbols[..split] {
+            if !ids.contains_key(symbol.as_str()) {
+                ids.insert(symbol.as_str(), ids.len() as u32);
+            }
+        }
+    }
     let mut encoded: Vec<Vec<u32>> = Vec::with_capacity(stream.records.len());
     for (record, &split) in stream.records.iter().zip(&splits) {
         // Position `i + 1` holds event `i`; position 0 holds the start.
         let mut sequence = Vec::with_capacity(record.symbols.len() + 1);
         sequence.push(START);
-        for (i, symbol) in record.symbols.iter().enumerate() {
-            let id = match ids.get(symbol.as_str()) {
-                Some(&id) => id,
-                // A name first met after the cut is unknown to every predictor.
-                None if i >= split => UNKNOWN,
-                None => {
-                    let id = ids.len() as u32;
-                    ids.insert(symbol.as_str(), id);
-                    id
-                }
-            };
-            sequence.push(id);
+        for symbol in &record.symbols {
+            // A name never met before the cut is unknown to every predictor.
+            sequence.push(ids.get(symbol.as_str()).copied().unwrap_or(UNKNOWN));
         }
         if split > 0 {
             counted_entities += 1;
