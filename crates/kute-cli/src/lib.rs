@@ -956,10 +956,28 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 return Err(KuteError::Backend(format!("the evolved vocabulary fails its test vectors: {}", report.failures.join("; "))));
             }
             vocab::save(&child, &output, force)?;
+            // A container writes every id in as many bytes as the largest
+            // id of the vocabulary needs. A step across one of these sizes
+            // makes every token cost more, which can outweigh what the new
+            // tokens save (measured: benchmarks/README.md, drifting data).
+            let mut warnings = Vec::new();
+            for (limit, bytes) in [(256usize, "one byte"), (65_536, "two bytes")] {
+                if parent.len() <= limit && child.len() > limit {
+                    warnings.push(format!(
+                        "the vocabulary grew from {} to {} tokens, past {limit}: a token id no longer fits {bytes}, so sequences can come out larger than under the parent even with fewer tokens. Measure on your data before adopting it.",
+                        parent.len(),
+                        child.len()
+                    ));
+                }
+            }
+            for warning in &warnings {
+                eprintln!("warning: {warning}");
+            }
             print(&json!({
                 "output": output,
                 "parent": { "version": parent.version().to_string(), "digest": parent.digest()?, "tokens": parent.len() },
                 "summary": vocab::summarize(&child)?,
+                "warnings": warnings,
             }))
         }
         Command::Peer { action } => peer(engine, action),

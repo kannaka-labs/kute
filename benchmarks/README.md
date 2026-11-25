@@ -386,6 +386,47 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
+## External datasets, and source code (after v0.6.0)
+
+Three datasets that this project did not make are used in these notes.
+They differ in kind, not only in size:
+
+| dataset | what it is | held-out part | where it is used |
+|---|---|---|---|
+| enwik8 | 100 MB of an English Wikipedia dump: prose with XML markup | last 10 MB | compressors, `tokenizers`, `tiktoken` comparisons |
+| HDFS_v1 | block traces of a Hadoop file system, 30 event names | 1,766,436 events | discovery, timing, evolution, compressors |
+| CPython 3.12.7 `Lib` | 1,786 Python source files, 32.5 MB | every tenth file, 2.5 MB | this section |
+
+The code corpus is built by `benchmarks/code_corpus.py` from the release
+tarball (SHA-256 `73ac8fe7...2ab623`): whole files, sorted by path, every
+tenth to the held-out side, three files that are not UTF-8 left out. A
+byte-level BPE vocabulary of 32,768 tokens was trained on the 30.0 MB
+training side with the default split, and the held-out files were encoded
+with it and decoded back exactly: 596,162 tokens for 2,525,866 bytes, 4.24
+bytes per token. Sizes against general-purpose compressors on the same
+held-out bytes (`results/compressors-cpython-lib.json`; one run, sizes
+only):
+
+| method | bytes | shared in advance | ratio | ratio counting what is shared |
+|---|---:|---:|---:|---:|
+| zstd -19 with a 1 MiB dictionary trained on the training side | 401,925 | 1,048,576 | 6.28 | 1.74 |
+| xz -9 | 419,968 | 0 | 6.01 | 6.01 |
+| zstd -19 | 429,227 | 0 | 5.89 | 5.89 |
+| zstd -19 with a 110 KiB trained dictionary | 443,337 | 112,640 | 5.70 | 4.54 |
+| **KUTE compressed container** | 473,280 | 147,575 | 5.34 | 4.07 |
+| gzip -9 | 522,394 | 0 | 4.84 | 4.84 |
+| zstd -3 | 551,107 | 0 | 4.58 | 4.58 |
+
+As on enwik8, the KUTE container is larger than what `xz` and `zstd -19`
+make of the same bytes with nothing shared: 13% and 10% larger here. A
+tokenizer is not a compressor, and on text and code it does not compete
+with one on size. The token count is what it is for.
+
+Limits: one release of one project in one language; the held-out files
+come from the same code base as the training files, written by the same
+people, so this is the easy case for a learned vocabulary. Not compared
+with `tiktoken` or `tokenizers` on this corpus yet, and nothing was timed.
+
 ## Frozen, evolved and retrained event vocabularies (v0.6.0)
 
 `benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by
