@@ -35,11 +35,17 @@ fn exchange(dir: &Path, name: &str, trusted: &[&str], vocab: &str) -> (Output, V
     }
     let mut server = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(dir).args(&args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     // It says when it is listening; send only then.
+    // The reader is kept until the server has ended. Dropping it closes
+    // the pipe, and the server's next line to it (the warning about no
+    // TLS follows at once) then ends the server before it accepts: about
+    // one run in fifteen, seen as "connection refused" by the sender.
     let mut line = String::new();
-    BufReader::new(server.stderr.take().unwrap()).read_line(&mut line).unwrap();
+    let mut errors = BufReader::new(server.stderr.take().unwrap());
+    errors.read_line(&mut line).unwrap();
     assert!(line.contains("listening"), "{line}");
     let sent = kute(dir, &["peer", "send", "--connect", &address, "--insecure-plain", "--vocab", vocab, "--input", "log.jsonl"]);
     let _ = server.wait();
+    drop(errors);
     let mut received: Vec<PathBuf> = std::fs::read_dir(dir.join(name)).map(|d| d.map(|e| e.unwrap().path()).collect()).unwrap_or_default();
     received.sort();
     (sent, received)
