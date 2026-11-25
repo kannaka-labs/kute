@@ -78,6 +78,10 @@ pub struct Federation {
     asking: Mutex<()>,
     kept: Mutex<std::collections::VecDeque<(String, Arc<[u8]>)>>,
     absent: Mutex<std::collections::VecDeque<(String, Instant)>>,
+    /// For each upstream, when it last failed. One that failed is not
+    /// asked again for a while, so a slow or broken upstream named
+    /// first costs its timeout once and not on every question.
+    failed: Mutex<Vec<Option<Instant>>>,
 }
 
 pub type UpstreamCheck = Box<dyn Fn(&kute::Vocabulary) -> Result<(), String> + Send + Sync>;
@@ -90,6 +94,8 @@ impl std::fmt::Debug for Federation {
 
 /// How long a digest that no upstream had is remembered as absent.
 const ABSENT_FOR: Duration = Duration::from_secs(60);
+/// How long an upstream that failed, stalled or sent something else is left alone.
+const REST_FOR: Duration = Duration::from_secs(30);
 /// How many such digests are remembered.
 const ABSENT_KEPT: usize = 1024;
 
@@ -102,7 +108,8 @@ impl Federation {
         for upstream in &upstreams {
             crate::registry::parse_url(upstream)?;
         }
-        Ok(Self { upstreams, timeout, max_bytes, cache_bytes, check, asking: Mutex::new(()), kept: Default::default(), absent: Default::default() })
+        let failed = Mutex::new(vec![None; upstreams.len()]);
+        Ok(Self { upstreams, timeout, max_bytes, cache_bytes, check, asking: Mutex::new(()), kept: Default::default(), absent: Default::default(), failed })
     }
 
     fn cached(&self, digest: &str) -> Option<Arc<[u8]>> {
@@ -137,13 +144,19 @@ impl Federation {
             return Ok(Some(file));
         }
         let mut every_upstream_said_no = true;
-        for upstream in &self.upstreams {
+        for (i, upstream) in self.upstreams.iter().enumerate() {
+            if locked(&self.failed)[i].is_some_and(|when| when.elapsed() < REST_FOR) {
+                // Not asked, so it has not said no.
+                every_upstream_said_no = false;
+                continue;
+            }
             match crate::registry::take(engine, upstream, digest, self.max_bytes, self.timeout, true) {
                 Ok(crate::registry::Taken::Found(vocabulary, _)) => {
                     // The right content without a signature this registry
                     // requires is not kept: the next upstream may have it signed.
                     if self.check.as_ref().is_some_and(|check| check(&vocabulary).is_err()) {
                         every_upstream_said_no = false;
+                        locked(&self.failed)[i] = Some(Instant::now());
                         continue;
                     }
                     // Written out again here, not passed on as it came.
@@ -161,7 +174,10 @@ impl Federation {
                 Ok(crate::registry::Taken::Absent(_)) => {}
                 // An upstream that failed or sent something else is passed
                 // over, and is not taken as having said the file is absent.
-                Err(_) => every_upstream_said_no = false,
+                Err(_) => {
+                    every_upstream_said_no = false;
+                    locked(&self.failed)[i] = Some(Instant::now());
+                }
             }
         }
         if every_upstream_said_no {
@@ -437,6 +453,9 @@ fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
         reply.reason,
         body.len()
     );
+    if reply.status == 503 {
+        head.push_str("Retry-After: 1\r\n");
+    }
     if reply.page.is_some() {
         head.push_str(&format!("Content-Security-Policy: {STUDIO_POLICY}\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\n"));
     }

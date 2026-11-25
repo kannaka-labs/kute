@@ -244,9 +244,12 @@ fn an_upstream_that_lies_is_passed_over_and_what_it_sent_is_not_given_on() {
     // What the registry sent upstream: the digest, and the mark that it is a registry asking.
     let sent = last.lock().unwrap().to_ascii_lowercase();
     assert!(sent.starts_with(&format!("get /v1/vocabularies/{signed} ")) && sent.contains("kute-registry-via: 1"), "{sent}");
-    // A failure is not remembered as absence: the upstream is asked again.
-    assert_eq!(alone.get(&format!("/v1/vocabularies/{signed}"), "").0, 404);
-    assert_eq!(asked.load(Ordering::SeqCst), 2);
+    // An upstream that sent something else is left alone for a while:
+    // the next questions do not reach it.
+    for other in [signed.as_str(), NOBODY] {
+        assert_eq!(alone.get(&format!("/v1/vocabularies/{other}"), "").0, 404);
+    }
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
     // With an honest upstream named after it, the liar costs a question and nothing else.
     let both = Service::start(&dir, &["--registry-only", "--upstream", &liar, "--upstream", &honest.url()]);
     ok(&dir, &["fetch", "--from", &both.url(), "--digest", &signed, "--output", "past-the-liar.kvf", "--trusted-key", &ours]);
@@ -318,7 +321,26 @@ fn asking_upstream_is_bounded_one_question_at_a_time_and_absence_is_remembered()
     let (status, took) = first.join().unwrap();
     assert_eq!(status, 404);
     assert!(took >= Duration::from_secs(2) && took < Duration::from_secs(6), "the upstream deadline did not hold: {took:?}");
+    // The upstream that stalled is now left alone: the next question
+    // costs no wait, so one caller cannot hold the asking by repeating it.
+    let started = Instant::now();
+    assert_eq!(slow.get(&format!("/v1/vocabularies/{second}"), "").0, 404);
+    assert!(started.elapsed() < Duration::from_secs(1), "{:?}", started.elapsed());
     let _ = holder.join();
+
+    // A silent upstream named first, an honest one second: the first
+    // question pays the wait, and every one after goes straight to the
+    // honest upstream.
+    let quiet = TcpListener::bind("127.0.0.1:0").unwrap();
+    let quiet_at = format!("http://{}", quiet.local_addr().unwrap());
+    let source = Service::start(&dir, &["--registry-only", "--vocab", "signed.kvf"]);
+    let behind = Service::start(&dir, &["--registry-only", "--upstream", &quiet_at, "--upstream", &source.url(), "--upstream-timeout", "2"]);
+    assert_eq!(behind.get(&format!("/v1/vocabularies/{NOBODY}"), "").0, 404);
+    let started = Instant::now();
+    assert_eq!(behind.get(&format!("/v1/vocabularies/{second}"), "").0, 404);
+    assert_eq!(behind.get(&format!("/v1/vocabularies/{signed}"), "").0, 200);
+    assert!(started.elapsed() < Duration::from_secs(1), "{:?}", started.elapsed());
+    drop(quiet);
 
     // A file larger than the registry will take from upstream is not taken.
     let honest = Service::start(&dir, &["--registry-only", "--vocab", "signed.kvf"]);

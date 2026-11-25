@@ -1226,7 +1226,11 @@ repeats another's listing.
   a queue (callers asking for digests nobody has would fill it and hold
   every worker), and several at once (the same, later). With one, the
   service always has workers for what it holds.
-* Absence is remembered for a minute; failure is not remembered.
+* Absence is remembered for a minute, per digest. Failure is
+  remembered for thirty seconds, per upstream: at first it was not, and
+  review showed one caller and one silent upstream named first could
+  then hold the single question all the time, so that nobody reached
+  the honest upstream named second.
 * The listing is unchanged but for naming the upstreams. A fetched file
   is not added to it: the listing says what the operator put there.
 * Signatures: the digest does not cover them (ADR-0044), so an upstream

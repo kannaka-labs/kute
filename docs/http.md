@@ -154,7 +154,7 @@ What bounds it:
   header; all it does is make a registry do less.
 * One question upstream at a time. While a registry is waiting on an
   upstream, a second caller asking for something it does not hold is
-  told 503 at once and may try again. Files it holds, and the listing,
+  told 503 with `Retry-After: 1` and may try again. Files it holds, and the listing,
   are given without waiting. A caller asking for digests nobody has can
   therefore delay other callers' upstream fetches, and cannot stop the
   registry answering for what it has. One worker is occupied for up to
@@ -162,6 +162,11 @@ What bounds it:
 * A digest every upstream answered 404 for is remembered as absent for
   60 seconds (the last 1024 of them), and is not asked for again in
   that time. An upstream that failed is not counted as having said no.
+* An upstream that failed, stalled or sent something that did not pass
+  is left alone for 30 seconds, and questions go straight to the next
+  one. So a slow upstream costs its timeout once in that time, not on
+  every question, and a caller repeating questions cannot use it to
+  keep the registry busy. While it rests, what only it holds is 404.
 * `--upstream-max-bytes` (16 MiB) is the largest file taken, and
   `--upstream-cache-bytes` (64 MiB) is all that is kept; the oldest
   files go first. A file too large to keep is still given, and asked

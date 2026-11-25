@@ -68,17 +68,29 @@ pub fn parse_url(url: &str) -> kute::Result<(String, String)> {
 /// registries that name each other cannot pass it round.
 pub const VIA_HEADER: &str = "Kute-Registry-Via";
 
+/// Name lookups allowed to be unanswered at once in this process.
+const MAX_LOOKUPS: usize = 16;
+
 fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
     let deadline = Instant::now() + timeout;
     let left = || deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(|| failed("no complete answer in time"));
     // Looking a name up has no deadline of its own in the standard
     // library, so it is done on another thread and waited for only as
-    // long as the exchange has. A lookup that never ends leaves that
-    // thread behind; this process is about to end anyway.
+    // long as the exchange has. A lookup that outlasts the wait leaves
+    // its thread behind until the resolver of the system gives up. `kute
+    // fetch` ends soon after; a registry asking upstream runs for hours,
+    // so the number left behind at once is capped.
+    static LOOKUPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    use std::sync::atomic::Ordering::SeqCst;
+    if LOOKUPS.fetch_add(1, SeqCst) >= MAX_LOOKUPS {
+        LOOKUPS.fetch_sub(1, SeqCst);
+        return Err(failed(format!("{authority} was not looked up: {MAX_LOOKUPS} earlier lookups are still unanswered")));
+    }
     let (found, lookup) = std::sync::mpsc::channel();
     let name = authority.to_string();
     std::thread::spawn(move || {
         let _ = found.send(name.to_socket_addrs().map(|addresses| addresses.collect::<Vec<_>>()));
+        LOOKUPS.fetch_sub(1, SeqCst);
     });
     let addresses = lookup.recv_timeout(left()?).map_err(|_| failed(format!("{authority} was not looked up in time")))?.map_err(|e| failed(format!("{authority}: {e}")))?;
     let mut stream = None;
