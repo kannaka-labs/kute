@@ -516,7 +516,8 @@ vocabulary reached 246 to 277 tokens (report
 passed 256, a token id no longer fit one byte and the evolved vocabulary
 cost up to 16% more bytes than the frozen one, with fewer tokens; over the
 ten seeds it averaged 4% more bytes (0.93 to 1.16) and 23% fewer tokens.
-`kute evolve` does not warn when a step crosses that line.
+`kute evolve` did not warn when a step crossed that line when this was
+measured; it does now.
 
 Limits: synthetic data from one generator, whose drift is a clean switch;
 real processes change in other ways and by other amounts. One vocabulary
