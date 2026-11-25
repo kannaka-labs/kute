@@ -206,6 +206,7 @@ fn old_windows_are_forgotten_and_state_stays_inside_its_bound() {
         min_cohesion_bits: 1.0,
         max_patterns: 50,
         end_symbols: Vec::new(),
+        idle_ticks: None,
     };
     let bound = tight.state_bytes_bound();
     let mut watch = Watch::new(tight).unwrap();
@@ -401,4 +402,93 @@ fn an_ending_event_frees_its_entity_so_that_long_lived_ones_are_not_evicted() {
 
     assert!(Watch::new(WatchParams { end_symbols: vec![String::new()], ..base.clone() }).is_err());
     assert!(Watch::new(WatchParams { end_symbols: (0..65).map(|i| i.to_string()).collect(), ..base }).is_err());
+}
+
+/// An id that comes back after a long silence is another entity's, or
+/// the same one starting over: its events are not joined to the old
+/// ones. And the silent give up their places before the active do.
+#[test]
+fn an_idle_limit_stops_joins_across_a_reused_id_and_frees_the_silent_first() {
+    // Process ids 0 to 9 are reused: each run is LOGIN, WORK, LOGOUT a
+    // tick apart, and the id comes back 1,000 ticks later.
+    let mut events: Vec<Event> = Vec::new();
+    for round in 0..50i64 {
+        for pid in 0..10i64 {
+            let t = round * 1000 + pid * 10;
+            for (step, name) in ["LOGIN", "WORK", "LOGOUT"].iter().enumerate() {
+                events.push((format!("pid-{pid}"), name.to_string(), t + step as i64));
+            }
+        }
+    }
+    let base = WatchParams { pane_ticks: 1_000_000, max_patterns: 10_000, min_cohesion_bits: -100.0, ..WatchParams::default() };
+    let support = |reports: &[WindowReport], symbols: &[&str]| reports.last().unwrap().patterns.iter().find(|p| p.symbols == symbols).map_or(0, |p| p.support);
+
+    // The most often any reported sequence runs from one session into the
+    // next (a shorter one is left to the longer that extends it).
+    let crossing = |reports: &[WindowReport]| reports.last().unwrap().patterns.iter().filter(|p| p.symbols.windows(2).any(|w| w[0] == "LOGOUT" && w[1] == "LOGIN")).map(|p| p.support).max().unwrap_or(0);
+    // Without a limit, each new session is joined to the end of the last.
+    let without = run(base.clone(), &events);
+    assert!(crossing(&without) >= 480, "{}", crossing(&without));
+    // With one, no session runs on into the next, and the sessions themselves are whole.
+    let mut watch = Watch::new(WatchParams { idle_ticks: Some(100), ..base.clone() }).unwrap();
+    let mut with = Vec::new();
+    for (entity, symbol, time) in &events {
+        with.extend(watch.observe(entity, symbol, *time));
+    }
+    // A checkpoint taken here carries the times: the restored watch must
+    // still know how long each id has been silent.
+    let saved = watch.checkpoint().unwrap();
+    let (rest, totals) = watch.finish();
+    with.extend(rest);
+    assert_eq!(crossing(&with), 0);
+    assert_eq!(support(&with, &["LOGIN", "WORK", "LOGOUT"]), 500);
+    assert_eq!(totals.idle_ended, 490);
+    assert!(with.last().unwrap().exact);
+    let mut restored = Watch::restore(&saved).unwrap();
+    assert_eq!(restored.checkpoint().unwrap(), saved);
+    restored.observe("pid-3", "LOGIN", 60_000);
+    let (reports, totals) = restored.finish();
+    assert_eq!(totals.idle_ended, 491);
+    assert_eq!(crossing(&reports), 0);
+    // An interval inside the limit is still one sequence.
+    let mut close = Watch::new(WatchParams { idle_ticks: Some(100), min_support: 1, ..base.clone() }).unwrap();
+    for (i, name) in ["A", "B", "C"].iter().enumerate() {
+        close.observe("x", name, i as i64 * 100);
+    }
+    let (reports, totals) = close.finish();
+    assert_eq!((support(&reports, &["A", "B", "C"]), totals.idle_ended), (1, 0));
+
+    // Eight places. One job pings every 40 ticks; a visitor comes every 8
+    // and is never seen again. Without a limit the visitors are pushed
+    // out as evictions, which a report must count as possible loss. With
+    // one, a visitor silent past the limit is let go: by the rule its
+    // next event would have started afresh anyway, so nothing is lost
+    // and the report stays exact. (A limit cannot help when more
+    // entities are active inside it than there are places.)
+    let mut events: Vec<Event> = Vec::new();
+    for t in 0..4000i64 {
+        if t % 40 == 0 {
+            events.push(("long".into(), if (t / 40) % 2 == 0 { "PING".into() } else { "PONG".into() }, t));
+        } else if t % 8 == 1 {
+            events.push((format!("visitor-{t}"), "HELLO".into(), t));
+        }
+    }
+    let tight = WatchParams { live: LiveParams { max_entities: 8, ..Default::default() }, ..base };
+    let without = run(tight.clone(), &events);
+    assert!(without.last().unwrap().entities_evicted > 0 && !without.last().unwrap().exact);
+    let with = run(WatchParams { idle_ticks: Some(45), ..tight.clone() }, &events);
+    assert_eq!((with.last().unwrap().entities_evicted, with.last().unwrap().exact), (0, true));
+    // And it counts what a watch with room for everyone counts.
+    let roomy = run(WatchParams { idle_ticks: Some(45), live: LiveParams::default(), ..tight }, &events);
+    assert_eq!(window_patterns(with.last().unwrap()), window_patterns(roomy.last().unwrap()));
+    assert!(!window_patterns(with.last().unwrap()).is_empty());
+
+    // A checkpoint whose times do not fit is refused, and so is a limit of nothing.
+    let mut doc: serde_json::Value = serde_json::from_slice(&saved).unwrap();
+    doc["tail_times"].as_array_mut().unwrap().pop();
+    assert!(Watch::restore(&serde_json::to_vec(&doc).unwrap()).is_err());
+    let mut doc: serde_json::Value = serde_json::from_slice(&saved).unwrap();
+    doc["tail_times"][0] = serde_json::json!(i64::MAX);
+    assert!(Watch::restore(&serde_json::to_vec(&doc).unwrap()).is_err());
+    assert!(Watch::new(WatchParams { idle_ticks: Some(0), ..WatchParams::default() }).is_err());
 }

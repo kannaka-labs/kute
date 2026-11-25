@@ -1017,6 +1017,32 @@ generalization. Until one of those is built and measured against these
 baselines, no claim about the usefulness of these representations is
 made.
 
+## ADR-0049: An entity silent past a stated time starts over, and is let go without loss
+
+Status: accepted.
+
+ADR-0039 forgot entities only by eviction, and an ending event was
+added for streams that state an end. Streams with reused ids and no
+dependable ending event (OpenSSH process ids) had neither: old
+sequences were joined to new ones, and finished entities held places.
+
+Decided: `idle_ticks` (`--idle`). An entity whose last counted event
+is more than that before its next starts a new sequence. When places
+run out, entities silent that long go first and are not counted as
+evicted, because the rule would have joined nothing to them. Measured
+in event time, in time order, like everything else in the watch; no
+timer. A checkpoint with a limit carries each entity's last time, and
+one without is unchanged byte for byte.
+
+Rejected: a timer on the wall clock (a replay would differ from the
+live run); counting idle removals as evictions (it would mark exact
+reports inexact).
+
+Measuring it found that the OpenSSH event file had been dated wrongly
+across a year boundary. Results that used its times were redone:
+the prediction report (its sign changed) and the live figures. Results
+that use only the order of lines (the representation windows) stand.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

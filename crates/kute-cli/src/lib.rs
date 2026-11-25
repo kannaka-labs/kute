@@ -288,6 +288,11 @@ enum Command {
         /// entity is forgotten and its place freed. Repeatable.
         #[arg(long = "end-on", value_name = "EVENT")]
         end_on: Vec<String>,
+        /// Start an entity's sequence afresh when its last event was
+        /// more than this long ago, in the unit of --pane; and let
+        /// entities idle that long go first when places run out.
+        #[arg(long, value_name = "TICKS")]
+        idle: Option<i64>,
         /// Events held waiting to be put in time order.
         #[arg(long, default_value_t = 100_000)]
         max_buffered: usize,
@@ -1313,6 +1318,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             panes,
             lateness,
             end_on,
+            idle,
             max_buffered,
             max_length,
             max_symbols,
@@ -1327,7 +1333,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             skip_bad_lines,
         } => {
             let bounds = kute_discover::live::LiveParams { max_length, max_symbols, max_candidates, max_entities, ..Default::default() };
-            let params = kute_discover::watch::WatchParams { live: bounds, pane_ticks: pane, panes, lateness, max_buffered, min_support, min_cohesion_bits, max_patterns, end_symbols: end_on };
+            let params = kute_discover::watch::WatchParams { live: bounds, pane_ticks: pane, panes, lateness, max_buffered, min_support, min_cohesion_bits, max_patterns, end_symbols: end_on, idle_ticks: idle };
             live::run(live::Options { input, symbol_field, time_field, group_field, params, checkpoint, checkpoint_every, resume, skip_bad_lines })
         }
         Command::Predict { input, symbol_field, time_field, time_unit, group_field, holdout_fraction, max_context, min_count, windows, resamples, seed, output } => {

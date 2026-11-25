@@ -455,7 +455,7 @@ Most of what is left is two columns that are close to incompressible:
 the 575,061 block ids (5.2 MB) and the times (5.4 MB).
 
 **OpenSSH** (Loghub-2.0), 638,947 log lines turned into records by
-`openssh_events.py`: time, host, process, pid, the template id as the
+`openssh_events.py` (times corrected since: see the prediction section): time, host, process, pid, the template id as the
 event name, and the text that fills the template's slots as `params`;
 77.4 MB of JSON Lines (report `results/events-container-openssh.json`):
 
@@ -728,17 +728,24 @@ four parts of the held-out time the context predictor scores 1.00,
 
 | predictor | bits an event | most likely event was right | calibration error |
 |---|---:|---:|---:|
-| frequency | 3.54 | 23% | 0.02 |
-| previous event | 0.91 | 80% | 0.05 |
-| up to three events | 0.86 | 74% | 0.07 |
+| frequency | 3.93 | 16% | 0.08 |
+| previous event | 0.73 | 79% | 0.09 |
+| up to three events | 0.77 | 80% | 0.10 |
 
-Here nearly everything is in the previous event. Three events save 0.047
-bits over one overall, and over the four parts of the held-out time
-0.03, -0.02, 0.07 and 0.11: in one quarter the longer past did worse.
-That is too small and too unsteady to call a gain. The most likely event
-is right less often than with one event of past. Over
-the four parts of held-out time the context predictor scores 0.64, 0.73,
-1.21 and 0.87.
+Here everything is in the previous event, and the longer past does
+harm: three events cost 0.044 bits more than one overall, and more in
+each of the four parts of the held-out time (0.04, 0.02, 0.03 and
+0.09). Over those parts the context predictor scores 0.72, 0.65, 0.65
+and 1.05. On process ids not seen before the cut it is worse still
+(1.10 against 0.73), though that is 975 events.
+
+**This table replaces one that was wrong.** The log runs from December
+into January and carries no year; the converter dated the second half a
+year before the first. The held-out "last quarter by time" was then
+from the middle of the log, with later events in the training part, and
+it showed a small saving from the longer past (0.047 bits, called too
+unsteady to be a gain). With the times right the saving is a loss. The
+converter is fixed; the HDFS file was never affected.
 
 What this is and is not. These are log templates: much of the
 predictability is a program writing its lines in order. The predictor is
@@ -748,9 +755,8 @@ the first held-out runs on these two datasets showed its absence, so
 they are not clean evidence for that choice; before it, the HDFS context
 predictor scored 1.45 bits and after, 1.32. These reports were regenerated after a
 defect was fixed (a name first used before the cut by an entity listed
-later was treated as unknown): HDFS did not change; on OpenSSH the
-events with an unknown name went from 68 to 61 and the figures moved in
-the third decimal. One cut in time on each
+later was treated as unknown): HDFS did not change. The OpenSSH report
+was then redone again for the wrong times described above. One cut in time on each
 dataset, so one held-out period. Nothing here shows that an event causes
 the next.
 

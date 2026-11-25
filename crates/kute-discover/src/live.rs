@@ -80,7 +80,7 @@ impl LiveParams {
         const MAP_ENTRY: u64 = 48; // key pointer and length, value, hash-table slack
         let names = self.max_symbols as u64 * (2 * self.max_symbol_bytes as u64 + 2 * MAP_ENTRY);
         let sequences: u64 = (1..=self.max_length as u64).map(|n| self.max_candidates as u64 * (4 * n + MAP_ENTRY + 8)).sum();
-        let tails = self.max_entities as u64 * (4 * self.max_length as u64 + MAP_ENTRY + 24);
+        let tails = self.max_entities as u64 * (4 * self.max_length as u64 + MAP_ENTRY + 32);
         names + sequences + tails
     }
 }
@@ -119,6 +119,8 @@ impl Table {
 pub(crate) struct Tail {
     pub(crate) recent: VecDeque<u32>,
     pub(crate) last_seen: u64,
+    /// Time of the last event, for a watch with an idle limit; unused here.
+    pub(crate) last_time: i64,
 }
 
 /// A pattern found in the stream so far.
@@ -227,7 +229,7 @@ impl Live {
             self.evict();
         }
         let max_length = self.params.max_length;
-        let tail = self.entities.entry(key).or_insert_with(|| Tail { recent: VecDeque::with_capacity(max_length), last_seen: 0 });
+        let tail = self.entities.entry(key).or_insert_with(|| Tail { recent: VecDeque::with_capacity(max_length), last_seen: 0, last_time: 0 });
         tail.last_seen = self.events;
         if tail.recent.len() == max_length {
             tail.recent.pop_front();
@@ -254,7 +256,7 @@ impl Live {
         const MAP_ENTRY: u64 = 48;
         let names: u64 = self.names.iter().map(|n| 2 * n.len() as u64 + 2 * MAP_ENTRY).sum();
         let sequences: u64 = self.tables.iter().enumerate().map(|(n, t)| t.counts.len() as u64 * (4 * n as u64 + MAP_ENTRY + 8)).sum();
-        let tails = self.entities.len() as u64 * (4 * self.params.max_length as u64 + MAP_ENTRY + 24);
+        let tails = self.entities.len() as u64 * (4 * self.params.max_length as u64 + MAP_ENTRY + 32);
         names + sequences + tails
     }
 
@@ -359,7 +361,7 @@ impl Live {
             if recent.len() > p.max_length || recent.iter().any(|&id| id > known) || last_seen > saved.events {
                 return Err(bad("an entity's recent symbols are malformed"));
             }
-            if live.entities.insert(key, Tail { recent: recent.into(), last_seen }).is_some() {
+            if live.entities.insert(key, Tail { recent: recent.into(), last_seen, last_time: 0 }).is_some() {
                 return Err(bad("an entity is listed twice"));
             }
         }

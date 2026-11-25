@@ -27,9 +27,9 @@ fn ok(dir: &Path, args: &[&str]) -> Value {
 /// and a sender offering `vocab`. Returns the sender's output and what
 /// the server received.
 fn exchange(dir: &Path, name: &str, trusted: &[&str], vocab: &str) -> (Output, Vec<PathBuf>) {
-    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-    let address = format!("127.0.0.1:{port}");
-    let mut args = vec!["peer", "serve", "--listen", &address, "--insecure-plain", "--accept-vocabularies", "--output-dir", name, "--timeout", "20"];
+    // The server picks the port and says which: choosing one here and
+    // letting it go would leave a moment for another test to take it.
+    let mut args = vec!["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--accept-vocabularies", "--output-dir", name, "--timeout", "20"];
     for key in trusted {
         args.extend_from_slice(&["--require-signature-from", key]);
     }
@@ -38,6 +38,7 @@ fn exchange(dir: &Path, name: &str, trusted: &[&str], vocab: &str) -> (Output, V
     let mut line = String::new();
     BufReader::new(server.stderr.take().unwrap()).read_line(&mut line).unwrap();
     assert!(line.contains("listening"), "{line}");
+    let address = line.trim().rsplit(' ').next().unwrap().to_string();
     let sent = kute(dir, &["peer", "send", "--connect", &address, "--insecure-plain", "--vocab", vocab, "--input", "log.jsonl"]);
     let _ = server.wait();
     let mut received: Vec<PathBuf> = std::fs::read_dir(dir.join(name)).map(|d| d.map(|e| e.unwrap().path()).collect()).unwrap_or_default();

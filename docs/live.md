@@ -81,6 +81,7 @@ estimate from the sizes of the tables, not a measurement of the process.
 | `--max-candidates` | 200,000 | per length, per pane. Counts become a Misra-Gries summary: never above the truth, under by at most `max_undercount` |
 | `--max-entities` | 100,000 | the least recently seen eighth lose their recent events; a sequence spanning that is missed (`entities_evicted`) |
 | `--max-buffered` | 100,000 | forced releases, above |
+| `--idle` | none | not a limit reached but a rule: see below |
 | `--max-length` | 6 | longest sequence counted (2 to 16) |
 | `--panes` | 1 | at most 64 |
 
@@ -97,15 +98,43 @@ keeps finished entities from holding places that long-lived ones then
 lose. The event must be one that only ever ends an entity: one that
 also occurs part way through cuts real sequences in two.
 
-Measured by the reviewer on the OpenSSH log (entity = process id, one
-pane): with a limit of 16,384 entities, evictions fell from 38,931 to
-8,196 with one ending event named, and `ended` equalled the occurrences
-of that event. What it did not settle is whether the patterns are
-better for it. Process ids are reused, so an unbounded run joins a new
-session to the tail of an old one and is not a truth to compare with;
-and the event named there ends 16,813 processes but occurs 37,963
-times. This data wants an idle limit (forget an entity not seen for a
-given time), which is not built.
+`--idle TICKS` ends an entity's sequence by silence instead: when an
+entity's last counted event is more than that long before its next, the
+next starts a new sequence and the two are not joined. Entities silent
+that long are also the first to go when places run out, and that is
+not an eviction: by the rule, nothing would have been joined to them
+anyway. It suits streams whose entity ids are reused (process ids) or
+whose entities stop without saying so. `idle_ended` counts the
+sequences ended this way; ones still held when the stream ends are not
+counted. It cannot help when more entities are active inside the limit
+than there are places. The time is the event's own, so a checkpoint
+with a limit carries each entity's last time.
+
+Measured on the OpenSSH log (638,947 events, 32,420 process ids, one
+pane, 16,384 places, a lateness of 90,000 s to cover one line the log
+has a day out of order):
+
+| | evicted | sequences reported |
+|---|---:|---:|
+| neither | 94,254 | 150 |
+| `--end-on E29` (the session-closing line) | 57,372 | 202 |
+| `--idle 600` | 0 | 55 |
+| both | 0 | 55 |
+
+With the limit, 16,384 places report exactly what 1,000,000 places
+report. The limit's size hardly matters on this log: of the 124,750
+gaps over a minute between events of one process id, 103,078 are over a
+day, which is the id being used again; 60, 600 and 3,600 s all leave no
+evictions. The 95 sequences reported only without the limit were not
+examined one by one, so this shows what the limit removes and not that
+each removed one was false.
+
+Figures given here before (evictions 38,931 falling to 8,196) were
+measured on a file whose times were wrong: the log runs from December
+into January with no year, the converter dated the second half a year
+before the first, and with no lateness allowed that half, 347,943
+events, was dropped as late. `benchmarks/openssh_events.py` now starts
+a new year when the month falls back.
 
 The entity limit matters most. An entity evicted between two of its
 events loses the sequence across the gap, so the limit should be above

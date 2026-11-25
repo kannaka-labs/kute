@@ -77,11 +77,18 @@ pub struct WatchParams {
     /// alphabet was full ends nothing.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub end_symbols: Vec<String>,
+    /// An entity whose last counted event is more than this many ticks
+    /// before its next one starts a new sequence there: the two are not
+    /// joined. It also lets entities idle that long be forgotten, without
+    /// counting as evicted, when places run out. For streams whose entity
+    /// ids are reused (process ids), or whose entities simply stop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idle_ticks: Option<i64>,
 }
 
 impl Default for WatchParams {
     fn default() -> Self {
-        Self { live: LiveParams::default(), pane_ticks: 3600, panes: 1, lateness: 0, max_buffered: 100_000, min_support: 5, min_cohesion_bits: 1.0, max_patterns: 100, end_symbols: Vec::new() }
+        Self { live: LiveParams::default(), pane_ticks: 3600, panes: 1, lateness: 0, max_buffered: 100_000, min_support: 5, min_cohesion_bits: 1.0, max_patterns: 100, end_symbols: Vec::new(), idle_ticks: None }
     }
 }
 
@@ -94,6 +101,9 @@ impl WatchParams {
         }
         if self.end_symbols.len() > 64 || self.end_symbols.iter().any(String::is_empty) {
             return bad("end_symbols holds at most 64 names, none empty");
+        }
+        if self.idle_ticks.is_some_and(|idle| idle <= 0) {
+            return bad("idle_ticks must be positive");
         }
         if !(1..=MAX_PANES).contains(&self.panes) {
             return bad("panes must be between 1 and 64");
@@ -119,7 +129,7 @@ impl WatchParams {
         let names = l.max_symbols as u64 * (2 * l.max_symbol_bytes as u64 + 2 * MAP_ENTRY);
         let sequences: u64 = (1..=l.max_length as u64).map(|n| l.max_candidates as u64 * (4 * n + MAP_ENTRY + 8)).sum();
         let copies = if self.panes > 1 { 2 * self.panes as u64 } else { 1 };
-        let tails = l.max_entities as u64 * (4 * l.max_length as u64 + MAP_ENTRY + 24);
+        let tails = l.max_entities as u64 * (4 * l.max_length as u64 + MAP_ENTRY + 32);
         let buffer = self.max_buffered as u64 * 40;
         let previous = self.max_patterns as u64 * (96 + l.max_length as u64 * (l.max_symbol_bytes as u64 + 24));
         names + copies * sequences + tails + buffer + previous
@@ -194,6 +204,9 @@ pub struct Totals {
     /// Entities forgotten because one of `end_symbols` was counted.
     #[serde(default)]
     pub ended: u64,
+    /// Sequences ended because their entity was idle past `idle_ticks`.
+    #[serde(default)]
+    pub idle_ended: u64,
 }
 
 type Held = Reverse<(i64, u64, u64, u32)>;
@@ -309,6 +322,20 @@ impl Watch {
         self.totals.counted += 1;
         let l = &self.params.live;
         let (max_length, max_candidates, max_entities) = (l.max_length, l.max_candidates, l.max_entities);
+        if let Some(idle) = self.params.idle_ticks {
+            // Too long since this entity's last event: what comes now is
+            // not a continuation of what came then.
+            if self.tails.get(&key).is_some_and(|tail| time.saturating_sub(tail.last_time) > idle) {
+                self.tails.remove(&key);
+                self.totals.idle_ended += 1;
+            }
+            // Out of places: the idle go first, and that is not a loss.
+            if !self.tails.contains_key(&key) && self.tails.len() >= max_entities {
+                let before = self.tails.len();
+                self.tails.retain(|_, tail| time.saturating_sub(tail.last_time) <= idle);
+                self.totals.idle_ended += (before - self.tails.len()) as u64;
+            }
+        }
         if !self.tails.contains_key(&key) && self.tails.len() >= max_entities {
             // Drop the least recently seen eighth.
             let mut seen: Vec<u64> = self.tails.values().map(|t| t.last_seen).collect();
@@ -318,8 +345,9 @@ impl Watch {
             self.tails.retain(|_, tail| tail.last_seen > threshold);
             self.pending.2 += (before - self.tails.len()) as u64;
         }
-        let tail = self.tails.entry(key).or_insert_with(|| Tail { recent: VecDeque::with_capacity(max_length), last_seen: 0 });
+        let tail = self.tails.entry(key).or_insert_with(|| Tail { recent: VecDeque::with_capacity(max_length), last_seen: 0, last_time: time });
         tail.last_seen = self.totals.counted;
+        tail.last_time = time;
         if tail.recent.len() == max_length {
             tail.recent.pop_front();
         }
@@ -369,7 +397,7 @@ impl Watch {
         const MAP_ENTRY: u64 = 48;
         let names: u64 = self.names.iter().map(|n| 2 * n.len() as u64 + 2 * MAP_ENTRY).sum();
         let sequences: u64 = self.panes.iter().flat_map(|p| p.tables.iter().enumerate()).map(|(n, t)| t.counts.len() as u64 * (4 * n as u64 + MAP_ENTRY + 8)).sum();
-        let tails = self.tails.len() as u64 * (4 * self.params.live.max_length as u64 + MAP_ENTRY + 24);
+        let tails = self.tails.len() as u64 * (4 * self.params.live.max_length as u64 + MAP_ENTRY + 32);
         let previous: u64 = self.previous.iter().flat_map(|(_, p)| p.iter()).map(|(_, symbols)| 96 + symbols.iter().map(|s| s.len() as u64 + 24).sum::<u64>()).sum();
         names + sequences + tails + self.buffer.len() as u64 * 40 + previous
     }
@@ -452,6 +480,9 @@ impl Watch {
     pub fn checkpoint(&self) -> Result<Vec<u8>> {
         let mut tails: Vec<(u64, Vec<u32>, u64)> = self.tails.iter().map(|(&k, t)| (k, t.recent.iter().copied().collect(), t.last_seen)).collect();
         tails.sort_unstable();
+        // Times of last events, in the order of `tails`; kept only when
+        // an idle limit needs them, so other checkpoints are unchanged.
+        let tail_times: Vec<i64> = if self.params.idle_ticks.is_some() { tails.iter().map(|(k, _, _)| self.tails[k].last_time).collect() } else { Vec::new() };
         let mut buffer: Vec<(i64, u64, u64, u32)> = self.buffer.iter().map(|held| held.0).collect();
         buffer.sort_unstable();
         let panes = self
@@ -479,6 +510,7 @@ impl Watch {
             params: self.params.clone(),
             names: self.names[1..].to_vec(),
             tails,
+            tail_times,
             buffer,
             watermark: self.watermark,
             latest: self.latest,
@@ -514,7 +546,7 @@ impl Watch {
             watch.names.push(name);
         }
         let t = saved.totals;
-        if t.arrived > MAX_EVENTS || t.counted > t.arrived || t.late_dropped > t.arrived || t.forced_releases > t.arrived || t.reports > t.arrived {
+        if t.arrived > MAX_EVENTS || t.counted > t.arrived || t.late_dropped > t.arrived || t.forced_releases > t.arrived || t.reports > t.arrived || t.idle_ended > t.counted {
             return Err(bad("totals no stream could produce"));
         }
         if saved.pending.0 > t.arrived || saved.pending.1 > t.arrived || saved.pending.2 > t.arrived {
@@ -539,11 +571,20 @@ impl Watch {
             return Err(bad("two buffered events share an arrival number"));
         }
         watch.buffer = saved.buffer.into_iter().map(Reverse).collect();
+        if saved.tail_times.len() != if p.idle_ticks.is_some() { saved.tails.len() } else { 0 } {
+            return Err(bad("times of last events do not match the entities held"));
+        }
+        if saved.tail_times.iter().any(|&time| saved.latest.is_none_or(|latest| time > latest)) {
+            return Err(bad("an entity was last seen after the latest event"));
+        }
+        let mut times = saved.tail_times.into_iter();
         for (key, recent, last_seen) in saved.tails {
             if recent.len() > l.max_length || recent.iter().any(|&id| id > known) || last_seen > t.counted {
                 return Err(bad("an entity's recent symbols are malformed"));
             }
-            if watch.tails.insert(key, Tail { recent: recent.into(), last_seen }).is_some() {
+            // Without an idle limit the time is never read.
+            let last_time = times.next().unwrap_or(i64::MAX);
+            if watch.tails.insert(key, Tail { recent: recent.into(), last_seen, last_time }).is_some() {
                 return Err(bad("an entity is listed twice"));
             }
         }
@@ -639,6 +680,8 @@ struct Saved {
     params: WatchParams,
     names: Vec<String>,
     tails: Vec<(u64, Vec<u32>, u64)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tail_times: Vec<i64>,
     buffer: Vec<(i64, u64, u64, u32)>,
     watermark: Option<i64>,
     latest: Option<i64>,
