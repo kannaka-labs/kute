@@ -916,8 +916,9 @@ Decided:
 Not decided, not built: relative bounds, bounds on derived quantities,
 many signals in one container, streaming, any predictor or transform.
 
-Measured on one real data set (`docs/signals.md`): 5% smaller than the
-same idea done by hand with xz, which is not a result worth a claim.
+Measured on one real data set (`docs/signals.md`): 0.2% smaller than the
+same differences written as varints under zstd by hand, which is to say
+the container adds nothing in bytes.
 Purpose-built float compressors were not run. The reason to have it is
 that the file says what it promises and a reader can check it.
 

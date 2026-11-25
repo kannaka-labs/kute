@@ -63,6 +63,15 @@ fn a_column_of_a_file_is_packed_and_read_back() {
     assert!(worst <= 0.1 && worst == header["max_error_observed"].as_f64().unwrap(), "{worst}");
     assert!(back.iter().zip(&volts).all(|(a, b)| a.is_nan() == b.is_nan()));
 
+    // Very large and very small values are printed with an exponent, and
+    // read back as the same numbers.
+    std::fs::write(dir.join("wide.txt"), "1e300\n5e-324\n-2.5e-200\n123456.789\n").unwrap();
+    ok(&dir, &["signals", "pack", "wide.txt", "--output", "wide.kts"]);
+    let (_, stdout, _) = run(&dir, &["signals", "unpack", "wide.kts"]);
+    let text = String::from_utf8(stdout).unwrap();
+    assert!(text.len() < 60, "{} characters: {text}", text.len());
+    assert_eq!(numbers(&text), [1e300, 5e-324, -2.5e-200, 123456.789]);
+
     // What is refused, and why.
     for (args, why) in [
         (vec!["signals", "pack", "log.csv", "--output", "x.kts"], "is not a number"),

@@ -450,8 +450,10 @@ enum SignalsAction {
         /// Where to write; standard output when absent.
         #[arg(long)]
         output: Option<PathBuf>,
-        /// Refuse a container holding more values than this.
-        #[arg(long, default_value_t = 1 << 28)]
+        /// Refuse a container holding more values than this. Reading can
+        /// take about 44 bytes of memory a value, so the default allows
+        /// about 740 MB.
+        #[arg(long, default_value_t = 1 << 24)]
         max_values: u64,
     },
     /// Print the container's header: the contract and what it measured.
@@ -1396,7 +1398,15 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 let values = kute_signals::unpack(&std::fs::read(&input)?, max_values)?;
                 let mut text = String::with_capacity(values.len() * 8);
                 for value in &values {
-                    text.push_str(&value.to_string());
+                    // The plain form never uses an exponent, so 1e300 is
+                    // 301 characters. Past a width the exponent form is
+                    // written; both read back as the same number.
+                    let plain = value.to_string();
+                    if plain.len() > 24 {
+                        text.push_str(&format!("{value:e}"));
+                    } else {
+                        text.push_str(&plain);
+                    }
                     text.push('\n');
                 }
                 match output {

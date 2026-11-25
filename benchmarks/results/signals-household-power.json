@@ -22,13 +22,14 @@
     "delta_order": 1,
     "kept_exactly": 25979,
     "every_value_read_back_equal": true,
-    "pack_seconds": 1.3,
-    "unpack_seconds": 0.4
+    "pack_seconds": 1.32,
+    "unpack_seconds": 0.41
    },
    "rivals_exact": {
     "text_xz": 2093080,
     "binary_xz": 2088988,
-    "scaled_delta_xz": 1675632
+    "scaled_delta_xz": 1675632,
+    "scaled_delta_varint_zstd": 1640711
    },
    "bounded": {
     "max_error": 0.005,
@@ -57,13 +58,14 @@
     "delta_order": 1,
     "kept_exactly": 25979,
     "every_value_read_back_equal": true,
-    "pack_seconds": 1.61,
-    "unpack_seconds": 0.39
+    "pack_seconds": 1.66,
+    "unpack_seconds": 0.37
    },
    "rivals_exact": {
     "text_xz": 1356116,
     "binary_xz": 1294580,
-    "scaled_delta_xz": 1164136
+    "scaled_delta_xz": 1164136,
+    "scaled_delta_varint_zstd": 1136575
    },
    "bounded": {
     "max_error": 0.005,
@@ -92,13 +94,14 @@
     "delta_order": 1,
     "kept_exactly": 25979,
     "every_value_read_back_equal": true,
-    "pack_seconds": 0.93,
-    "unpack_seconds": 0.42
+    "pack_seconds": 0.92,
+    "unpack_seconds": 0.47
    },
    "rivals_exact": {
     "text_xz": 2699660,
     "binary_xz": 2612392,
-    "scaled_delta_xz": 2262244
+    "scaled_delta_xz": 2262244,
+    "scaled_delta_varint_zstd": 2200485
    },
    "bounded": {
     "max_error": 0.05,
@@ -127,13 +130,14 @@
     "delta_order": 1,
     "kept_exactly": 25979,
     "every_value_read_back_equal": true,
-    "pack_seconds": 1.44,
-    "unpack_seconds": 0.37
+    "pack_seconds": 1.42,
+    "unpack_seconds": 0.4
    },
    "rivals_exact": {
     "text_xz": 902840,
     "binary_xz": 819020,
-    "scaled_delta_xz": 708596
+    "scaled_delta_xz": 708596,
+    "scaled_delta_varint_zstd": 625528
    },
    "bounded": {
     "max_error": 0.5,
@@ -162,13 +166,14 @@
     "delta_order": 0,
     "kept_exactly": 25979,
     "every_value_read_back_equal": true,
-    "pack_seconds": 0.4,
-    "unpack_seconds": 0.29
+    "pack_seconds": 0.41,
+    "unpack_seconds": 0.41
    },
    "rivals_exact": {
     "text_xz": 85880,
     "binary_xz": 81072,
-    "scaled_delta_xz": 78764
+    "scaled_delta_xz": 78764,
+    "scaled_delta_varint_zstd": 65100
    },
    "bounded": {
     "max_error": 5.0,
@@ -197,13 +202,14 @@
     "delta_order": 1,
     "kept_exactly": 25979,
     "every_value_read_back_equal": true,
-    "pack_seconds": 1.31,
+    "pack_seconds": 1.3,
     "unpack_seconds": 0.26
    },
    "rivals_exact": {
     "text_xz": 197108,
     "binary_xz": 196828,
-    "scaled_delta_xz": 170460
+    "scaled_delta_xz": 170460,
+    "scaled_delta_varint_zstd": 129775
    },
    "bounded": {
     "max_error": 5.0,
@@ -232,13 +238,14 @@
     "delta_order": 0,
     "kept_exactly": 25979,
     "every_value_read_back_equal": true,
-    "pack_seconds": 1.06,
+    "pack_seconds": 1.09,
     "unpack_seconds": 0.29
    },
    "rivals_exact": {
     "text_xz": 280744,
     "binary_xz": 247356,
-    "scaled_delta_xz": 234804
+    "scaled_delta_xz": 234804,
+    "scaled_delta_varint_zstd": 188926
    },
    "bounded": {
     "max_error": 5.0,
@@ -261,6 +268,7 @@
   "text_xz": 7615428,
   "binary_xz": 7340236,
   "scaled_delta_xz": 6294636,
+  "scaled_delta_varint_zstd": 5987100,
   "rounded_text_xz": 4033828
  },
  "all_exact_columns_equal": true,

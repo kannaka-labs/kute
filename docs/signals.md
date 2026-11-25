@@ -38,10 +38,20 @@ has (`max_error_observed`), which is at most `E` and often less.
 container if it differs from the one in the header. A damaged or altered
 container gives an error, not other numbers.
 
+The hash covers the values and not what the header says about them, so
+the header's statements are checked against each other: a container in
+steps that calls itself exact, a bound of zero, an observed error above
+the bound, are all refused by `unpack` and `inspect`. What no check can
+do is tell a reader what the original values were. A container made by
+someone you do not trust can state any bound it likes over values that
+were never within it; the header is the maker's word.
+
 What is not kept: the spelling. `234.840` and `234.84` are one value and
 `unpack` prints it in the shortest form that reads back as the same
-number. A missing reading (an empty field, `?`, `NA`, `NaN`) is stored
-as NaN and comes back as `NaN`. To keep text byte for byte, this is the
+number, with an exponent when the plain form would pass 24 characters.
+A missing reading (an empty field, `?`, `NA`, `NaN`) is stored as NaN
+and comes back as `NaN`: a file that used both `?` and `NaN` comes back
+with one spelling for the two. To keep text byte for byte, this is the
 wrong command.
 
 ## How it is stored
@@ -73,8 +83,11 @@ model of the signal, no transform, no per-segment adaptation.
 ## Limits
 
 * At most 2^31 values in a container. `unpack --max-values` (default
-  2^28) bounds what a container can make a reader allocate; each part's
+  2^24) bounds what a container can make a reader allocate; each part's
   size is checked against the number of values before it is inflated.
+  Reading can take about 44 bytes of memory a value, not 8, so the
+  default allows about 740 MB and the format's limit about 90 GB. Set
+  it to what you expect.
 * One signal per container. A table is one container per column.
 * The bound is absolute. There is no relative bound, and no bound on a
   derived quantity such as a sum or a rate.
@@ -102,17 +115,19 @@ Total over seven columns, bytes:
 |---|---|
 | The columns as text, xz -9 | 7,615,428 |
 | Eight bytes a value, xz -9 | 7,340,236 |
-| Scaled whole numbers, differenced by hand, xz -9 | 6,294,636 |
+| Scaled whole numbers, differenced by hand, four bytes each, xz -9 | 6,294,636 |
+| The same differences as varints, zstd -19 | 5,987,100 |
 | `kute signals`, exact | 5,976,899 |
 | Rounded to one digit fewer and printed, xz -9 | 4,033,828 |
 | `kute signals`, bounded to one digit fewer | 3,498,994 |
 
 Reading this fairly:
 
-* The third row is the same idea done by hand, and it lands within 5% of
-  the container. It also stores a missing reading as zero and so could
-  not give the data back; it is flattered. The container's advantage
-  over it is small and is not the point.
+* The third and fourth rows are the same idea done by hand. The fourth
+  uses the container's own number format and compressor, so the
+  difference between it and the container is what the container itself
+  adds in bytes: 10,201 bytes in 6 MB, or 0.2%. On the four columns where both take differences once, the hand-made row is the smaller by a few hundred bytes (it has no header); the container is ahead only on the two sub-meter columns where it chooses not to take differences. In bytes the container adds nothing worth a claim. Both rows store a missing reading as zero
+  and so could not give the data back; they are flattered.
 * The point is the contract in the file: which mode, what bound, what
   error was incurred, and a hash a reader checks.
 * Rivals were xz only. A purpose-built float compressor (Gorilla, Chimp,

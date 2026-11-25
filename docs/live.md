@@ -94,7 +94,18 @@ it is counted, the entity is forgotten and its place freed, in time
 order and not on arrival. Where entities have an end that the stream
 states (a job finishing, a block deleted, a session closing), this
 keeps finished entities from holding places that long-lived ones then
-lose. It has not been measured on real data.
+lose. The event must be one that only ever ends an entity: one that
+also occurs part way through cuts real sequences in two.
+
+Measured by the reviewer on the OpenSSH log (entity = process id, one
+pane): with a limit of 16,384 entities, evictions fell from 38,931 to
+8,196 with one ending event named, and `ended` equalled the occurrences
+of that event. What it did not settle is whether the patterns are
+better for it. Process ids are reused, so an unbounded run joins a new
+session to the tail of an old one and is not a truth to compare with;
+and the event named there ends 16,813 processes but occurs 37,963
+times. This data wants an idle limit (forget an entity not seen for a
+given time), which is not built.
 
 The entity limit matters most. An entity evicted between two of its
 events loses the sequence across the gap, so the limit should be above

@@ -17,6 +17,12 @@ the check `kute` makes. Rivals are given the same values:
   scaled_delta_xz whole numbers of the last printed digit, differences
                   taken once, four bytes each, xz -9: the same idea as
                   the container, done by hand with a general compressor
+  scaled_delta_varint_zstd
+                  the same differences as zigzag varints under zstd -19,
+                  which is the container's own number format and
+                  compressor: what is left between this row and the
+                  container is what the container itself adds. Needs
+                  Python 3.14 (compression.zstd); left out otherwise
   rounded_text_xz for the bounded case: the values rounded to the same
                   step and printed, xz -9
 """
@@ -37,6 +43,23 @@ MISSING = ("?", "")
 
 def xz(data: bytes) -> int:
     return len(lzma.compress(data, preset=9))
+
+
+try:
+    from compression import zstd
+except ImportError:
+    zstd = None
+
+
+def varints(numbers) -> bytes:
+    out = bytearray()
+    for n in numbers:
+        n = (n << 1) ^ (n >> 63)
+        while n >= 0x80:
+            out.append((n & 0x7F) | 0x80)
+            n >>= 7
+        out.append(n)
+    return bytes(out)
 
 
 def main() -> int:
@@ -109,6 +132,8 @@ def main() -> int:
                 "scaled_delta_xz": xz(struct.pack(f"<{len(deltas)}i", *deltas)),
             },
         }
+        if zstd is not None:
+            row["rivals_exact"]["scaled_delta_varint_zstd"] = len(zstd.compress(varints(deltas), level=19))
         # One printed digit dropped: steps of ten units of the last digit.
         max_error = 5 / scale
         out, _ = run("signals", "pack", column, "--output", work / "bounded.kts", "--max-error", max_error)
