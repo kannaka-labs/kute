@@ -1,0 +1,165 @@
+{
+  "params": {
+    "holdout_fraction": 0.25,
+    "max_context": 3,
+    "min_count": 5,
+    "windows": 4,
+    "resamples": 1000,
+    "seed": 1
+  },
+  "cut_time": 55015,
+  "counted_events": 3152090,
+  "counted_entities": 153313,
+  "alphabet": 28,
+  "contexts_counted": 949,
+  "held_out_events": 1050760,
+  "held_out_entities": 103274,
+  "unseen_entities": 59918,
+  "unseen_symbol_events": 0,
+  "frequency": {
+    "events": 1050760,
+    "bits_per_event": 3.209611263631173,
+    "top1_accuracy": 0.1704670904868857,
+    "calibration_error": 0.025648291003955128
+  },
+  "previous": {
+    "events": 1050760,
+    "bits_per_event": 1.6380402708617763,
+    "top1_accuracy": 0.592893715025315,
+    "calibration_error": 0.11426935435147699
+  },
+  "context": {
+    "events": 1050760,
+    "bits_per_event": 1.3213969035134765,
+    "top1_accuracy": 0.6393058357760097,
+    "calibration_error": 0.12935381772044754
+  },
+  "unseen_entities_only": [
+    {
+      "events": 864319,
+      "bits_per_event": 3.0191677535655077,
+      "top1_accuracy": 0.20720937524224273,
+      "calibration_error": 0.062390575759303735
+    },
+    {
+      "events": 864319,
+      "bits_per_event": 1.4193112406414476,
+      "top1_accuracy": 0.6471013595674745,
+      "calibration_error": 0.11125951483331904
+    },
+    {
+      "events": 864319,
+      "bits_per_event": 1.167432907276269,
+      "top1_accuracy": 0.6681641847512318,
+      "calibration_error": 0.14848575999898572
+    }
+  ],
+  "context_over_previous": {
+    "bits_per_event": 0.3166433673482998,
+    "interval_95_over_entities_at_this_cut": [
+      0.3149829090240888,
+      0.31828619492528887
+    ],
+    "range_over_windows": [
+      0.23231340878844592,
+      0.4713668694808058
+    ]
+  },
+  "previous_over_frequency": {
+    "bits_per_event": 1.5715709927693968,
+    "interval_95_over_entities_at_this_cut": [
+      1.569827167419944,
+      1.573338811721812
+    ],
+    "range_over_windows": [
+      1.379927925353745,
+      1.690656445549046
+    ]
+  },
+  "context_calibration": [
+    {
+      "from": 0.2,
+      "events": 7,
+      "mean_confidence": 0.2284459181095924,
+      "accuracy": 0.0
+    },
+    {
+      "from": 0.3,
+      "events": 593,
+      "mean_confidence": 0.3686415384872768,
+      "accuracy": 0.18718381112984822
+    },
+    {
+      "from": 0.4,
+      "events": 172962,
+      "mean_confidence": 0.46461247208854184,
+      "accuracy": 0.3768573443877846
+    },
+    {
+      "from": 0.5,
+      "events": 145806,
+      "mean_confidence": 0.5304049013808235,
+      "accuracy": 0.6074304212446676
+    },
+    {
+      "from": 0.6,
+      "events": 157147,
+      "mean_confidence": 0.660027977668965,
+      "accuracy": 0.7383596250644301
+    },
+    {
+      "from": 0.7,
+      "events": 158153,
+      "mean_confidence": 0.7249982826779369,
+      "accuracy": 0.5597996876442433
+    },
+    {
+      "from": 0.8,
+      "events": 162317,
+      "mean_confidence": 0.8368525908109417,
+      "accuracy": 0.40959973385412496
+    },
+    {
+      "from": 0.9,
+      "events": 253775,
+      "mean_confidence": 0.97906369749291,
+      "accuracy": 0.9727002265786622
+    }
+  ],
+  "windows": [
+    {
+      "from_time": 55015,
+      "to_time": 57091,
+      "events": 262674,
+      "frequency_bits": 2.95925884323829,
+      "previous_bits": 1.2686023976892442,
+      "context_bits": 1.0000045395146115
+    },
+    {
+      "from_time": 57092,
+      "to_time": 64673,
+      "events": 262612,
+      "frequency_bits": 3.481023331701709,
+      "previous_bits": 1.9309731548233988,
+      "context_bits": 1.459606285342593
+    },
+    {
+      "from_time": 64674,
+      "to_time": 66568,
+      "events": 262747,
+      "frequency_bits": 2.9514623855579325,
+      "previous_bits": 1.2858055212664643,
+      "context_bits": 0.9914504588457027
+    },
+    {
+      "from_time": 66569,
+      "to_time": 86399,
+      "events": 262727,
+      "frequency_bits": 3.4467884435322427,
+      "previous_bits": 2.0668605181784976,
+      "context_bits": 1.8345471093900516
+    }
+  ],
+  "predictors_compared": 3,
+  "note": "an event that is well predicted by what came before is associated with it in this data; nothing here shows that one causes the other"
+}

@@ -148,6 +148,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02f0e023adb368345ce0ca6cdfc0f24a06554468d0e8503e14a0841de79bfa69"
 dependencies = [
  "find-msvc-tools",
+ "jobserver",
+ "libc",
  "shlex",
 ]
 
@@ -404,6 +406,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
+name = "jobserver"
+version = "0.1.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3"
+dependencies = [
+ "getrandom 0.4.3",
+ "libc",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -415,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "kute-adapters"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -424,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "kute-algorithms"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -434,7 +446,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bench"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "flate2",
  "kute-engine",
@@ -446,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bpe"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "fancy-regex",
  "kute-core",
@@ -459,21 +471,24 @@ dependencies = [
 
 [[package]]
 name = "kute-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "base64",
  "clap",
  "kute-bench",
  "kute-discover",
  "kute-engine",
+ "kute-events",
  "kute-protocol",
+ "kute-signals",
+ "ring",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "kute-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "kute-types",
  "sha2",
@@ -481,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "kute-discover"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -492,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "kute-engine"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "kute-adapters",
  "kute-algorithms",
@@ -505,8 +520,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kute-events"
+version = "0.8.0"
+dependencies = [
+ "flate2",
+ "kute-adapters",
+ "kute-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zstd",
+]
+
+[[package]]
 name = "kute-protocol"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "kute-engine",
  "rustls",
@@ -517,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "kute-rustbpe"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "kute-bpe",
  "kute-cli",
@@ -529,8 +557,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kute-signals"
+version = "0.8.0"
+dependencies = [
+ "kute-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zstd",
+]
+
+[[package]]
 name = "kute-types"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "base64",
  "flate2",
@@ -543,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "kute-vocab"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "flate2",
  "kute-types",
@@ -599,6 +638,12 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "pkg-config"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "portable-atomic"
@@ -1186,3 +1231,31 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zstd"
+version = "0.13.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b04655dc7bf4abd8ebe23dac6bef20fceea52a29ad19e37a4101b3951d7e8b45"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "7.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df2575690b2a3eccad509fe7898cdde32a5afca06a06449ff4dcfb318c7b7281"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.2.0+zstd.1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3f4089cda6dda4dc43c43dd9f8964140064fd2f752f3da46c3a483c3c175160"
+dependencies = [
+ "cc",
+ "pkg-config",
+]

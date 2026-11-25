@@ -3,6 +3,10 @@
 //! Results go to stdout as JSON (or raw bytes for `decode`), messages to
 //! stderr. Exit status is 0 on success and 1 on any error.
 
+pub mod http;
+pub mod live;
+pub mod shadow;
+pub mod sign;
 pub mod mcp;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -67,6 +71,34 @@ enum Command {
     },
     /// Check structure, integrity and the embedded test vectors.
     Validate { vocab: PathBuf },
+    /// Make an Ed25519 signing key. The private half goes to the file,
+    /// unencrypted; the public half and the key's id are printed.
+    Keygen {
+        /// Where to write the private key (PEM). Must not exist.
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Add a signature to a vocabulary. Its digest does not change.
+    Sign {
+        #[arg(long)]
+        vocab: PathBuf,
+        /// A private key made by `kute keygen`.
+        #[arg(long)]
+        key: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        force: bool,
+    },
+    /// Check a vocabulary's signatures against keys you trust. Exits 1
+    /// unless a trusted key's signature of this exact content is there.
+    Verify {
+        #[arg(long)]
+        vocab: PathBuf,
+        /// A public key as printed by `kute keygen`. Repeatable.
+        #[arg(long = "trusted-key", value_name = "BASE64", required = true)]
+        trusted_keys: Vec<String>,
+    },
     /// Compare two vocabularies by token content.
     Compare { a: PathBuf, b: PathBuf },
     /// Rewrite a vocabulary in the other file form: compact binary when the
@@ -153,6 +185,194 @@ enum Command {
         #[arg(long, default_value_t = 4_194_304)]
         max_output_bytes: u64,
     },
+    /// Measure how well an entity's recent events predict its next one,
+    /// on time that was held out, against two baselines. A measurement,
+    /// not a predictor to deploy; association, not cause.
+    Predict {
+        /// JSON Lines files or directories, one event per line.
+        #[arg(long, required = true, num_args = 1..)]
+        input: Vec<PathBuf>,
+        /// Field holding the event name.
+        #[arg(long, value_name = "FIELD")]
+        symbol_field: String,
+        /// Field holding the event time, a whole number.
+        #[arg(long, value_name = "FIELD")]
+        time_field: String,
+        /// Unit of the time field: s, ms, us or ns.
+        #[arg(long, default_value = "s")]
+        time_unit: String,
+        /// Field naming the entity an event belongs to.
+        #[arg(long, value_name = "FIELD")]
+        group_field: Option<String>,
+        /// Share of the events, latest in time, held out and predicted.
+        #[arg(long, default_value_t = 0.25)]
+        holdout_fraction: f64,
+        /// Most past events the context predictor looks at (1 to 8).
+        #[arg(long, default_value_t = 3)]
+        max_context: usize,
+        /// A run of past events is used only if seen this often before the cut.
+        #[arg(long, default_value_t = 5)]
+        min_count: u64,
+        /// Parts the held-out time is cut into, to show drift.
+        #[arg(long, default_value_t = 4)]
+        windows: usize,
+        /// Resamples of the held-out entities for the intervals.
+        #[arg(long, default_value_t = 1000)]
+        resamples: usize,
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+        /// Also write the JSON report to this file.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Try a candidate vocabulary beside the one in use, on data neither
+    /// was made from, and decide whether it has earned its place. Encodes
+    /// every input with both; publishes and replaces nothing.
+    Shadow {
+        /// The vocabulary in use.
+        #[arg(long)]
+        parent: PathBuf,
+        /// The vocabulary proposed in its place.
+        #[arg(long)]
+        candidate: PathBuf,
+        /// Held-out inputs, each encoded as one message.
+        #[arg(long, required = true, num_args = 1..)]
+        input: Vec<PathBuf>,
+        /// What to do with a symbol a vocabulary lacks: `escape` or `strict`.
+        #[arg(long, default_value = "escape")]
+        unknown: String,
+        /// Least net saving to approve, as a share of the parent's bytes.
+        #[arg(long, default_value_t = 0.01)]
+        min_improvement: f64,
+        /// Traffic the candidate will carry, as a multiple of the inputs.
+        #[arg(long, default_value_t = 1.0)]
+        horizon: f64,
+        /// Times the candidate vocabulary file has to be sent.
+        #[arg(long, default_value_t = 1)]
+        distributions: u64,
+        /// Most the candidate may slow encoding, as a ratio.
+        #[arg(long, default_value_t = 2.0)]
+        max_slowdown: f64,
+        /// Timed passes with each vocabulary, in alternating order; the least time is used.
+        #[arg(long, default_value_t = 3)]
+        passes: usize,
+        /// Exit with status 1 when the candidate is rejected.
+        #[arg(long)]
+        fail_on_reject: bool,
+    },
+    /// Discovery over events as they arrive, by event time, in windows
+    /// that forget: JSON Lines in, one report per closed window out.
+    /// Memory is bounded by the options. Experimental.
+    Live {
+        /// JSON Lines to read; standard input when absent.
+        input: Option<PathBuf>,
+        /// Field holding the event name.
+        #[arg(long, value_name = "FIELD")]
+        symbol_field: String,
+        /// Field holding the time, a whole number of any unit.
+        #[arg(long, value_name = "FIELD")]
+        time_field: String,
+        /// Field naming the entity an event belongs to.
+        #[arg(long, value_name = "FIELD")]
+        group_field: Option<String>,
+        /// Length of a pane, in the unit of the time field.
+        #[arg(long)]
+        pane: i64,
+        /// Panes in a window: 1 for tumbling windows, more for a sliding one.
+        #[arg(long, default_value_t = 1)]
+        panes: usize,
+        /// How far behind the latest time an event may arrive and still count.
+        #[arg(long, default_value_t = 0)]
+        lateness: i64,
+        /// An event that ends its entity's sequence: once counted, the
+        /// entity is forgotten and its place freed. Repeatable.
+        #[arg(long = "end-on", value_name = "EVENT")]
+        end_on: Vec<String>,
+        /// Start an entity's sequence afresh when its last event was
+        /// more than this long ago, in the unit of --pane; and let
+        /// entities idle that long go first when places run out.
+        #[arg(long, value_name = "TICKS")]
+        idle: Option<i64>,
+        /// Events held waiting to be put in time order.
+        #[arg(long, default_value_t = 100_000)]
+        max_buffered: usize,
+        /// Longest sequence counted.
+        #[arg(long, default_value_t = 6)]
+        max_length: usize,
+        /// Distinct event names known; later ones are folded together.
+        #[arg(long, default_value_t = 65_536)]
+        max_symbols: usize,
+        /// Sequences counted at each length in each pane.
+        #[arg(long, default_value_t = 200_000)]
+        max_candidates: usize,
+        /// Entities whose recent events are remembered.
+        #[arg(long, default_value_t = 100_000)]
+        max_entities: usize,
+        #[arg(long, default_value_t = 5)]
+        min_support: u64,
+        #[arg(long, default_value_t = 1.0)]
+        min_cohesion_bits: f64,
+        /// Patterns in each report.
+        #[arg(long, default_value_t = 100)]
+        max_patterns: usize,
+        /// File the state is saved to as windows close.
+        #[arg(long)]
+        checkpoint: Option<PathBuf>,
+        /// Save after this many window reports.
+        #[arg(long, default_value_t = 1)]
+        checkpoint_every: u64,
+        /// Start from the checkpoint, passing over the input it had read.
+        #[arg(long)]
+        resume: bool,
+        /// Count lines that are not events and go on, instead of stopping.
+        #[arg(long)]
+        skip_bad_lines: bool,
+    },
+    /// Complete event records (entity, time and every other field) packed
+    /// by column into one container, and back. Experimental.
+    Events {
+        #[command(subcommand)]
+        action: EventsAction,
+    },
+    /// A sequence of numbers kept exactly, or within an error bound that
+    /// is checked on every value, in one container, and back. Experimental.
+    Signals {
+        #[command(subcommand)]
+        action: SignalsAction,
+    },
+    /// Serve encode, decode, inspect, compare and discover over HTTP, under
+    /// /v1/. Read-only, like `kute mcp`, and through the same code. No TLS
+    /// and no authentication: it listens on loopback unless told otherwise.
+    Serve {
+        /// Vocabularies the operations may use. Repeatable.
+        #[arg(long)]
+        vocab: Vec<PathBuf>,
+        /// Address to listen on. Port 0 picks a free one; the address in
+        /// use is printed as JSON on standard output.
+        #[arg(long, default_value = "127.0.0.1:8787")]
+        listen: String,
+        /// Allow an address that is not loopback. Anyone who can reach it
+        /// can use it: there is no TLS and no authentication.
+        #[arg(long)]
+        insecure_remote: bool,
+        /// Also serve KUTE Studio, a page for looking at what the service
+        /// holds and does, at /studio. Loopback only. The page loads
+        /// nothing from outside and calls only this service.
+        #[arg(long)]
+        studio: bool,
+        /// Most bytes of input in one encode or discover call.
+        #[arg(long, default_value_t = 1_048_576)]
+        max_input_bytes: u64,
+        /// Most bytes one decode call gives back.
+        #[arg(long, default_value_t = 4_194_304)]
+        max_output_bytes: u64,
+        /// Requests handled at once.
+        #[arg(long, default_value_t = 4)]
+        workers: usize,
+        /// Seconds a request may take to arrive.
+        #[arg(long, default_value_t = 10)]
+        timeout: u64,
+    },
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
     /// Write the seeded example datasets used by the documentation.
@@ -166,6 +386,83 @@ enum Command {
 #[derive(Clone, Copy, ValueEnum)]
 enum ExportFormat {
     Tiktoken,
+}
+
+#[derive(Subcommand)]
+enum EventsAction {
+    /// Pack JSON Lines, one object per event, keeping every field.
+    Pack {
+        /// JSON Lines to read.
+        input: PathBuf,
+        /// Container to write.
+        #[arg(long)]
+        output: PathBuf,
+        /// Field holding the event name.
+        #[arg(long, value_name = "FIELD")]
+        symbol_field: String,
+        /// Field holding the time, a whole number.
+        #[arg(long, value_name = "FIELD")]
+        time_field: Option<String>,
+        /// Field naming the entity an event belongs to.
+        #[arg(long, value_name = "FIELD")]
+        group_field: Option<String>,
+        /// How columns are compressed: zstd, or zlib for a container that
+        /// needs only a zlib reader.
+        #[arg(long, default_value = "zstd")]
+        codec: String,
+    },
+    /// Write the records back as canonical JSON Lines, in source order.
+    Unpack {
+        input: PathBuf,
+        /// File to write; standard output when absent.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Refuse a container that unpacks to more bytes than this.
+        #[arg(long, default_value_t = 1 << 32)]
+        max_bytes: u64,
+    },
+    /// Show a container's header: layout, counts, digest and columns.
+    Inspect { input: PathBuf },
+}
+
+#[derive(Subcommand)]
+enum SignalsAction {
+    /// Pack one number per line (or one column of a delimited file).
+    Pack {
+        /// Text, one value per line. An empty value, `?`, `NA` or `NaN`
+        /// is a missing value and comes back as NaN.
+        input: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        /// Keep every finite value within this absolute error instead of
+        /// exactly. Values that are not finite are still kept exactly.
+        #[arg(long, value_name = "ERROR")]
+        max_error: Option<f64>,
+        /// Take this column of each line, counting from 1.
+        #[arg(long, requires = "delimiter")]
+        column: Option<usize>,
+        /// The character between columns.
+        #[arg(long, requires = "column")]
+        delimiter: Option<char>,
+        /// Lines to pass over at the top, such as a header.
+        #[arg(long, default_value_t = 0)]
+        skip_lines: usize,
+    },
+    /// Write the values, one per line, in the shortest form that reads
+    /// back as the same number.
+    Unpack {
+        input: PathBuf,
+        /// Where to write; standard output when absent.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Refuse a container holding more values than this. Reading can
+        /// take about 44 bytes of memory a value, so the default allows
+        /// about 740 MB.
+        #[arg(long, default_value_t = 1 << 24)]
+        max_values: u64,
+    },
+    /// Print the container's header: the contract and what it measured.
+    Inspect { input: PathBuf },
 }
 
 #[derive(Subcommand)]
@@ -185,6 +482,12 @@ enum PeerAction {
         /// Let the other side extend vocabularies held here.
         #[arg(long)]
         accept_proposals: bool,
+        /// Take a vocabulary from the other side only if it carries a
+        /// valid signature from one of these keys (the base64 public key
+        /// `kute keygen` prints). Repeatable. Vocabularies given with
+        /// --vocab are yours and are not checked.
+        #[arg(long, value_name = "PUBLIC_KEY", requires = "accept_vocabularies", conflicts_with = "accept_proposals")]
+        require_signature_from: Vec<String>,
         /// Send a held vocabulary's file to the other side when it asks.
         #[arg(long)]
         give_vocabularies: bool,
@@ -301,6 +604,7 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             vocab: held,
             accept_vocabularies,
             accept_proposals,
+            require_signature_from,
             give_vocabularies,
             answer_queries,
             translate,
@@ -317,6 +621,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             if tls_cert.is_none() && !insecure_plain {
                 return Err(KuteError::InvalidConfig(NO_TRANSPORT.into()));
             }
+            // Read the trusted keys before listening: a key that cannot be
+            // read is the operator's mistake, to be told now and not to
+            // whoever connects first.
+            let gate = if require_signature_from.is_empty() { None } else { Some(sign::gate(&require_signature_from)?) };
             let timeout = (timeout > 0).then(|| std::time::Duration::from_secs(timeout));
             let secured = match (&tls_cert, &tls_key, &tls_client_ca) {
                 (Some(cert), Some(key), Some(ca)) => {
@@ -332,9 +640,12 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 _ => None,
             };
             let listener = std::net::TcpListener::bind(&listen)?;
-            eprintln!("listening on {}", listener.local_addr()?);
+            // Lines to standard error are written without `eprintln!`, which
+            // panics when the stream is closed: a parent that stopped reading
+            // would otherwise let the next refused connection end the server.
+            let _ = writeln!(std::io::stderr(), "listening on {}", listener.local_addr()?);
             if secured.is_none() {
-                eprintln!("warning: no TLS. The connection is not encrypted and whoever connects is served.");
+                let _ = writeln!(std::io::stderr(), "warning: no TLS. The connection is not encrypted and whoever connects is served.");
             }
             // With TLS, a connection that fails the handshake, stalls in
             // it, or is not allowed does not end the listener: whoever can
@@ -347,10 +658,15 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 let Some((config, access)) = &secured else { break (Box::new(tcp), None, policy, from) };
                 match tls::accept(config, tcp).and_then(|(stream, who)| Ok((stream, access.policy_for(&who)?, who))) {
                     Ok((stream, policy, who)) => break (Box::new(stream), Some(who.fingerprint), policy, from),
-                    Err(e) => eprintln!("refused {from}: {e}"),
+                    Err(e) => {
+                        let _ = writeln!(std::io::stderr(), "refused {from}: {e}");
+                    }
                 }
             };
             let mut peer = Peer::new("kute", engine, policy);
+            if let Some(gate) = gate {
+                peer.require_vocabulary_check(Box::new(gate));
+            }
             for path in &held {
                 peer.add_vocabulary(vocab::load(path)?)?;
             }
@@ -847,6 +1163,16 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
             print(&report)
         }
+        Command::Keygen { output } => print(&sign::keygen(&output)?),
+        Command::Sign { vocab: vocab_path, key, output, force } => print(&sign::sign(&vocab_path, &key, &output, force)?),
+        Command::Verify { vocab: vocab_path, trusted_keys } => {
+            let (report, verified) = sign::verify(&vocab_path, &trusted_keys)?;
+            print(&report)?;
+            if !verified {
+                return Err(KuteError::Integrity("no trusted key has signed this vocabulary".into()));
+            }
+            Ok(())
+        }
         Command::Validate { vocab: vocab_path } => {
             let vocabulary = vocab::load(&vocab_path)?;
             let report = engine.verify(&vocabulary)?;
@@ -987,6 +1313,160 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             let server = mcp::Server::new(engine, vocabularies, limits)?;
             server.serve(std::io::stdin().lock(), std::io::stdout().lock())?;
             Ok(())
+        }
+        Command::Live {
+            input,
+            symbol_field,
+            time_field,
+            group_field,
+            pane,
+            panes,
+            lateness,
+            end_on,
+            idle,
+            max_buffered,
+            max_length,
+            max_symbols,
+            max_candidates,
+            max_entities,
+            min_support,
+            min_cohesion_bits,
+            max_patterns,
+            checkpoint,
+            checkpoint_every,
+            resume,
+            skip_bad_lines,
+        } => {
+            let bounds = kute_discover::live::LiveParams { max_length, max_symbols, max_candidates, max_entities, ..Default::default() };
+            let params = kute_discover::watch::WatchParams { live: bounds, pane_ticks: pane, panes, lateness, max_buffered, min_support, min_cohesion_bits, max_patterns, end_symbols: end_on, idle_ticks: idle };
+            live::run(live::Options { input, symbol_field, time_field, group_field, params, checkpoint, checkpoint_every, resume, skip_bad_lines })
+        }
+        Command::Predict { input, symbol_field, time_field, time_unit, group_field, holdout_fraction, max_context, min_count, windows, resamples, seed, output } => {
+            let schema = kute::EventSchema {
+                id: "kute:events:unnamed".into(),
+                version: 1,
+                symbol_field,
+                time_unit: Some(kute::TimeUnit::parse(&time_unit)?),
+                time_field: Some(time_field),
+                group_field,
+            };
+            let mut stream = kute::EventStream::new(schema)?;
+            for path in &input {
+                for file in kute::collect_files(path)? {
+                    let reader = std::io::BufReader::with_capacity(1 << 20, std::fs::File::open(&file)?);
+                    stream.read_jsonl(reader, &file.display().to_string())?;
+                }
+            }
+            let params = kute_discover::predict::PredictParams { holdout_fraction, max_context, min_count, windows, resamples, seed };
+            let report = kute_discover::predict::evaluate(&stream, &params)?;
+            if let Some(path) = output {
+                std::fs::write(&path, serde_json::to_vec_pretty(&report)?)?;
+            }
+            print(&report)
+        }
+        Command::Shadow { parent, candidate, input, unknown, min_improvement, horizon, distributions, max_slowdown, passes, fail_on_reject } => {
+            let (report, approved) = shadow::run(&engine, &shadow::Options { parent, candidate, inputs: input, unknown, min_improvement, horizon, distributions, max_slowdown, passes })?;
+            print(&report)?;
+            if fail_on_reject && !approved {
+                return Err(KuteError::Backend("the candidate was rejected".into()));
+            }
+            Ok(())
+        }
+        Command::Events { action } => match action {
+            EventsAction::Pack { input, output, symbol_field, time_field, group_field, codec } => {
+                let layout = kute_events::Layout { symbol_field, time_field, group_field };
+                let (container, report) = kute_events::pack_with(&std::fs::read(&input)?, &layout, kute_events::Codec::parse(&codec)?)?;
+                std::fs::write(&output, &container)?;
+                print(&json!({ "output": output, "report": report }))
+            }
+            EventsAction::Unpack { input, output, max_bytes } => {
+                let bytes = kute_events::unpack(&std::fs::read(&input)?, max_bytes)?;
+                match output {
+                    Some(path) => {
+                        std::fs::write(&path, &bytes)?;
+                        print(&json!({ "output": path, "bytes": bytes.len() }))
+                    }
+                    None => {
+                        let mut out = std::io::stdout().lock();
+                        out.write_all(&bytes)?;
+                        out.flush()?;
+                        Ok(())
+                    }
+                }
+            }
+            EventsAction::Inspect { input } => print(&kute_events::header(&std::fs::read(&input)?)?.0),
+        },
+        Command::Signals { action } => match action {
+            SignalsAction::Pack { input, output, max_error, column, delimiter, skip_lines } => {
+                let text = std::fs::read_to_string(&input)?;
+                let mut values = Vec::new();
+                let mut missing = 0u64;
+                for (number, line) in text.lines().enumerate().skip(skip_lines) {
+                    let field = match (column, delimiter) {
+                        (Some(column), Some(delimiter)) => line.split(delimiter).nth(column.saturating_sub(1)).ok_or_else(|| KuteError::InvalidInput(format!("line {} has no column {column}", number + 1)))?,
+                        _ => line,
+                    }
+                    .trim();
+                    if field.is_empty() || field == "?" || field.eq_ignore_ascii_case("na") || field.eq_ignore_ascii_case("nan") {
+                        missing += 1;
+                        values.push(f64::NAN);
+                    } else {
+                        values.push(field.parse::<f64>().map_err(|_| KuteError::InvalidInput(format!("line {}: {field:?} is not a number", number + 1)))?);
+                    }
+                }
+                let mode = max_error.map_or(kute_signals::Mode::Exact, |max_error| kute_signals::Mode::Bounded { max_error });
+                let (container, report) = kute_signals::pack(&values, mode)?;
+                std::fs::write(&output, &container)?;
+                print(&json!({ "output": output, "input_bytes": text.len(), "missing_values": missing, "report": report }))
+            }
+            SignalsAction::Unpack { input, output, max_values } => {
+                let values = kute_signals::unpack(&std::fs::read(&input)?, max_values)?;
+                let mut text = String::with_capacity(values.len() * 8);
+                for value in &values {
+                    // The plain form never uses an exponent, so 1e300 is
+                    // 301 characters. Past a width the exponent form is
+                    // written; both read back as the same number.
+                    let plain = value.to_string();
+                    if plain.len() > 24 {
+                        text.push_str(&format!("{value:e}"));
+                    } else {
+                        text.push_str(&plain);
+                    }
+                    text.push('\n');
+                }
+                match output {
+                    Some(path) => {
+                        std::fs::write(&path, &text)?;
+                        print(&json!({ "output": path, "values": values.len() }))
+                    }
+                    None => {
+                        let mut out = std::io::stdout().lock();
+                        out.write_all(text.as_bytes())?;
+                        out.flush()?;
+                        Ok(())
+                    }
+                }
+            }
+            SignalsAction::Inspect { input } => print(&kute_signals::header(&std::fs::read(&input)?)?),
+        },
+        Command::Serve { vocab: paths, listen, insecure_remote, studio, max_input_bytes, max_output_bytes, workers, timeout } => {
+            let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
+            let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);
+            let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_body_bytes, ..Default::default() };
+            let server = mcp::Server::new(engine, vocabularies, limits)?;
+            let listener = std::net::TcpListener::bind(&listen)?;
+            let address = listener.local_addr()?;
+            if !http::is_loopback(&address) && !insecure_remote {
+                return Err(KuteError::InvalidConfig(format!(
+                    "{address} is not a loopback address, and this service has no TLS and no authentication; pass --insecure-remote to serve it anyway"
+                )));
+            }
+            if studio && !http::is_loopback(&address) {
+                return Err(KuteError::InvalidConfig("Studio is served on a loopback address only: it is a page for the person at this machine".into()));
+            }
+            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")) }))?;
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, ..Default::default() };
+            http::serve(server, listener, options)
         }
         Command::Capabilities => {
             let registry = engine.registry();

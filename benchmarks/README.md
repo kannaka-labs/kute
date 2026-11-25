@@ -427,6 +427,158 @@ come from the same code base as the training files, written by the same
 people, so this is the easy case for a learned vocabulary. Not compared
 with `tiktoken` or `tokenizers` on this corpus yet, and nothing was timed.
 
+## Complete event records by column (after v0.7.0)
+
+`kute events pack` keeps whole records (entity, time, every other field),
+where the comparisons above store event names only. `events_container.py`
+packs, unpacks, checks the result against the digest in the header and
+against the source, and then runs the general compressors on exactly the
+bytes the container gives back. Sizes are whole files. One run each, on
+the 8-thread laptop.
+
+**HDFS_v1**, all 11,175,629 events as `{"block", "event", "t"}`, 643.8 MB
+of JSON Lines, 575,061 blocks (report `results/events-container-hdfs.json`):
+
+| | bytes | of the JSON | time to write |
+|---|---:|---:|---:|
+| `kute events pack` (zstd columns, the default) | 11,995,521 | 1.9% | 96 s |
+| plain columns, xz -9 each | 12,956,032 | 2.0% | 76 s |
+| `kute events pack --codec zlib` (an earlier run) | 13,660,465 | 2.1% | 59 s |
+| xz -9e, dictionary of 256 MiB | 22,655,896 | 3.5% | 579 s |
+| xz -9 | 23,144,380 | 3.6% | 261 s |
+| zstd -19 | 26,457,244 | 4.1% | 232 s |
+| zlib -9 | 34,820,525 | 5.4% | 14 s |
+
+The container is 7% smaller than plain columns through xz and 0.53 of
+the tuned xz. Unpacking took 5 s and gave the source back byte for byte.
+Most of what is left is two columns that are close to incompressible:
+the 575,061 block ids (5.2 MB) and the times (5.4 MB).
+
+**OpenSSH** (Loghub-2.0), 638,947 log lines turned into records by
+`openssh_events.py` (times corrected since: see the prediction section): time, host, process, pid, the template id as the
+event name, and the text that fills the template's slots as `params`;
+76.7 MB of JSON Lines (report `results/events-container-openssh.json`):
+
+| | bytes | of the JSON | time to write |
+|---|---:|---:|---:|
+| `kute events pack` (zstd columns, the default) | 1,274,967 | 1.7% | 28 s |
+| plain columns, xz -9 each | 1,378,672 | 1.8% | 11 s |
+| `kute events pack --codec zlib` (an earlier run, on the file before its times were corrected) | 1,790,408 | 2.3% | 11 s |
+| xz -9e, dictionary as large as the input | 2,035,152 | 2.7% | 400 s |
+| zstd -19 | 2,776,163 | 3.6% | 75 s |
+| zlib -9 | 3,714,577 | 4.8% | 1 s |
+| xz -9 | 3,879,452 | 5.1% | 27 s |
+
+The records came back equal; the bytes differ from the source only in key
+order, which the source did not have sorted.
+
+**With zlib columns the container lost to the plainest column layout
+with a better codec.** "Plain columns" is one column per field, values in
+source order, no grouping by entity and no time differences, each column
+through xz -9. It is 22% smaller than the zlib container. The reviewer
+found this; the first version of this section compared only with
+compressors run on the whole file at default settings and read better
+than it should have.
+
+The default codec is now Zstandard, and with it the container is 8%
+smaller than plain columns through xz, and 0.63 of xz tuned as far as it
+goes (extreme preset, dictionary covering the whole input). Of the
+distance between the zlib container and the zstd one, nearly all is the
+codec. What the container's own layout (grouping names by entity, time
+as differences) adds over plain columns is those 8%, measured here with
+two different codecs on the two sides, so not cleanly.
+
+The table was rerun after the times in the events file were corrected
+(a year boundary; see the prediction section): the sizes moved by under
+2% and no conclusion changed.
+
+Unpacking took 0.7 s. The times in this table are from a run while
+another job was using the machine and are slower than a quiet run; the
+sizes do not depend on that.
+
+What this does and does not show:
+
+* Splitting records into columns and using a good codec is what helps,
+  and neither is KUTE's invention.
+* No vocabulary is trained or used, so none of this is a measurement of
+  tokenization.
+* JSON Lines repeats every key on every line, which flatters any column
+  layout. Against the original OpenSSH log text (70.5 MB, xz -9
+  3,384,512 bytes) the container is 0.53, but the two do not hold quite
+  the same thing: the records keep everything in the log line except its
+  exact spacing and the year-less date, which became seconds.
+* Log-specific compressors and existing column formats were not run.
+* Two datasets, both logs, one run. Packing reads the whole input into
+  memory and runs at about 7 MB of JSON a second on this machine with
+  the default codec.
+
+## A day of events through `kute live` (after v0.7.0)
+
+`hdfs_clock.py` rebuilds HDFS_v1 from the raw log in the archive, so
+that every event has the log's own time: 11,175,629 events over 38.7
+hours, in the order written. Its event sequences agree with the
+archive's own traces for all 575,061 blocks (`results/hdfs-clock-report.json`).
+`live_replay.py` replays the first 24 hours, 4,202,850 events of
+213,231 blocks, as fast as they can be read, in hourly windows. One run
+of each, on the 8-thread laptop; report `results/live-replay-hdfs-24h.json`.
+
+| bounds | events a second | peak process memory | state reported, at most | bound computed | windows exact | entities evicted |
+|---|---:|---:|---:|---:|---:|---:|
+| small (2,000 sequences a length, 20,000 entities) | 579,000 | 29 MB | 2.2 MB | 43.8 MB | 0 of 24 | 825,330 |
+| the defaults (200,000 and 100,000) | 612,000 | 31 MB | 9.6 MB | 137.8 MB | 16 of 24 | 225,018 |
+| large enough to be exact | 616,000 | 31 MB | 20.6 MB | | 24 of 24 | 0 |
+
+Throughput includes reading and parsing the JSON. The computed bound is
+an estimate from table sizes at their limits, not a measurement, and the
+runs stayed far inside it; process memory was the same in all three, so
+most of it is not the counting state. Nothing was dropped late, released
+early or folded in any run; what the bounded runs lost, they lost by
+evicting entities.
+
+**Accuracy of the bounded runs**, each hourly window against the same
+window of the exact run, over the 200 strongest patterns of each:
+
+| bounds | exact patterns also reported | of the 20 strongest | largest undercount of a support | any support above the truth |
+|---|---:|---:|---:|---|
+| small | 63% | 53% | 96% | no |
+| the defaults | 95% | 70% | 77% | no |
+
+This is not good, and the reason is specific. A block's events are
+spread over a long time among those of many other blocks, so with fewer
+entity slots than blocks alive at once, a block is often evicted between
+two of its events and the sequence across the gap is never counted. The
+count tables were never full (the undercount bound of the summaries was
+zero throughout): the whole loss is eviction, which the report counts
+but puts no bound on. For data like this the entity limit has to be
+above the number of entities alive at once, and the report's
+`entities_evicted` is the figure to watch.
+
+**Against offline discovery.** The whole day as one window, with exact
+bounds, against `kute discover` on the same file: the same 200 patterns,
+the same supports, in the same order.
+
+**Restart.** A run killed after eight windows and resumed from its
+checkpoint gave the same 24 windows and the same totals as the run that
+was not interrupted. One window, written after the last checkpoint and
+before the kill, was written again by the resumed run. The checkpoint
+was 0.77 MB.
+
+**Out of order.** The log itself never steps back in time. Delivered
+shuffled instead, each event up to 30 seconds late (all but 2,828 of the
+events out of place), with 31 seconds of lateness allowed: nothing was
+dropped, and all 24 windows are identical to those of the same delivery
+sorted by time beforehand. They are not identical to the windows of the
+log in its own order, in any of the 24: the times are whole seconds,
+many events of a block share a second, and their order within the
+second is lost in the shuffle. Event time restores order only as finely
+as the timestamps resolve.
+
+Limits: one dataset, one run, one machine. It is a replay at full speed,
+not 24 hours of waiting, so it says nothing about a process that stays
+up for a day. The high-cardinality and unseen-symbol cases are tested on
+synthetic streams only (`crates/kute-discover/tests/watch.rs`); this log
+has 29 event names.
+
 ## Frozen, evolved and retrained event vocabularies (v0.6.0)
 
 `benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by
@@ -523,6 +675,118 @@ Limits: synthetic data from one generator, whose drift is a clean switch;
 real processes change in other ways and by other amounts. One vocabulary
 size per table, one evolution step, one run per seed. Nothing here
 measures what an evolved vocabulary is worth to anything downstream.
+
+## Layered vocabularies against a flat one (after v0.7.0)
+
+`python benchmarks/layered_vocab.py`, report
+`results/layered-vocab-code.json`; the whole account is
+`docs/layered.md`. A vocabulary trained on English Wikipedia used on
+Python source (CPython 3.12.7 standard library, 2.5 MB held out), with
+tables of short local ids layered on it, against a flat vocabulary
+trained on 30 MB of the same source. Real data, one domain, one run.
+
+| 64 kB sessions | tokens | token bytes | after zlib -9 |
+|---|---:|---:|---:|
+| base vocabulary, plain ids | 869,576 | 1,535,572 | 561,302 |
+| layered: domain table | 869,576 | 1,230,545 | 505,183 |
+| layered: session table over the domain table | 869,576 | 1,141,301 | 509,276 |
+| flat domain vocabulary | 596,166 | 1,114,110 | 503,222 |
+| flat domain vocabulary, ids ranked by frequency | 596,166 | 904,767 | 463,406 |
+
+Layering recovers most of the bytes and none of the tokens, a general
+compressor does as much without it, and the best row is a flat
+vocabulary with its ids reordered. Nothing was built from this.
+
+## Predicting the next event (after v0.7.0)
+
+`kute predict` with its defaults: the last quarter of the events by time
+is held out, and each held-out event is predicted from the earlier
+events of the same entity. Bits are the average surprise an event; lower
+is better. One run each. Reports `results/predict-hdfs-day.json` and
+`results/predict-openssh.json`.
+
+**HDFS**, the first day on the log's clock (4,202,850 events; 1,050,760
+held out, of 103,274 blocks, 59,918 of them not seen before the cut):
+
+| predictor | bits an event | most likely event was right | calibration error |
+|---|---:|---:|---:|
+| frequency | 3.21 | 17% | 0.03 |
+| previous event | 1.64 | 59% | 0.11 |
+| up to three events | 1.32 | 64% | 0.13 |
+
+Three events of the past save 0.32 bits an event over one, and one
+saves 1.57 over none. The 0.32 is not steady: over the four parts of the
+held-out time it is 0.27, 0.47, 0.29 and 0.23. (Resampling blocks at
+this one cut gives 0.315 to 0.318, which is the variation between
+blocks and far narrower than the variation over time.) On blocks never seen
+before the cut the three score 3.02, 1.42 and 1.17: the structure is not
+particular to known blocks.
+
+Two things qualify that. The probabilities are not well calibrated:
+where the predictor says about 0.84 it is right 41% of the time, and
+where it says about 0.47, 38%. And it does not hold steady: over the
+four parts of the held-out time the context predictor scores 1.00,
+1.46, 0.99 and 1.84 bits, the baselines moving with it.
+
+**OpenSSH** (638,947 events; 159,737 held out; entity = process id):
+
+| predictor | bits an event | most likely event was right | calibration error |
+|---|---:|---:|---:|
+| frequency | 3.93 | 16% | 0.08 |
+| previous event | 0.73 | 79% | 0.09 |
+| up to three events | 0.77 | 80% | 0.10 |
+
+Here everything is in the previous event, and the longer past does
+harm: three events cost 0.044 bits more than one overall, and more in
+each of the four parts of the held-out time (0.04, 0.02, 0.03 and
+0.09). Over those parts the context predictor scores 0.72, 0.65, 0.65
+and 1.05. On process ids not seen before the cut it is worse still
+(1.10 against 0.73), though that is 975 events.
+
+**This table replaces one that was wrong.** The log runs from December
+into January and carries no year; the converter dated the second half a
+year before the first. The held-out "last quarter by time" was then
+from the middle of the log, with later events in the training part, and
+it showed a small saving from the longer past (0.047 bits, called too
+unsteady to be a gain). With the times right the saving is a loss. The
+converter is fixed; the HDFS file was never affected.
+
+What this is and is not. These are log templates: much of the
+predictability is a program writing its lines in order. The predictor is
+a simple one on purpose (`docs/predict.md`), so the bits saved are what
+it found and not a limit. A start-of-entity marker was added to it after
+the first held-out runs on these two datasets showed its absence, so
+they are not clean evidence for that choice; before it, the HDFS context
+predictor scored 1.45 bits and after, 1.32. These reports were regenerated after a
+defect was fixed (a name first used before the cut by an entity listed
+later was treated as unknown): HDFS did not change. The OpenSSH report
+was then redone again for the wrong times described above. One cut in time on each
+dataset, so one held-out period. Nothing here shows that an event causes
+the next.
+
+## Shadow comparison on the drifting data (synthetic, after v0.7.0)
+
+`shadow_drift.py` takes the frozen and evolved vocabularies of the ten
+drifting and ten stationary runs above and puts each evolved vocabulary
+to `kute shadow` as a candidate against its frozen parent, on that run's
+100,000 held-out events, asking for a net improvement of 1% with one
+distribution (report `results/shadow-drift-synthetic.json`).
+
+| data | approved at horizon 1 | 10 | 100 | 1,000 | compressed size, evolved over frozen | tokens, evolved over frozen |
+|---|---:|---:|---:|---:|---|---|
+| drifting | 0 of 10 | 5 | 5 | 5 | 0.927 to 1.156 | 0.699 to 0.846 |
+| stationary | 0 of 10 | 0 | 0 | 0 | 1.000 to 1.001 | 0.997 to 0.999 |
+
+On data that did not change, the evolved vocabulary was never approved.
+On data that drifted, every evolved vocabulary emitted 15% to 30% fewer
+tokens, and half of them still produced larger output and were rejected
+at every horizon. At horizon 1 nothing is approved: a vocabulary file of
+about 1.7 kB costs more than it saves on a single container of about
+20 kB. Token count would have approved all ten.
+
+Synthetic data, and the held-out events of each run are the ones the
+earlier section already reported on, so this adds the decision rule and
+no new evidence about evolution itself.
 
 ## Against Hugging Face `tokenizers` on text (v0.5.0)
 
@@ -683,6 +947,22 @@ for the whole training, the processor at a steady 2.3 times its nominal
 no pages read from disk, mains power, the Balanced plan. So the three
 ordinary explanations are ruled out: the laptop (4 cores, 8 threads,
 i7-1065G7) really does take a minute.
+
+The laptop run was repeated with the released 0.7.0 package from PyPI
+(report `results/tokenizers-enwik8-10runs-matched-isolated-v0.7.0.json`):
+KUTE trained in 4.06 s (3.95 to 6.01) and `tokenizers` in 69.9 s (65.8 to
+81.2); encoding 0.30 s against 3.70 s for a batch of lines; the same token
+counts. The ranges are wider than in the 0.6.0 run because other work ran
+on the machine for a few minutes during this one. The medians agree with
+the earlier run: nothing in 0.7.0 changed the speed of training or
+encoding. This disturbed run is not one to quote; the 0.6.0 laptop run
+above is the clean one.
+
+The reviewer repeated the desktop run with the same 0.7.0 package (report
+`results/tokenizers-enwik8-10runs-matched-isolated-v0.7.0-desktop.json`):
+KUTE 1.94 s (1.87 to 1.96), `tokenizers` 7.73 s (7.68 to 7.92), encoding
+0.138 s against 0.789 s for a batch of lines, the same token counts. Four
+times to train, as on 0.6.0.
 
 What can be said: with one training per process, KUTE trained this
 vocabulary about 4 times faster on a 24-thread desktop and about 16 times

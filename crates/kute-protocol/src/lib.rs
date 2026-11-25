@@ -235,11 +235,18 @@ enum Stage {
     Ready,
 }
 
+/// A test a vocabulary must pass before it is taken from the other side.
+/// It is given the vocabulary after its digest has been recomputed and
+/// matched; an `Err` is the reason it is refused. The protocol does no
+/// cryptography of its own: a caller that wants signatures checks them here.
+pub type VocabularyCheck = Box<dyn Fn(&Vocabulary) -> std::result::Result<(), String> + Send>;
+
 /// One side of the protocol.
 pub struct Peer {
     name: String,
     engine: Engine,
     policy: Policy,
+    check: Option<VocabularyCheck>,
     held: BTreeMap<String, Held>,
     stage: Stage,
     wanted: Option<VocabRef>,
@@ -259,6 +266,7 @@ impl Peer {
             name: name.to_string(),
             engine,
             policy,
+            check: None,
             held: BTreeMap::new(),
             stage: Stage::New,
             wanted: None,
@@ -266,6 +274,15 @@ impl Peer {
             inbox_bytes: 0,
             seen: Default::default(),
         }
+    }
+
+    /// Take a vocabulary from the other side only if `check` passes it.
+    /// Vocabularies this side adds itself are not checked: their holder
+    /// chose them. While a check is set, proposals are refused, since a
+    /// vocabulary derived here from a proposal is one nobody has vouched
+    /// for.
+    pub fn require_vocabulary_check(&mut self, check: VocabularyCheck) {
+        self.check = Some(check);
     }
 
     /// Hold `vocabulary`. Returns its digest.
@@ -498,6 +515,11 @@ impl Peer {
                 if let Some(refusal) = self.over_budget(vocabulary.len() as u64) {
                     return Ok(refusal);
                 }
+                if let Some(check) = &self.check {
+                    if let Err(why) = check(&vocabulary) {
+                        return Ok(refuse(ErrorCode::Refused, format!("the vocabulary is not taken: {why}")));
+                    }
+                }
                 let report = self.engine.verify(&vocabulary)?;
                 if !report.ok() {
                     return Ok(refuse(ErrorCode::Invalid, format!("the vocabulary fails its own test vectors: {}", report.failures.join("; "))));
@@ -517,6 +539,9 @@ impl Peer {
             Message::SymbolPropose { digest, additions, version, rule } => {
                 if !self.policy.accept_proposals {
                     return Ok(refuse(ErrorCode::Refused, "this peer does not accept vocabulary proposals"));
+                }
+                if self.check.is_some() {
+                    return Ok(refuse(ErrorCode::Refused, "this peer takes only vocabularies that pass its check, and one derived from a proposal has nobody vouching for it"));
                 }
                 // Before anything is derived: under another rule the child
                 // would differ, and the two sides would part silently.

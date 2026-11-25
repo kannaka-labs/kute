@@ -49,6 +49,13 @@ archive: 14,273,135 bytes -> 4,870,481 tokens (2.931 bytes per token); round tri
 patterns: 217 reported from 32,362 sessions; 20 of the top 20 seen again in 19,337 held-out sessions, 8 at half their learned rate or more
 ```
 
+Run again with `kute-engine==0.7.0` from PyPI, on another machine
+(`report-openssh-kute-0.7.0.json`, one run, 21 seconds): every count and
+size above is the same. Two things differ: the timings, and the
+vocabulary's digest, because the generator's version is part of what the
+digest covers. A vocabulary made by 0.6.0 and one made by 0.7.0 from the
+same data hold the same tokens and have different digests.
+
 ## How to read it
 
 **The round trip is the result.** The last fifth of the log, which the

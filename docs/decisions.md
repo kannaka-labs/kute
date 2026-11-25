@@ -629,9 +629,425 @@ C2: there are no gapped pairs, no event time or late-event policy, no
 windows that forget, no transport, no CLI, and the 24-hour replay with
 recorded throughput has not been run. The test streams are synthetic.
 
+## ADR-0037: The HTTP service is the MCP server's operations behind a hand-written, bounded listener
+
+The v0.7 specification lists a REST surface beside MCP (E1): versioned
+encode, decode, discover, inspect, compare and capabilities with bounded
+payloads. `kute serve` provides it by calling the same function the MCP
+server calls for each tool, so the two cannot drift apart, and adds only
+the transport.
+
+The transport is written on `std::net`, about 250 lines, instead of
+taking an HTTP framework. The service needs one request per connection,
+JSON in and out, and nothing else; a framework would bring an async
+runtime and defaults (keep-alive, pipelining, chunked bodies, generous
+header limits) that each need a bound found and set. Written out, every
+bound is visible in one file: workers, queue, read deadline, header block,
+body length checked before reading. What it gives up is everything a
+framework does well, and it must never grow into one: if TLS, HTTP/2 or
+streaming are wanted, the answer is a proxy in front or a real library,
+not more code here.
+
+It has no TLS and no authentication, so it binds loopback by default and
+needs `--insecure-remote` otherwise, in the manner of ADR-0033. Loopback
+is reachable from a browser, so it also refuses a `Host` that is not a
+loopback name (DNS rebinding) and a body not declared as JSON (a form
+post from another origin), and sends no cross-origin headers.
+
+Not offered: training and jobs, which the specification lists for REST
+with "explicit permission and quotas". They write files and run for
+minutes; they need the permission model first and are left out until it
+exists. Time spent inside one operation is not bounded, and there is no
+per-client rate limit.
+
+## ADR-0038: Complete events are stored by column, in a container of their own
+
+The v0.7 specification asks for an event profile that keeps identity,
+time, attributes and numeric values, where a token sequence keeps only
+the names (C1). `kute-events` packs JSON Lines records into a `KUTE-EV1`
+container and unpacks them exactly; `docs/events.md` describes it.
+
+It is a separate container, not an extension of the token container. A
+token container is one sequence of ids under one vocabulary; a record
+has several things of different kinds, and they compress when each is
+stored with its like. Forcing them into one token stream would mean
+inventing ids for timestamps and values.
+
+"Exactly" means canonical JSON, the same rule as the `jsonl` adapter and
+through the same code: the records and their values come back, key order
+and spacing do not, and the header says whether the source was already
+canonical, in which case the bytes are the same. Events stay in source
+order; the entity grouping that helps compression is undone on reading.
+
+Columns were first compressed with zlib, because it was already a
+dependency. Review showed what that cost: on the OpenSSH records the
+plainest column layout through xz was 22% smaller than the container.
+Columns are now Zstandard frames by default (level 19, a window that
+covers the column up to 128 MiB), which makes the container 8% smaller
+than that rival; zlib remains as `--codec zlib` for a container
+readable with nothing else. Every column names its codec. Zstandard is
+the workspace's first C dependency, through the `zstd` crate, which
+builds the library from bundled source: building `kute-events` or the
+command line now needs a C compiler. It was chosen over xz for its
+speed in both directions at nearly the same size. The other crates do
+not depend on it.
+
+Deliberately absent: the event names are not tokenized with a trained
+vocabulary. The container needs no vocabulary to read, which removes a
+failure mode, and whether sequence tokens would beat zlib on the grouped
+name column has not been measured. Also absent: streaming writing,
+reading part of a container, units of measurement, and relationships
+between entities other than the one group field.
+
+## ADR-0039: Live discovery orders by event time behind a watermark and forgets by panes
+
+The prototype of ADR-0036 counted events in arrival order and never
+forgot. `kute_discover::watch::Watch` and `kute live` add what the
+specification's C2 asks for; `docs/live.md` describes the behaviour.
+
+Order: arrivals wait in a bounded buffer and are counted in order of
+(time, arrival) once the watermark, the latest time minus a configured
+lateness, passes them. Ties go by arrival so the result is a function of
+the arrivals. The late-event policy is to drop and count. The
+alternatives were to count late events out of order, which makes a
+sequence depend on delivery, or to hold windows open for them, which
+makes memory depend on the stream. When the buffer is full the earliest
+event is counted early and the watermark moves; that trades lateness
+tolerance for the memory bound, and is counted.
+
+Forgetting: time is cut into panes and each pane has its own
+Misra-Gries tables; a window is the last k panes, and a report adds
+their counts. Summaries of this kind add, and their undercount bounds
+add with them, so a sliding window needs no subtraction, which such a
+summary cannot do. The price is k tables and a merged copy at each
+report. One pane gives tumbling windows.
+
+Reports are driven by events, not by a clock: a pane closes when an
+event of a later pane is counted. A stream that goes quiet reports
+nothing until it speaks again or ends. A timer would need a second
+source of time and make replays differ from live runs.
+
+Transport is a file or a pipe, read synchronously, which is the
+backpressure. Reports are delivered at least once across a restart.
+NATS and MQTT adapters, which the specification lists as optional, are
+not built. Durations of patterns and gapped pairs remain offline only.
+
+## ADR-0040: A candidate vocabulary is judged in shadow, on net bytes, and nothing is approved automatically
+
+Measurements on HDFS and on synthetic drifting data showed that an
+evolved vocabulary can emit fewer tokens and larger output. `kute shadow`
+(specification D1) encodes held-out inputs with the vocabulary in use
+and with a candidate and gives a decision with its evidence;
+`docs/shadow.md` describes the terms.
+
+The quantity judged is net bytes: compressed containers, scaled by the
+traffic the candidate is expected to carry, less the cost of sending
+the candidate's file. Token count is reported and not judged, because
+it is not what is stored or sent. The horizon and the number of
+distributions are the caller's to state; the command cannot know them,
+and the default (the inputs once, one distribution) is deliberately
+unfavourable to the candidate.
+
+The command decides and does nothing else. Publishing, monitoring and
+rolling back are existing commands and the properties vocabularies
+already have (immutable, identified by digest, a child never
+invalidating its parent), written down as a procedure rather than built
+as a controller. An automatic loop would need a policy for who may
+approve, which belongs with the permission model that does not exist
+yet.
+
+Memory, task quality and predictive utility are not measured.
+
+## ADR-0041: Predictive value is measured against baselines on held-out time, by a predictor kept simple on purpose
+
+Discovery reports sequences that recur. Whether they help anticipate
+anything is a separate question (specification D2). `kute predict`
+answers it with a measurement; `docs/predict.md` describes it.
+
+The cut is in time, not at random: a random split puts the future of an
+entity in training and its past in test. The comparison is between
+three predictors of one family that differ only in how far back they
+look, so that the difference is the value of the longer past and not of
+a cleverer method. Scores are log loss in bits, top-1 accuracy and
+calibration; entities unseen before the cut are scored apart; the
+held-out time is scored in parts to show drift; differences carry
+intervals from resampling entities.
+
+The predictor is a smoothed n-gram with backoff. It is not offered as a
+model. A stronger one would give larger numbers and tell less about the
+data, since its skill and the data's structure could not be told apart.
+
+One change was made after seeing held-out results: the first runs on
+HDFS and OpenSSH showed the first event of an entity given a confidence
+near 0.15 and being right 93% of the time, because "nothing came
+before" was not a context. A start marker was added. It is a fix to the
+model's definition and it was prompted by test data, so those two
+datasets are not clean evidence for it.
+
+Repeated testing across runs is not controlled and cannot be from
+inside one command. Association is not cause, and the report says so in
+its output.
+
+## ADR-0042: QueenSync is an example made of released commands, and its result is published as measured
+
+The specification's E2 asks for two agents that observe their traffic,
+discover procedures, judge candidate tokens in shadow, negotiate a
+vocabulary and exchange encoded messages. `examples/queensync` does
+that with a script driving `kute train`, `peer`, `discover`, `evolve`
+and `shadow`. Nothing was added to the engine for it: if the flagship
+needed private hooks, an outside developer could not build the same.
+
+Agents are scripted and the workload synthetic. Calling a language
+model would cost money and would not change the bytes measured. The
+report says that model tokens are not measured and why they would not
+change.
+
+Messages are carried as symbols: one for each brace, comma and key, one
+for each character of a value. Whole values as symbols was tried first
+and failed before producing a result: every task id became a vocabulary
+entry.
+
+The measured result is that the loop works (1,000 of 1,000 tasks, novel
+message kinds carried by escape, the candidate rejected by shadow and
+the rejection borne out), and that zlib with a preset dictionary carries
+the same tasks in about a third of the bytes of the KUTE container. The
+settings were fixed before the result and were not tuned after it. The
+example's README states this. A flagship that hid it would be an
+advertisement.
+
+Not built: a signature on the vocabulary (B8), resuming after a dropped
+connection, per-message latency.
+
+## ADR-0043: Studio is a page inside the binary, over the same HTTP interface, showing only what a backend answers
+
+The specification's F2 asks for a local-first workbench in which each
+view consumes actual backend output and exposes provenance and
+limitations. `kute serve --studio` serves one; `docs/studio.md`.
+
+It is three static files compiled into `kute`, calling `/v1/` like any
+other client. No second interface was added for it: what Studio can
+show is exactly what an outside developer's page could show. No
+framework and no build step, so the page that ships is the page in the
+repository.
+
+Views exist for what the service answers (runtime, vocabulary, encode,
+compare, discover) and for report files from the command line. Peer
+status, event timing, running benchmarks and representation experiments
+have no backend operation and are listed as absent with the reason. A
+view with invented or sample data was the alternative and is what the
+specification rules out.
+
+The service is unauthenticated, so a browser page on it is a new way
+in. It is off unless asked for, refused on any address but loopback,
+and carries a content security policy of `default-src 'none'` with
+scripts, styles and requests allowed from its own origin only, which is
+why the script and style are separate files rather than inline. Text
+from the service or a file is only ever set as text. The existing host
+rule covers the page as it covers the interface.
+
+The page was driven in a headless browser through every view once.
+That check is not automated: it needs a browser, which the test suite
+does not assume. The automated tests cover what the service sends.
+
+## ADR-0044: A vocabulary is signed over its digest with Ed25519, and trust is whatever keys the verifier names
+
+KVF 0.1 reserved a `signatures` list beside the digest and defined no
+scheme. `kute keygen`, `kute sign` and `kute verify` define one;
+`docs/signing.md`. It is the first step of the specification's B8.
+
+What is signed is a fixed context line and the digest. The digest
+already covers the whole content, so the signature does too, and the
+context line keeps it from being a signature of anything else. The
+verifier computes the digest from the content. Signatures stay outside
+what the digest covers: a signed vocabulary keeps its digest, so nothing
+that names it by digest changes, and signatures can be added by several
+parties without each invalidating the others. `seal` now keeps the
+signatures when the digest is unchanged and drops them when it is not;
+before, every save dropped them.
+
+Ed25519, by `ring`, which is already in the build for TLS. One
+algorithm and no negotiation: an unknown algorithm is reported and
+counts for nothing.
+
+Trust is not modelled. `kute verify` takes the public keys the caller
+trusts and reports against those; a key found in the file proves
+nothing and none is stored there. A registry, key chains, expiry and
+revocation are the rest of B8 and need a design of who may vouch for
+whom, which this does not attempt.
+
+Nothing enforces a signature: the engine, the peer protocol and the
+service keep signatures and check none. Requiring one before a peer
+accepts a vocabulary is the obvious next use and is not built. The
+private key is an unencrypted file.
+
+## ADR-0045: A signal is stored as numbers under a stated contract, exact or bounded, and the bound is checked per value
+
+Status: accepted, experimental.
+
+The specification asks for signals (F3): numeric sequences, delta
+encoding, quantization, error bounds. Symbols are the wrong unit for a
+meter reading, so this is a separate crate (`kute-signals`) and a
+separate container (`KUTE-SG1`), not an adapter that turns numbers into
+tokens.
+
+Decided:
+
+* Two contracts, named in the header: `exact` (same bits, including NaN
+  payloads and the sign of zero) and `bounded` (every finite value within
+  an absolute `max_error`; values that are not finite exactly).
+* The bound is enforced per value while packing: a value whose
+  reconstruction would miss it is kept as raw bits. Rounding arithmetic
+  is not trusted to stay inside the bound near the edges of a step or at
+  large magnitudes.
+* `pack` reads its own container back and compares against the contract
+  before returning. The header carries the largest error incurred and a
+  SHA-256 of the values a reader must obtain; `unpack` refuses anything
+  else.
+* The step of a bounded container is stored as the bits of an `f64`, so
+  the reader multiplies by the same number the writer did.
+* The method is ordinary: decimal scaling or uniform steps, differences
+  of order 0 to 2 chosen by trial, varints, zstd. A bounded container is
+  written in steps and as the values are, and the smaller kept (found on
+  real data: a bound finer than the data's resolution made steps cost
+  more than the values).
+* zstd only. The events container's choice of codec is still open with
+  the maintainer; whatever is decided there applies here.
+
+Not decided, not built: relative bounds, bounds on derived quantities,
+many signals in one container, streaming, any predictor or transform.
+
+Measured on one real data set (`docs/signals.md`): 0.2% smaller than the
+same differences written as varints under zstd by hand, which is to say
+the container adds nothing in bytes.
+Purpose-built float compressors were not run. The reason to have it is
+that the file says what it promises and a reader can check it.
+
+## ADR-0046: Vocabularies stay flat; layered scopes with local ids were measured and did not earn a format
+
+Status: accepted. An experiment was run; nothing was built into the
+engine.
+
+The specification (D3) asks for an investigation of base, domain,
+environment and session scopes with negotiated local ids and reversible
+fallback, compared with a flat vocabulary, and says KVF is not to be
+replaced until evidence supports it.
+
+Measured (`docs/layered.md`, `benchmarks/layered_vocab.py`): a
+Wikipedia vocabulary used on Python source, with tables of local ids at
+domain and session scope, against a flat vocabulary trained on the
+domain. Real data, one domain, one run.
+
+* Local ids brought the base vocabulary's token bytes to within 2.5% of
+  the flat vocabulary's, and after zlib to within 0.4%. They cannot
+  change the token count, which stayed 46% higher.
+* A general compressor closed the same gap without any table.
+* The largest gain found had nothing to do with layers: ranking a flat
+  vocabulary's ids by frequency took 19% off its token bytes.
+
+Decided: KVF stays as it is. No layer format, no local-id negotiation
+in the protocol. Derivation from a parent (`kute evolve`, proposals
+between peers) remains the only relation between vocabularies.
+
+Left open, not decided: whether token ids should be assigned or carried
+in frequency order. That would change every digest and the tiktoken
+export, and would want its own measurement on event vocabularies, where
+most ids are one byte already.
+
+## ADR-0047: A peer may require a signature on a vocabulary it is sent; the protocol only carries the question
+
+Status: accepted, experimental.
+
+ADR-0044 left signatures checked by nothing but `kute verify`. The next
+step of B8 is a peer that refuses an unsigned vocabulary.
+
+Decided:
+
+* `kute-protocol` gains no cryptography. `Peer::require_vocabulary_check`
+  takes a function from a vocabulary to accept or a reason; it is called
+  on a vocabulary received, after its digest is recomputed and matched
+  and before it is held. The CLI supplies the Ed25519 check from the
+  same code as `kute verify`.
+* While a check is set, proposals are refused. A proposal derives a
+  vocabulary on the receiving side that no signer has seen; accepting it
+  would let the other side put an unsigned vocabulary into a peer that
+  requires signed ones. The CLI refuses the two options together.
+* Vocabularies the operator loads are not checked.
+* The requirement is per peer process, not per allowed fingerprint. A
+  per-fingerprint set of trusted keys would belong in `tls::Access`
+  and is not built.
+* The wire format is unchanged: the refusal is the existing `Refused`
+  error with the reason, so an older sender understands it.
+
+Not built: a registry, key distribution, expiry, revocation, threshold
+rules (two of three keys), signing a proposal.
+
+## ADR-0048: Composed representations are identified, toleranced and measured before anything is built on them
+
+Status: accepted, research. A negative result is recorded.
+
+The specification (F1) asks for research into compositional
+representations with the phase-hash mapping kept as the baseline, an
+identity for every representation, portable tolerances, and published
+measurements including negative ones.
+
+Decided:
+
+* The three standard compositions (bundle, permute-bundle, bind-chain)
+  live in `kute_hrm::compose`, outside the engine. No command, no
+  service operation, no container carries a vector.
+* A composition's identity is a string naming algorithm and version,
+  dimension, configuration, and the base mapping and its version.
+  Vectors under different identities are not compared.
+* Portable tolerance: similarities of unit-energy vectors agree within
+  1e-4 between implementations, the inner product being summed in f64
+  so that the margin does not shrink with the dimension. Pinned at
+  three dimensions by a test that runs on three systems and two
+  processor families in CI.
+* Measurements compare against exact baselines that use no vectors
+  (counts, positions), and ties are split, after a first scoring that
+  counted ties as misses made the vectors look better than the exact
+  thing they approximate.
+
+Measured (`docs/representations.md`): on windows of two real logs,
+bundle equals counting and permute-bundle equals counting by position;
+bind-chain is a hash. Nothing beat exact counting.
+
+Not built, and the reason the question stays open: learned or
+co-occurrence representations, where similar tokens get similar vectors;
+any associative or predictive medium; sequence completion;
+generalization. Until one of those is built and measured against these
+baselines, no claim about the usefulness of these representations is
+made.
+
+## ADR-0049: An entity silent past a stated time starts over, and is let go without loss
+
+Status: accepted.
+
+ADR-0039 forgot entities only by eviction, and an ending event was
+added for streams that state an end. Streams with reused ids and no
+dependable ending event (OpenSSH process ids) had neither: old
+sequences were joined to new ones, and finished entities held places.
+
+Decided: `idle_ticks` (`--idle`). An entity whose last counted event
+is more than that before its next starts a new sequence. When places
+run out, entities silent that long go first and are not counted as
+evicted, because the rule would have joined nothing to them. Measured
+in event time, in time order, like everything else in the watch; no
+timer. A checkpoint with a limit carries each entity's last time, and
+one without is unchanged byte for byte.
+
+Rejected: a timer on the wall clock (a replay would differ from the
+live run); counting idle removals as evictions (it would mark exact
+reports inexact).
+
+Measuring it found that the OpenSSH event file had been dated wrongly
+across a year boundary. Results that used its times were redone:
+the prediction report (its sign changed) and the live figures. Results
+that use only the order of lines (the representation windows) stand.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
-checkpoints written during a run, event values, units and relationships,
-timestamps in token containers, entropy-coded containers, and
+checkpoints written during a run, units and relationships between
+entities, timestamps in token containers, entropy-coded containers, and
 adapters for DNA, telemetry, mathematics and quantum circuits.

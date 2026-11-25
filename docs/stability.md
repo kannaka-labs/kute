@@ -42,6 +42,14 @@ someone building on it knows what a new release may do to them.
 | `discover` | provisional | The report's fields are still settling. |
 | `peer serve`, `peer send`, `peer fingerprint` | provisional | Follows the protocol's class. |
 | `mcp` | experimental | See `docs/mcp.md`. |
+| `keygen`, `sign`, `verify`, the signature scheme, `peer serve --require-signature-from` | experimental | See `docs/signing.md`. |
+| `serve --studio` | experimental | See `docs/studio.md`. |
+| `predict`, `kute_discover::predict` | experimental | See `docs/predict.md`. |
+| `shadow` | experimental | See `docs/shadow.md`. |
+| `live`, `kute_discover::watch`, its checkpoint | experimental | See `docs/live.md`. |
+| `events`, the `KUTE-EV1` container, the `kute-events` crate | experimental | See `docs/events.md`. |
+| `signals`, the `KUTE-SG1` container, the `kute-signals` crate | experimental | See `docs/signals.md`. |
+| `serve` (HTTP, `/v1/`) | experimental | See `docs/http.md`. A breaking change to the interface arrives as a new path version. |
 
 ## Libraries
 
@@ -55,7 +63,8 @@ someone building on it knows what a new release may do to them.
 | `kute-discover::live` | experimental | A prototype. Its counts are estimates with a stated error; see ADR-0036. |
 | `kute-bench` | experimental | A tool for this repository, published so that reports can be reproduced. |
 | Python package `kute-engine` (`kute.Engine`, `kute.Vocabulary`, `kute.discover`) | provisional | Tracks the Rust `kute` crate. |
-| HRM adapter contract and plugin | experimental | An interface and one reference mapping. Nothing has been measured about its usefulness. |
+| HRM adapter contract and plugin | experimental | An interface and one reference mapping. |
+| `kute_hrm::compose` (bundle, permute-bundle, bind-chain) | experimental, research | Measured once, with a negative result: `docs/representations.md`. May be removed. |
 | `backends/rustbpe` | experimental | A reference backend for comparison. |
 
 Minimum supported Rust is 1.85 and is checked in CI. Raising it is a minor
@@ -77,6 +86,26 @@ binary. On every commit:
 All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
+
+## Changes since v0.7.0 that need action
+
+- **Building `kute-cli` needs a C compiler.** The event and signal
+  containers (`kute-events`, `kute-signals`) use Zstandard through the
+  `zstd` crate, which compiles C. The other libraries and the Python
+  package do not.
+- **A vocabulary file may carry signatures**, and one with more than 16,
+  or with an overlong field in one, is refused. Signatures are outside
+  the digest: signing changes no digest, and the engine checks none
+  (`kute verify` does).
+- **`kute_hrm::inner_product` sums in `f64`.** Similarities can differ
+  from v0.7.0 in the last digits; the stated tolerance is 1e-4.
+- **Vocabularies trained by this release have new digests**, as with
+  every release: the generator string is part of the digest. The tokens
+  are the same.
+- Everything added in this release (`kute serve`, `kute events`,
+  `kute signals`, `kute live`, `kute shadow`, `kute predict`, signing) is
+  experimental: its formats (`KUTE-EV1`, `KUTE-SG1`, signature files,
+  checkpoints) may change before 1.0.
 
 ## Changes since v0.6.0 that need action
 

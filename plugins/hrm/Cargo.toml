@@ -16,3 +16,6 @@ readme = "README.md"
 kute-types.workspace = true
 kute-core.workspace = true
 sha2.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
