@@ -82,8 +82,10 @@ The other side is `kute fetch`:
 if it is the digest asked for and the vocabulary passes its own test
 vectors; with `--trusted-key`, only if one of those keys signed it, as
 `kute verify` checks. It needs a stated `Content-Length`, takes at most
-`--max-bytes` (256 MiB unless told), and gives the whole exchange
-`--timeout` seconds (60). `--list` prints what the registry says it
+`--max-bytes` (64 MiB unless told; 256 MiB in 0.9.0), and gives the
+whole exchange `--timeout` seconds (60), looking the name up included
+(since 0.9.1). The whole file is held and read before its digest is
+known, so `--max-bytes` is what a registry can make the client hold. `--list` prints what the registry says it
 holds and checks nothing.
 
 What this is and is not:
@@ -94,6 +96,14 @@ What this is and is not:
   and that is all the protection there is: the connection is plain
   HTTP, so both can see what was asked for and what was sent, and can
   refuse or stall. `https://` addresses are refused, not built.
+* The file is written with whatever signatures arrived in it. A
+  signature is outside what the digest covers, so a registry can add
+  one, and a file with the right digest can carry a signature nobody
+  made honestly. With `--trusted-key` one signature from a key you
+  trust has been checked; without it none has, and the report says how
+  many the file carries and that they are claims until `kute verify` is
+  run. They are kept and not removed because a signature you did not
+  check today is the one you may check tomorrow.
 * The digest has to come from somewhere you trust. The listing is the
   registry's own account. A digest read from the listing and fetched
   without `--trusted-key` proves only that the registry sent what it

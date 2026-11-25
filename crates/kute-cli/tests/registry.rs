@@ -152,6 +152,12 @@ fn a_vocabulary_is_fetched_by_digest_and_kept_only_if_it_is_that_one() {
     // Without a key the digest alone is checked, and the report says so.
     let unsigned = ok(&dir, &["fetch", "--from", &url, "--digest", &other, "--output", "got-other.kvf"]);
     assert!(unsigned["signature"].as_str().unwrap().starts_with("not checked"), "{unsigned}");
+    assert_eq!(unsigned["signatures_in_the_file"], 0);
+    // A signed file fetched without a key keeps its signature, and the report says nobody checked it.
+    let unchecked = ok(&dir, &["fetch", "--from", &url, "--digest", &signed, "--output", "got-unchecked.kvf"]);
+    assert_eq!(unchecked["signatures_in_the_file"], 1);
+    assert!(unchecked["signatures_in_the_file_means"].as_str().unwrap().starts_with("none was checked"), "{unchecked}");
+    assert_eq!(got["signatures_in_the_file"], 1);
 
     // Not kept: signed by nobody trusted, signed by somebody else, not held, already there.
     assert!(fails(&dir, &["fetch", "--from", &url, "--digest", &other, "--output", "no1.kvf", "--trusted-key", &ours]).contains("carries no signature"));
@@ -163,6 +169,10 @@ fn a_vocabulary_is_fetched_by_digest_and_kept_only_if_it_is_that_one() {
     // Refused before anything is asked for.
     assert!(fails(&dir, &["fetch", "--from", &url, "--digest", "latest", "--output", "no4.kvf"]).contains("not a digest"));
     assert!(fails(&dir, &["fetch", "--from", "https://example.invalid", "--digest", &signed, "--output", "no5.kvf"]).contains("https is not built"));
+    // A name that is not there is an error, and one within the time given.
+    let started = std::time::Instant::now();
+    fails(&dir, &["fetch", "--from", "http://registry.invalid:8787", "--digest", &signed, "--output", "no5.kvf", "--timeout", "5"]);
+    assert!(started.elapsed() < Duration::from_secs(8), "{:?}", started.elapsed());
     assert!(fails(&dir, &["fetch", "--from", &url, "--digest", &signed, "--output", "no6.kvf", "--trusted-key", "not-a-key"]).contains("trusted key"));
     assert!(fails(&dir, &["fetch", "--from", &url, "--digest", &signed, "--output", "no7.kvf", "--max-bytes", "100"]).contains("--max-bytes"));
     for name in ["no1.kvf", "no2.kvf", "no3.kvf", "no4.kvf", "no5.kvf", "no6.kvf", "no7.kvf"] {

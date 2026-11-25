@@ -65,9 +65,19 @@ fn parse_url(url: &str) -> kute::Result<(String, String)> {
 fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration) -> kute::Result<(u16, Vec<u8>)> {
     let deadline = Instant::now() + timeout;
     let left = || deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(|| failed("no complete answer in time"));
+    // Looking a name up has no deadline of its own in the standard
+    // library, so it is done on another thread and waited for only as
+    // long as the exchange has. A lookup that never ends leaves that
+    // thread behind; this process is about to end anyway.
+    let (found, lookup) = std::sync::mpsc::channel();
+    let name = authority.to_string();
+    std::thread::spawn(move || {
+        let _ = found.send(name.to_socket_addrs().map(|addresses| addresses.collect::<Vec<_>>()));
+    });
+    let addresses = lookup.recv_timeout(left()?).map_err(|_| failed(format!("{authority} was not looked up in time")))?.map_err(|e| failed(format!("{authority}: {e}")))?;
     let mut stream = None;
     let mut last = None;
-    for address in authority.to_socket_addrs().map_err(|e| failed(format!("{authority}: {e}")))? {
+    for address in addresses {
         match TcpStream::connect_timeout(&address, left()?) {
             Ok(s) => {
                 stream = Some(s);
@@ -187,6 +197,7 @@ pub fn fetch(engine: &Engine, from: &str, digest: &str, output: &Path, trusted: 
     if let Some(gate) = &gate {
         gate(&vocabulary).map_err(|why| KuteError::Integrity(format!("the vocabulary is not kept: {why}; nothing was written")))?;
     }
+    let signatures = vocabulary.integrity.as_ref().map_or(0, |i| i.signatures.len());
     vocab::save(&vocabulary, output, force)?;
     Ok(json!({
         "registry": from,
@@ -198,6 +209,11 @@ pub fn fetch(engine: &Engine, from: &str, digest: &str, output: &Path, trusted: 
         "bytes_received": body.len(),
         "test_vectors_pass": true,
         "signature": if gate.is_some() { "a trusted key signed exactly this content" } else { "not checked: no --trusted-key was given" },
+        // The file is written with whatever signatures arrived. Only one
+        // that a trusted key was seen to hold has been checked; the rest
+        // are entries anyone could have added, the registry included.
+        "signatures_in_the_file": signatures,
+        "signatures_in_the_file_means": if gate.is_some() { "at least one is from a trusted key; any others were not checked" } else { "none was checked: they are claims until `kute verify` is run with keys you trust" },
         "output": output,
         "means": "the file is the content this digest names. Whether that content is the one you wanted depends on where the digest came from; who made it is known only if a signature was checked.",
     }))

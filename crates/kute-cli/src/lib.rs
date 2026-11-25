@@ -408,8 +408,10 @@ enum Command {
         /// Print what the registry says it holds, and fetch nothing.
         #[arg(long)]
         list: bool,
-        /// Largest file taken.
-        #[arg(long, default_value_t = 268_435_456)]
+        /// Largest file taken. All of it is held and read before its
+        /// digest is known, so this is what a registry can make this
+        /// process hold. A vocabulary of 32,768 tokens is about 3 MB.
+        #[arg(long, default_value_t = 67_108_864)]
         max_bytes: u64,
         /// Seconds the whole exchange may take.
         #[arg(long, default_value_t = 60)]
