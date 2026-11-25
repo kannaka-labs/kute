@@ -349,6 +349,12 @@ impl Live {
         if saved.tables.len() != p.max_length || saved.entities.len() > p.max_entities {
             return Err(bad("tables or entities outside its bounds"));
         }
+        // The numbers must be ones a stream could have produced. Otherwise
+        // a count near the top of the range overflows on the next event or
+        // in the next report.
+        if saved.events > MAX_EVENTS || saved.folded > saved.events {
+            return Err(bad("more events than a stream can have, or more folded than events"));
+        }
         let known = saved.names.len() as u32;
         let mut live = Live::new(saved.params.clone())?;
         for name in saved.names {
@@ -361,6 +367,17 @@ impl Live {
             let n = i + 1;
             if table.counts.len() > p.max_candidates {
                 return Err(bad("more sequences than its bounds allow"));
+            }
+            // Every event offers at most one sequence of each length; each
+            // lowering of the counts answers `max_candidates + 1` offers;
+            // and what is held cannot exceed what was offered.
+            let per_decrement = (p.max_candidates as u64).saturating_add(1);
+            if table.offered > saved.events || table.decrements > table.offered / per_decrement {
+                return Err(bad("a table was offered or lowered more than the events allow"));
+            }
+            let mut held: u64 = 0;
+            for (_, count) in &table.counts {
+                held = held.checked_add(*count).filter(|&h| h <= table.offered).ok_or_else(|| bad("a table holds more than it was offered"))?;
             }
             let target = &mut live.tables[n];
             for (seq, count) in table.counts {
@@ -375,7 +392,7 @@ impl Live {
             target.decrements = table.decrements;
         }
         for (key, recent, last_seen) in saved.entities {
-            if recent.len() > p.max_length || recent.iter().any(|&id| id > known) {
+            if recent.len() > p.max_length || recent.iter().any(|&id| id > known) || last_seen > saved.events {
                 return Err(bad("an entity's recent symbols are malformed"));
             }
             if live.entities.insert(key, Tail { recent: recent.into(), last_seen }).is_some() {
@@ -390,6 +407,10 @@ impl Live {
 }
 
 const SAVED_FORMAT: u32 = 1;
+/// More events than any stream delivers (a million a second for 146,000
+/// years). A checkpoint that claims more is damaged; refusing it keeps
+/// every sum of counts inside 64 bits.
+const MAX_EVENTS: u64 = 1 << 62;
 
 #[derive(Serialize, Deserialize)]
 struct SavedTable {
