@@ -672,6 +672,27 @@ real processes change in other ways and by other amounts. One vocabulary
 size per table, one evolution step, one run per seed. Nothing here
 measures what an evolved vocabulary is worth to anything downstream.
 
+## Layered vocabularies against a flat one (after v0.7.0)
+
+`python benchmarks/layered_vocab.py`, report
+`results/layered-vocab-code.json`; the whole account is
+`docs/layered.md`. A vocabulary trained on English Wikipedia used on
+Python source (CPython 3.12.7 standard library, 2.5 MB held out), with
+tables of short local ids layered on it, against a flat vocabulary
+trained on 30 MB of the same source. Real data, one domain, one run.
+
+| 64 kB sessions | tokens | token bytes | after zlib -9 |
+|---|---:|---:|---:|
+| base vocabulary, plain ids | 869,576 | 1,535,572 | 561,302 |
+| layered: domain table | 869,576 | 1,230,545 | 505,183 |
+| layered: session table over the domain table | 869,576 | 1,141,301 | 509,276 |
+| flat domain vocabulary | 596,166 | 1,114,110 | 503,222 |
+| flat domain vocabulary, ids ranked by frequency | 596,166 | 904,767 | 463,406 |
+
+Layering recovers most of the bytes and none of the tokens, a general
+compressor does as much without it, and the best row is a flat
+vocabulary with its ids reordered. Nothing was built from this.
+
 ## Predicting the next event (after v0.7.0)
 
 `kute predict` with its defaults: the last quarter of the events by time

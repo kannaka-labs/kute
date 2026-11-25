@@ -1,0 +1,126 @@
+{
+ "question": "does a table of local ids over a held general vocabulary do as well as a flat vocabulary trained for the domain?",
+ "kute_version": "kute 0.7.0",
+ "base_vocabulary": {
+  "file": "enwik8-32k.kvf",
+  "digest": "sha256:e6fde3147759054d405851202e2a43327284e7ed28925ed0b554c20d2e87467a",
+  "file_bytes": 3335566
+ },
+ "flat_vocabulary": {
+  "file": "code-32k.kvf",
+  "digest": "sha256:72656b45234460e51690314a2825fae8ac0a818ba5c5df571f18540604808b5a",
+  "file_bytes": 3338144
+ },
+ "domain_train": {
+  "file": "train.txt",
+  "bytes": 29987078,
+  "sha256": "6b0544a4ecaa722745eb45cefa7eb598f3063c8fc399f9b14fcf247f4b27eb95"
+ },
+ "domain_eval": {
+  "file": "eval.txt",
+  "bytes": 2525866,
+  "sha256": "864cc881a4c118f3213476f3275c2ec50b38b1265df0daa046071ff0ec32f5de"
+ },
+ "sent_once": {
+  "flat_vocabulary_file_bytes": 3338144,
+  "flat_vocabulary_file_zlib_bytes": 542582,
+  "flat_ranking_table_bytes": 79917,
+  "domain_table_bytes": 39016,
+  "domain_table_entries": 16514
+ },
+ "by_session_size": [
+  {
+   "session_bytes_at_least": 4096,
+   "sessions": 613,
+   "text_bytes": 2525866,
+   "zlib_9_of_the_text_each_session": 717164,
+   "tokens": {
+    "flat": 596266,
+    "base": 869675
+   },
+   "base_tokens_not_in_domain_table": 637,
+   "every_layered_stream_decoded_to_the_same_ids": true,
+   "rows": {
+    "flat, plain ids": {
+     "token_bytes": 1114186,
+     "zlib_token_bytes": 628247,
+     "zlib_fixed_width_bytes": 620503
+    },
+    "flat, ranked ids": {
+     "token_bytes": 904840,
+     "zlib_token_bytes": 567633
+    },
+    "base, plain ids": {
+     "token_bytes": 1535645,
+     "zlib_token_bytes": 750669,
+     "zlib_fixed_width_bytes": 757449
+    },
+    "layered: domain table": {
+     "token_bytes": 1230630,
+     "zlib_token_bytes": 648312
+    },
+    "layered: session table": {
+     "token_bytes": 988000,
+     "zlib_token_bytes": 566227,
+     "session_table_bytes": 341947,
+     "token_bytes_with_tables": 1329947,
+     "zlib_token_bytes_with_tables": 908174
+    },
+    "layered: session over domain": {
+     "token_bytes": 990109,
+     "zlib_token_bytes": 604310,
+     "session_table_bytes": 120788,
+     "token_bytes_with_tables": 1110897,
+     "zlib_token_bytes_with_tables": 725098
+    }
+   }
+  },
+  {
+   "session_bytes_at_least": 65536,
+   "sessions": 39,
+   "text_bytes": 2525866,
+   "zlib_9_of_the_text_each_session": 549302,
+   "tokens": {
+    "flat": 596166,
+    "base": 869576
+   },
+   "base_tokens_not_in_domain_table": 637,
+   "every_layered_stream_decoded_to_the_same_ids": true,
+   "rows": {
+    "flat, plain ids": {
+     "token_bytes": 1114110,
+     "zlib_token_bytes": 503222,
+     "zlib_fixed_width_bytes": 497600
+    },
+    "flat, ranked ids": {
+     "token_bytes": 904767,
+     "zlib_token_bytes": 463406
+    },
+    "base, plain ids": {
+     "token_bytes": 1535572,
+     "zlib_token_bytes": 561302,
+     "zlib_fixed_width_bytes": 568541
+    },
+    "layered: domain table": {
+     "token_bytes": 1230545,
+     "zlib_token_bytes": 505183
+    },
+    "layered: session table": {
+     "token_bytes": 1131666,
+     "zlib_token_bytes": 487809,
+     "session_table_bytes": 125433,
+     "token_bytes_with_tables": 1257099,
+     "zlib_token_bytes_with_tables": 613242
+    },
+    "layered: session over domain": {
+     "token_bytes": 1134184,
+     "zlib_token_bytes": 502159,
+     "session_table_bytes": 7117,
+     "token_bytes_with_tables": 1141301,
+     "zlib_token_bytes_with_tables": 509276
+    }
+   }
+  }
+ ],
+ "seconds": 47.3
+}

@@ -921,6 +921,37 @@ same idea done by hand with xz, which is not a result worth a claim.
 Purpose-built float compressors were not run. The reason to have it is
 that the file says what it promises and a reader can check it.
 
+## ADR-0046: Vocabularies stay flat; layered scopes with local ids were measured and did not earn a format
+
+Status: accepted. An experiment was run; nothing was built into the
+engine.
+
+The specification (D3) asks for an investigation of base, domain,
+environment and session scopes with negotiated local ids and reversible
+fallback, compared with a flat vocabulary, and says KVF is not to be
+replaced until evidence supports it.
+
+Measured (`docs/layered.md`, `benchmarks/layered_vocab.py`): a
+Wikipedia vocabulary used on Python source, with tables of local ids at
+domain and session scope, against a flat vocabulary trained on the
+domain. Real data, one domain, one run.
+
+* Local ids brought the base vocabulary's token bytes to within 2.5% of
+  the flat vocabulary's, and after zlib to within 0.4%. They cannot
+  change the token count, which stayed 46% higher.
+* A general compressor closed the same gap without any table.
+* The largest gain found had nothing to do with layers: ranking a flat
+  vocabulary's ids by frequency took 19% off its token bytes.
+
+Decided: KVF stays as it is. No layer format, no local-id negotiation
+in the protocol. Derivation from a parent (`kute evolve`, proposals
+between peers) remains the only relation between vocabularies.
+
+Left open, not decided: whether token ids should be assigned or carried
+in frequency order. That would change every digest and the tiktoken
+export, and would want its own measurement on event vocabularies, where
+most ids are one byte already.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
