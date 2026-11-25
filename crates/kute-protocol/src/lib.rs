@@ -393,6 +393,12 @@ impl Peer {
         if units > self.policy.max_decoded_units {
             return Err(KuteError::LimitExceeded(format!("the sequence decodes to {units} units")));
         }
+        // Symbols can be a kilobyte each, so their count is not their size.
+        // The translation goes back in one frame, so a frame bounds it.
+        let bytes = kute::decoded_bytes_at_least(&from.vocabulary, sequence)?;
+        if bytes > self.policy.max_frame_bytes {
+            return Err(KuteError::LimitExceeded(format!("the sequence decodes to at least {bytes} bytes; a frame holds {}", self.policy.max_frame_bytes)));
+        }
         to.tokenizer.encode_open(&from.tokenizer.decode(sequence)?, UnknownPolicy::Escape)
     }
 
@@ -571,7 +577,7 @@ impl Peer {
                 let sequence = TokenSequence::from_bytes_bounded(&container, self.token_limit())?;
                 let held = self.usable(&sequence.vocabulary_digest)?;
                 let units = kute::decoded_units(&held.vocabulary, &sequence)?;
-                let bytes = self.engine.decode_raw_bounded(held.tokenizer.as_ref(), &sequence, self.policy.max_decoded_units)?;
+                let bytes = self.engine.decode_raw_within(held.tokenizer.as_ref(), &sequence, self.policy.max_decoded_units, self.policy.max_inbox_bytes)?;
                 // What the inbox keeps for this message: the decoded bytes
                 // and the sequence (ids, and the escapes the container holds).
                 let kept = (bytes.len() as u64).saturating_add(4 * sequence.ids.len() as u64).saturating_add(container.len() as u64);

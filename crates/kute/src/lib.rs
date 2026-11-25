@@ -26,7 +26,7 @@ pub use kute_adapters as adapters;
 pub use kute_algorithms as algorithms;
 pub use kute_bpe as bpe;
 pub use kute_core::{
-    check_sequence, decoded_units, AdapterCapabilities, CorpusSource, FnCorpus, ModalityAdapter, Registry, Representation,
+    check_sequence, decoded_bytes_at_least, decoded_units, AdapterCapabilities, CorpusSource, FnCorpus, ModalityAdapter, Registry, Representation,
     RepresentationBackend, Tokenizer, VecCorpus,
 };
 pub use kute_types::*;
@@ -233,11 +233,29 @@ impl Engine {
 
     /// Like [`Engine::decode_raw`], but refuses before decoding when the
     /// sequence would expand to more than `max_units` bytes or symbols.
+    ///
+    /// For a symbol vocabulary this bounds the number of symbols and not
+    /// their size: a symbol can be a kilobyte long, and an escaped one is
+    /// chosen by whoever made the sequence. For a sequence from a party you
+    /// do not trust, use [`Engine::decode_raw_within`].
     pub fn decode_raw_bounded(&self, tokenizer: &dyn Tokenizer, tokens: &TokenSequence, max_units: u64) -> Result<Vec<u8>> {
+        self.decode_raw_within(tokenizer, tokens, max_units, u64::MAX)
+    }
+
+    /// Like [`Engine::decode_raw_bounded`], and also refuses before
+    /// decoding when the decoded content comes to more than `max_bytes`:
+    /// the bytes of a byte vocabulary, or the names of the symbols of a
+    /// symbol vocabulary. What an adapter writes around each name (a few
+    /// bytes of JSON) is not counted.
+    pub fn decode_raw_within(&self, tokenizer: &dyn Tokenizer, tokens: &TokenSequence, max_units: u64, max_bytes: u64) -> Result<Vec<u8>> {
         let vocabulary = tokenizer.vocabulary().ok_or_else(|| KuteError::NotTrained("tokenizer has no vocabulary".into()))?;
         let units = kute_core::decoded_units(vocabulary, tokens)?;
         if units > max_units {
             return Err(KuteError::LimitExceeded(format!("the sequence decodes to {units} units; the budget is {max_units}")));
+        }
+        let bytes = kute_core::decoded_bytes_at_least(vocabulary, tokens)?;
+        if bytes > max_bytes {
+            return Err(KuteError::LimitExceeded(format!("the sequence decodes to at least {bytes} bytes; the budget is {max_bytes}")));
         }
         self.decode_raw(tokenizer, tokens)
     }
