@@ -18,115 +18,115 @@
   "header_says_byte_exact": false
  },
  "container": {
-  "bytes": 1790408,
-  "pack_seconds": 8.65,
-  "unpack_seconds": 0.69,
+  "bytes": 1274960,
+  "pack_seconds": 32.41,
+  "unpack_seconds": 0.73,
   "time_order": "source",
   "columns": [
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "json",
     "name": "@names",
     "raw": 218,
-    "stored": 88
+    "stored": 92
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "json",
     "name": "@shapes",
     "raw": 49,
-    "stored": 53
+    "stored": 54
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "varint",
     "name": "@shape",
     "raw": 638947,
-    "stored": 642
+    "stored": 37
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "json",
     "name": "@entities",
     "raw": 184157,
-    "stored": 77088
+    "stored": 34281
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "varint",
     "name": "@entity",
     "raw": 1565919,
-    "stored": 449986
+    "stored": 332030
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "varint",
     "name": "@symbols",
     "raw": 638947,
-    "stored": 59030
+    "stored": 49737
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "delta",
     "name": "@time",
     "raw": 641745,
-    "stored": 128375
+    "stored": 112512
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "json",
     "name": "f:fits",
     "raw": 3194842,
-    "stored": 4979
+    "stored": 856
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "json",
     "name": "f:host",
     "raw": 5111575,
-    "stored": 7465
+    "stored": 446
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "json",
     "name": "f:params",
     "raw": 19894609,
-    "stored": 1055062
+    "stored": 743413
    },
    {
-    "codec": "zlib",
+    "codec": "zstd",
     "kind": "json",
     "name": "f:proc",
     "raw": 4472628,
-    "stored": 6533
+    "stored": 400
    }
   ]
  },
  "compressors_on_the_canonical_bytes": {
   "zlib -9": {
    "bytes": 3730572,
-   "seconds": 1.11,
-   "container_over_this": 0.48
+   "seconds": 1.81,
+   "container_over_this": 0.342
   },
   "xz -9": {
    "bytes": 3887204,
-   "seconds": 23.0,
-   "container_over_this": 0.461
+   "seconds": 74.58,
+   "container_over_this": 0.328
   },
   "xz -9e, dictionary to fit": {
    "bytes": 2059556,
-   "seconds": 205.03,
-   "container_over_this": 0.869
+   "seconds": 384.38,
+   "container_over_this": 0.619
   },
   "plain columns, xz -9 each": {
    "bytes": 1388904,
-   "seconds": 8.38,
-   "container_over_this": 1.289
+   "seconds": 7.23,
+   "container_over_this": 0.918
   },
   "zstd -19": {
    "bytes": 2785261,
-   "seconds": 75.26,
-   "container_over_this": 0.643
+   "seconds": 77.34,
+   "container_over_this": 0.458
   }
  },
  "note": "one run; the container's columns are zlib streams"

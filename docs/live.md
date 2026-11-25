@@ -89,6 +89,13 @@ window and nothing was dropped late or released early. `support_at_most`
 covers the undercount of the summary only; what folding and eviction
 lose is counted but not bounded.
 
+The entity limit matters most. An entity evicted between two of its
+events loses the sequence across the gap, so the limit should be above
+the number of entities active at once. On a replayed day of HDFS, with
+213,231 blocks and the default limit of 100,000, 5% of the patterns of
+an exact run were missed and some supports were far under; see
+`benchmarks/README.md`.
+
 ## Stopping and going on
 
 `--checkpoint FILE` saves the state each time `--checkpoint-every`

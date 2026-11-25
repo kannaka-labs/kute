@@ -281,6 +281,10 @@ enum EventsAction {
         /// Field naming the entity an event belongs to.
         #[arg(long, value_name = "FIELD")]
         group_field: Option<String>,
+        /// How columns are compressed: zstd, or zlib for a container that
+        /// needs only a zlib reader.
+        #[arg(long, default_value = "zstd")]
+        codec: String,
     },
     /// Write the records back as canonical JSON Lines, in source order.
     Unpack {
@@ -1142,9 +1146,9 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             live::run(live::Options { input, symbol_field, time_field, group_field, params, checkpoint, checkpoint_every, resume, skip_bad_lines })
         }
         Command::Events { action } => match action {
-            EventsAction::Pack { input, output, symbol_field, time_field, group_field } => {
+            EventsAction::Pack { input, output, symbol_field, time_field, group_field, codec } => {
                 let layout = kute_events::Layout { symbol_field, time_field, group_field };
-                let (container, report) = kute_events::pack(&std::fs::read(&input)?, &layout)?;
+                let (container, report) = kute_events::pack_with(&std::fs::read(&input)?, &layout, kute_events::Codec::parse(&codec)?)?;
                 std::fs::write(&output, &container)?;
                 print(&json!({ "output": output, "report": report }))
             }

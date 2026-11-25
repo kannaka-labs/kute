@@ -441,13 +441,18 @@ of JSON Lines, 575,061 blocks (report `results/events-container-hdfs.json`):
 
 | | bytes | of the JSON | time to write |
 |---|---:|---:|---:|
-| `kute events pack` | 13,660,465 | 2.1% | 59 s |
-| xz -9 | 23,144,380 | 3.6% | 242 s |
-| zstd -19 | 26,457,244 | 4.1% | 257 s |
-| zlib -9 | 34,820,525 | 5.4% | 13 s |
+| `kute events pack` (zstd columns, the default) | 11,995,521 | 1.9% | 96 s |
+| plain columns, xz -9 each | 12,956,032 | 2.0% | 76 s |
+| `kute events pack --codec zlib` (an earlier run) | 13,660,465 | 2.1% | 59 s |
+| xz -9e, dictionary of 256 MiB | 22,655,896 | 3.5% | 579 s |
+| xz -9 | 23,144,380 | 3.6% | 261 s |
+| zstd -19 | 26,457,244 | 4.1% | 232 s |
+| zlib -9 | 34,820,525 | 5.4% | 14 s |
 
-The container is 0.59 of xz and 0.39 of zlib. Unpacking took 5 s and gave
-the source back byte for byte.
+The container is 7% smaller than plain columns through xz and 0.53 of
+the tuned xz. Unpacking took 5 s and gave the source back byte for byte.
+Most of what is left is two columns that are close to incompressible:
+the 575,061 block ids (5.2 MB) and the times (5.4 MB).
 
 **OpenSSH** (Loghub-2.0), 638,947 log lines turned into records by
 `openssh_events.py`: time, host, process, pid, the template id as the
@@ -456,35 +461,41 @@ event name, and the text that fills the template's slots as `params`;
 
 | | bytes | of the JSON | time to write |
 |---|---:|---:|---:|
-| plain columns, xz -9 each | 1,388,904 | 1.8% | 8 s |
-| `kute events pack` | 1,790,408 | 2.3% | 11 s |
-| xz -9e, dictionary as large as the input | 2,059,556 | 2.7% | 205 s |
-| zstd -19 | 2,785,261 | 3.6% | 75 s |
-| zlib -9 | 3,730,572 | 4.8% | 1 s |
-| xz -9 | 3,887,204 | 5.0% | 23 s |
+| `kute events pack` (zstd columns, the default) | 1,274,960 | 1.6% | 32 s |
+| plain columns, xz -9 each | 1,388,904 | 1.8% | 7 s |
+| `kute events pack --codec zlib` (an earlier run) | 1,790,408 | 2.3% | 11 s |
+| xz -9e, dictionary as large as the input | 2,059,556 | 2.7% | 384 s |
+| zstd -19 | 2,785,261 | 3.6% | 77 s |
+| zlib -9 | 3,730,572 | 4.8% | 2 s |
+| xz -9 | 3,887,204 | 5.0% | 75 s |
 
 The records came back equal; the bytes differ from the source only in key
 order, which the source did not have sorted.
 
-**The container loses to the plainest column layout with a better
-codec.** "Plain columns" is one column per field, values in source order,
-no grouping by entity and no time differences, each column through
-xz -9: it is 22% smaller than the container. The reviewer found this;
-the first version of this section compared only with compressors run on
-the whole file at default settings and read better than it should have.
-A prototype of the container's own layout with xz in place of zlib came
-to about 1.33 MB on the same records, so grouping and differences are
-worth a few percent over plain columns, and the choice of codec is worth
-about a quarter. With the general compressor tuned (extreme preset,
-dictionary covering the whole input) the container is 0.87 of it, not
-0.46.
+**With zlib columns the container lost to the plainest column layout
+with a better codec.** "Plain columns" is one column per field, values in
+source order, no grouping by entity and no time differences, each column
+through xz -9. It is 22% smaller than the zlib container. The reviewer
+found this; the first version of this section compared only with
+compressors run on the whole file at default settings and read better
+than it should have.
+
+The default codec is now Zstandard, and with it the container is 8%
+smaller than plain columns through xz, and 0.62 of xz tuned as far as it
+goes (extreme preset, dictionary covering the whole input). Of the
+distance between the zlib container and the zstd one, nearly all is the
+codec. What the container's own layout (grouping names by entity, time
+as differences) adds over plain columns is those 8%, measured here with
+two different codecs on the two sides, so not cleanly.
+
+Unpacking took 0.7 s. The times in this table are from a run while
+another job was using the machine and are slower than a quiet run; the
+sizes do not depend on that.
 
 What this does and does not show:
 
-* Splitting records into columns is what helps, and it is not KUTE's
-  invention. zlib was chosen because it was already a dependency; these
-  numbers say it is the wrong codec for a format meant to be small. The
-  header names each column's codec so that another can be added.
+* Splitting records into columns and using a good codec is what helps,
+  and neither is KUTE's invention.
 * No vocabulary is trained or used, so none of this is a measurement of
   tokenization.
 * JSON Lines repeats every key on every line, which flatters any column
@@ -494,8 +505,75 @@ What this does and does not show:
   exact spacing and the year-less date, which became seconds.
 * Log-specific compressors and existing column formats were not run.
 * Two datasets, both logs, one run. Packing reads the whole input into
-  memory and runs at about 10 MB of JSON a second on this machine. The
-  HDFS table above has not yet been rerun with the two extra rows.
+  memory and runs at about 7 MB of JSON a second on this machine with
+  the default codec.
+
+## A day of events through `kute live` (after v0.7.0)
+
+`hdfs_clock.py` rebuilds HDFS_v1 from the raw log in the archive, so
+that every event has the log's own time: 11,175,629 events over 38.7
+hours, in the order written. Its event sequences agree with the
+archive's own traces for all 575,061 blocks (`results/hdfs-clock-report.json`).
+`live_replay.py` replays the first 24 hours, 4,202,850 events of
+213,231 blocks, as fast as they can be read, in hourly windows. One run
+of each, on the 8-thread laptop; report `results/live-replay-hdfs-24h.json`.
+
+| bounds | events a second | peak process memory | state reported, at most | bound computed | windows exact | entities evicted |
+|---|---:|---:|---:|---:|---:|---:|
+| small (2,000 sequences a length, 20,000 entities) | 579,000 | 29 MB | 2.2 MB | 43.8 MB | 0 of 24 | 825,330 |
+| the defaults (200,000 and 100,000) | 612,000 | 31 MB | 9.6 MB | 137.8 MB | 16 of 24 | 225,018 |
+| large enough to be exact | 616,000 | 31 MB | 20.6 MB | | 24 of 24 | 0 |
+
+Throughput includes reading and parsing the JSON. The computed bound is
+an estimate from table sizes at their limits, not a measurement, and the
+runs stayed far inside it; process memory was the same in all three, so
+most of it is not the counting state. Nothing was dropped late, released
+early or folded in any run; what the bounded runs lost, they lost by
+evicting entities.
+
+**Accuracy of the bounded runs**, each hourly window against the same
+window of the exact run, over the 200 strongest patterns of each:
+
+| bounds | exact patterns also reported | of the 20 strongest | largest undercount of a support | any support above the truth |
+|---|---:|---:|---:|---|
+| small | 63% | 53% | 96% | no |
+| the defaults | 95% | 70% | 77% | no |
+
+This is not good, and the reason is specific. A block's events are
+spread over a long time among those of many other blocks, so with fewer
+entity slots than blocks alive at once, a block is often evicted between
+two of its events and the sequence across the gap is never counted. The
+count tables were never full (the undercount bound of the summaries was
+zero throughout): the whole loss is eviction, which the report counts
+but puts no bound on. For data like this the entity limit has to be
+above the number of entities alive at once, and the report's
+`entities_evicted` is the figure to watch.
+
+**Against offline discovery.** The whole day as one window, with exact
+bounds, against `kute discover` on the same file: the same 200 patterns,
+the same supports, in the same order.
+
+**Restart.** A run killed after eight windows and resumed from its
+checkpoint gave the same 24 windows and the same totals as the run that
+was not interrupted. One window, written after the last checkpoint and
+before the kill, was written again by the resumed run. The checkpoint
+was 0.77 MB.
+
+**Out of order.** The log itself never steps back in time. Delivered
+shuffled instead, each event up to 30 seconds late (all but 2,828 of the
+events out of place), with 31 seconds of lateness allowed: nothing was
+dropped, and all 24 windows are identical to those of the same delivery
+sorted by time beforehand. They are not identical to the windows of the
+log in its own order, in any of the 24: the times are whole seconds,
+many events of a block share a second, and their order within the
+second is lost in the shuffle. Event time restores order only as finely
+as the timestamps resolve.
+
+Limits: one dataset, one run, one machine. It is a replay at full speed,
+not 24 hours of waiting, so it says nothing about a process that stays
+up for a day. The high-cardinality and unseen-symbol cases are tested on
+synthetic streams only (`crates/kute-discover/tests/watch.rs`); this log
+has 29 event names.
 
 ## Frozen, evolved and retrained event vocabularies (v0.6.0)
 

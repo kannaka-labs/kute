@@ -1,0 +1,15 @@
+{
+ "lines": 11175629,
+ "events": 11175629,
+ "no_block": 0,
+ "no_template": 0,
+ "time_went_back": 0,
+ "blocks": 575061,
+ "span_seconds": 139270,
+ "largest_step_back_seconds": 0,
+ "against_the_archive's_own_traces": {
+  "blocks_with_the_same_sequence": 575061,
+  "blocks_that_differ": 0,
+  "blocks_in_theirs_not_here": 0
+ }
+}

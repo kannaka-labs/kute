@@ -54,9 +54,17 @@ need not increase.
     "KUTE-EV1\n"  length of header (4 bytes, little-endian)  header (JSON)  columns
 
 The header lists the columns in order with their kind, their codec, their
-size before compression and their size in the file. The only codec so far
-is `zlib`: each column is one zlib stream. A reader refuses a codec it
-does not know.
+size before compression and their size in the file. A reader refuses a
+codec it does not know.
+
+| codec | a column is | written by |
+|---|---|---|
+| `zstd` | one Zstandard frame, window at most 128 MiB, no checksum of its own | `pack`, by default |
+| `zlib` | one zlib stream | `pack --codec zlib` |
+
+`zstd` is the smaller; `zlib` is for a container that must be readable
+with nothing but a zlib library. Both unpack to the same records and the
+same digest.
 
 | column | kind | holds |
 |---|---|---|

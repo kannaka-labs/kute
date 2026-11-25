@@ -18,70 +18,87 @@
   "header_says_byte_exact": true
  },
  "container": {
-  "bytes": 13660465,
-  "pack_seconds": 58.71,
-  "unpack_seconds": 5.11,
+  "bytes": 11995521,
+  "pack_seconds": 95.79,
+  "unpack_seconds": 5.23,
   "time_order": "entity",
   "columns": [
    {
+    "codec": "zstd",
     "kind": "json",
     "name": "@names",
     "raw": 164,
-    "stored": 74
+    "stored": 81
    },
    {
+    "codec": "zstd",
     "kind": "json",
     "name": "@shapes",
     "raw": 21,
-    "stored": 27
+    "stored": 30
    },
    {
+    "codec": "zstd",
     "kind": "varint",
     "name": "@shape",
     "raw": 11175629,
-    "stored": 10876
+    "stored": 361
    },
    {
+    "codec": "zstd",
     "kind": "json",
     "name": "@entities",
     "raw": 15170334,
-    "stored": 6044331
+    "stored": 5152560
    },
    {
+    "codec": "zstd",
     "kind": "varint",
     "name": "@entity",
     "raw": 33118392,
-    "stored": 1008186
+    "stored": 854812
    },
    {
+    "codec": "zstd",
     "kind": "varint",
     "name": "@symbols",
     "raw": 11175629,
-    "stored": 737852
+    "stored": 584984
    },
    {
+    "codec": "zstd",
     "kind": "delta",
     "name": "@time",
     "raw": 13097973,
-    "stored": 5858403
+    "stored": 5401875
    }
   ]
  },
  "compressors_on_the_canonical_bytes": {
   "zlib -9": {
    "bytes": 34820525,
-   "seconds": 13.19,
-   "container_over_this": 0.392
+   "seconds": 13.83,
+   "container_over_this": 0.344
   },
   "xz -9": {
    "bytes": 23144380,
-   "seconds": 241.89,
-   "container_over_this": 0.59
+   "seconds": 260.8,
+   "container_over_this": 0.518
+  },
+  "xz -9e, dictionary to fit": {
+   "bytes": 22655896,
+   "seconds": 579.12,
+   "container_over_this": 0.529
+  },
+  "plain columns, xz -9 each": {
+   "bytes": 12956032,
+   "seconds": 76.34,
+   "container_over_this": 0.926
   },
   "zstd -19": {
    "bytes": 26457244,
-   "seconds": 257.44,
-   "container_over_this": 0.516
+   "seconds": 231.63,
+   "container_over_this": 0.453
   }
  },
  "note": "one run; the container's columns are zlib streams"

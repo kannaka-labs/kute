@@ -250,3 +250,35 @@ fn a_container_with_something_left_over_is_refused() {
     let error = unpack(&changed, 1 << 20).unwrap_err().to_string();
     assert!(error.contains("after its compressed data"), "{error}");
 }
+
+#[test]
+fn both_codecs_give_the_same_records_and_an_unknown_one_is_refused() {
+    let mut source = String::new();
+    for i in 0..5000u32 {
+        source.push_str(&format!("{{\"event\":\"e{}\",\"id\":\"n{}\",\"t\":{},\"v\":\"value {}\"}}\n", i % 7, i % 13, i * 2, i % 17));
+    }
+    let (zstd, with_zstd) = kute_events::pack_with(source.as_bytes(), &layout(), kute_events::Codec::Zstd).unwrap();
+    let (zlib, with_zlib) = kute_events::pack_with(source.as_bytes(), &layout(), kute_events::Codec::Zlib).unwrap();
+    assert_eq!(pack(source.as_bytes(), &layout()).unwrap().0, zstd, "zstd is what pack writes");
+    assert_eq!(unpack(&zstd, LIMIT).unwrap(), source.as_bytes());
+    assert_eq!(unpack(&zlib, LIMIT).unwrap(), source.as_bytes());
+    assert_eq!(with_zstd.header.sha256, with_zlib.header.sha256);
+    assert!(with_zstd.header.columns.iter().all(|c| c.codec == kute_events::Codec::Zstd));
+    assert_ne!(zstd, zlib);
+
+    // The columns under a header that names another codec: one this
+    // reader does not have, and each of the two declared as the other.
+    let relabel = |container: &[u8], report: &kute_events::Packed, from: &str, to: &str| -> Vec<u8> {
+        let (_, start) = header(container).unwrap();
+        let text = serde_json::to_string(&report.header).unwrap().replace(from, to);
+        let mut out = Vec::new();
+        out.extend_from_slice(kute_events::MAGIC);
+        out.extend_from_slice(&(text.len() as u32).to_le_bytes());
+        out.extend_from_slice(text.as_bytes());
+        out.extend_from_slice(&container[start..]);
+        out
+    };
+    assert!(unpack(&relabel(&zstd, &with_zstd, "\"zstd\"", "\"lzma\""), LIMIT).is_err());
+    assert!(unpack(&relabel(&zstd, &with_zstd, "\"zstd\"", "\"zlib\""), LIMIT).is_err());
+    assert!(unpack(&relabel(&zlib, &with_zlib, "\"zlib\"", "\"zstd\""), LIMIT).is_err());
+}

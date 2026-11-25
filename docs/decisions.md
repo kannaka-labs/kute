@@ -679,9 +679,18 @@ and spacing do not, and the header says whether the source was already
 canonical, in which case the bytes are the same. Events stay in source
 order; the entity grouping that helps compression is undone on reading.
 
-Columns are compressed with zlib because it is already a dependency and
-is in every language's standard library. It is the weakest of the
-general compressors measured beside it; the layout does the work.
+Columns were first compressed with zlib, because it was already a
+dependency. Review showed what that cost: on the OpenSSH records the
+plainest column layout through xz was 22% smaller than the container.
+Columns are now Zstandard frames by default (level 19, a window that
+covers the column up to 128 MiB), which makes the container 8% smaller
+than that rival; zlib remains as `--codec zlib` for a container
+readable with nothing else. Every column names its codec. Zstandard is
+the workspace's first C dependency, through the `zstd` crate, which
+builds the library from bundled source: building `kute-events` or the
+command line now needs a C compiler. It was chosen over xz for its
+speed in both directions at nearly the same size. The other crates do
+not depend on it.
 
 Deliberately absent: the event names are not tokenized with a trained
 vocabulary. The container needs no vocabulary to read, which removes a

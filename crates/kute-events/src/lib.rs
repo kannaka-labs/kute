@@ -75,7 +75,22 @@ pub enum Kind {
 pub enum Codec {
     /// One zlib stream.
     Zlib,
+    /// One Zstandard frame, with a window of at most 128 MiB.
+    Zstd,
 }
+
+impl Codec {
+    pub fn parse(name: &str) -> Result<Self> {
+        match name {
+            "zlib" => Ok(Self::Zlib),
+            "zstd" => Ok(Self::Zstd),
+            other => Err(KuteError::InvalidConfig(format!("unknown codec {other:?}; use zstd or zlib"))),
+        }
+    }
+}
+
+/// The largest Zstandard window written, and the largest accepted: 2^27.
+const ZSTD_WINDOW_LOG: u32 = 27;
 
 /// One column as the header describes it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,6 +202,62 @@ fn deflate(raw: &[u8]) -> Result<Vec<u8>> {
     Ok(encoder.finish()?)
 }
 
+fn compress(raw: &[u8], codec: Codec) -> Result<Vec<u8>> {
+    match codec {
+        Codec::Zlib => deflate(raw),
+        Codec::Zstd => {
+            // A window that covers the column, up to the largest a reader
+            // accepts, with long-distance matching once the window is
+            // larger than the level would use by itself.
+            let window = (usize::BITS - raw.len().saturating_sub(1).leading_zeros()).clamp(10, ZSTD_WINDOW_LOG);
+            let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 19)?;
+            encoder.window_log(window)?;
+            encoder.long_distance_matching(window > 23)?;
+            encoder.include_checksum(false)?;
+            encoder.set_pledged_src_size(Some(raw.len() as u64))?;
+            encoder.write_all(raw)?;
+            Ok(encoder.finish()?)
+        }
+    }
+}
+
+/// About how small a column will be, for choosing between two ways of
+/// writing it. Quicker than [`compress`] and close enough to rank them.
+fn rough(raw: &[u8], codec: Codec) -> Result<usize> {
+    Ok(match codec {
+        Codec::Zlib => deflate(raw)?.len(),
+        Codec::Zstd => zstd::bulk::compress(raw, 6)?.len(),
+    })
+}
+
+/// Inflate one column to exactly its declared size, refusing a column
+/// that is longer, shorter, or followed by bytes it does not use.
+fn expand(stored: &[u8], column: &Column) -> Result<Vec<u8>> {
+    let bad = |why: String| damaged(format!("column {}: {why}", column.name));
+    let mut bytes = Vec::new();
+    let limit = column.raw.saturating_add(1);
+    let spare = match column.codec {
+        Codec::Zlib => {
+            let mut decoder = ZlibDecoder::new(stored);
+            decoder.by_ref().take(limit).read_to_end(&mut bytes).map_err(|e| bad(e.to_string()))?;
+            stored.len() as u64 - decoder.total_in()
+        }
+        Codec::Zstd => {
+            let mut decoder = zstd::stream::read::Decoder::with_buffer(stored).map_err(|e| bad(e.to_string()))?.single_frame();
+            decoder.window_log_max(ZSTD_WINDOW_LOG).map_err(|e| bad(e.to_string()))?;
+            decoder.by_ref().take(limit).read_to_end(&mut bytes).map_err(|e| bad(e.to_string()))?;
+            decoder.finish().len() as u64
+        }
+    };
+    if bytes.len() as u64 != column.raw {
+        return Err(damaged(format!("column {} does not inflate to its declared size", column.name)));
+    }
+    if spare != 0 {
+        return Err(damaged(format!("column {} has bytes after its compressed data", column.name)));
+    }
+    Ok(bytes)
+}
+
 /// A table of canonical JSON texts, numbered in order of first use.
 #[derive(Default)]
 struct Table {
@@ -253,6 +324,12 @@ pub struct Packed {
 /// else that is not a JSON object with the fields the layout requires is
 /// an error naming the line. Nothing is dropped or rounded.
 pub fn pack(source: &[u8], layout: &Layout) -> Result<(Vec<u8>, Packed)> {
+    pack_with(source, layout, Codec::Zstd)
+}
+
+/// [`pack`] with the codec chosen. `zlib` writes a container that needs
+/// nothing but a zlib reader; `zstd` writes a smaller one.
+pub fn pack_with(source: &[u8], layout: &Layout, codec: Codec) -> Result<(Vec<u8>, Packed)> {
     if layout.symbol_field.is_empty() {
         return Err(KuteError::InvalidConfig("the symbol field must be named".into()));
     }
@@ -362,8 +439,8 @@ pub fn pack(source: &[u8], layout: &Layout) -> Result<(Vec<u8>, Packed)> {
 
     let mut columns: Vec<(Column, Vec<u8>)> = Vec::new();
     let mut add = |name: String, kind: Kind, raw: Vec<u8>| -> Result<()> {
-        let stored = deflate(&raw)?;
-        columns.push((Column { name, kind, codec: Codec::Zlib, raw: raw.len() as u64, stored: stored.len() as u64 }, stored));
+        let stored = compress(&raw, codec)?;
+        columns.push((Column { name, kind, codec, raw: raw.len() as u64, stored: stored.len() as u64 }, stored));
         Ok(())
     };
     let varints = |values: &[u64]| {
@@ -393,7 +470,7 @@ pub fn pack(source: &[u8], layout: &Layout) -> Result<(Vec<u8>, Packed)> {
                 put_varint(&mut by_entity, zigzag(t.wrapping_sub(last[e])));
                 last[e] = t;
             }
-            if deflate(&by_entity)?.len() < deflate(&choice.1)?.len() {
+            if rough(&by_entity, codec)? < rough(&choice.1, codec)? {
                 choice = (TimeOrder::Entity, by_entity);
             }
         }
@@ -405,7 +482,7 @@ pub fn pack(source: &[u8], layout: &Layout) -> Result<(Vec<u8>, Packed)> {
         match field.whole {
             Some(whole) => {
                 let delta = delta_column(whole.into_iter());
-                if deflate(&delta)?.len() < deflate(&text)?.len() {
+                if rough(&delta, codec)? < rough(&text, codec)? {
                     add(format!("f:{name}"), Kind::Delta, delta)?;
                 } else {
                     add(format!("f:{name}"), Kind::Json, text)?;
@@ -537,15 +614,7 @@ pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
     let mut raw: HashMap<&str, (Kind, Vec<u8>)> = HashMap::new();
     for column in &header.columns {
         let stored = usize::try_from(column.stored).ok().filter(|&n| n <= container.len() - at).ok_or_else(|| damaged(format!("column {} runs past the end", column.name)))?;
-        let mut bytes = Vec::new();
-        let mut decoder = ZlibDecoder::new(&container[at..at + stored]);
-        decoder.by_ref().take(column.raw.saturating_add(1)).read_to_end(&mut bytes).map_err(|e| damaged(format!("column {}: {e}", column.name)))?;
-        if bytes.len() as u64 != column.raw {
-            return Err(damaged(format!("column {} does not inflate to its declared size", column.name)));
-        }
-        if decoder.total_in() != column.stored {
-            return Err(damaged(format!("column {} has bytes after its compressed data", column.name)));
-        }
+        let bytes = expand(&container[at..at + stored], column)?;
         at += stored;
         if raw.insert(column.name.as_str(), (column.kind, bytes)).is_some() {
             return Err(damaged(format!("column {} appears twice", column.name)));
