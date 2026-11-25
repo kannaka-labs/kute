@@ -178,6 +178,12 @@ original = engine.decode(tokens, vocabulary=vocab)
 Five worked use cases, each independent of the others, are in
 `docs/use-cases.md`.
 
+`examples/log-archive` is a separate application built on the published
+Python package: it archives a public 70 MB server log with an exact round
+trip and checks discovered event sequences on sessions it had not seen.
+Its README gives the commands to reproduce it and says what the numbers
+do and do not show.
+
 ## Layout
 
 ```
