@@ -465,7 +465,10 @@ impl Peer {
                 Ok(vec![Message::VocabAccept { digest }])
             }
             Message::Translate { id, container, to_digest } => {
-                let sequence = TokenSequence::from_bytes(&container)?;
+                // Every token decodes to at least one unit, so a container
+                // that declares more tokens than the unit limit is over it,
+                // and is refused before its ids are decompressed.
+                let sequence = TokenSequence::from_bytes_bounded(&container, self.policy.max_decoded_units)?;
                 let translated = self.translate(&sequence, &to_digest)?;
                 Ok(vec![Message::EncodedMessage { id, container: translated.to_bytes_compressed()? }])
             }
@@ -484,7 +487,7 @@ impl Peer {
                 if self.inbox.len() as u64 >= self.policy.max_inbox_messages {
                     return Ok(refuse(ErrorCode::Busy, format!("the inbox holds {} messages, its limit", self.inbox.len())));
                 }
-                let sequence = TokenSequence::from_bytes(&container)?;
+                let sequence = TokenSequence::from_bytes_bounded(&container, self.policy.max_decoded_units)?;
                 let held = self.hold(&sequence.vocabulary_digest)?;
                 let units = kute::decoded_units(&held.vocabulary, &sequence)?;
                 let bytes = self.engine.decode_raw_bounded(held.tokenizer.as_ref(), &sequence, self.policy.max_decoded_units)?;
