@@ -691,7 +691,14 @@ KUTE trained in 4.06 s (3.95 to 6.01) and `tokenizers` in 69.9 s (65.8 to
 counts. The ranges are wider than in the 0.6.0 run because other work ran
 on the machine for a few minutes during this one. The medians agree with
 the earlier run: nothing in 0.7.0 changed the speed of training or
-encoding.
+encoding. This disturbed run is not one to quote; the 0.6.0 laptop run
+above is the clean one.
+
+The reviewer repeated the desktop run with the same 0.7.0 package (report
+`results/tokenizers-enwik8-10runs-matched-isolated-v0.7.0-desktop.json`):
+KUTE 1.94 s (1.87 to 1.96), `tokenizers` 7.73 s (7.68 to 7.92), encoding
+0.138 s against 0.789 s for a batch of lines, the same token counts. Four
+times to train, as on 0.6.0.
 
 What can be said: with one training per process, KUTE trained this
 vocabulary about 4 times faster on a 24-thread desktop and about 16 times
