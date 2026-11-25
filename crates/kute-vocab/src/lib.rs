@@ -139,6 +139,14 @@ pub struct Summary {
     pub corpus_fingerprints: Vec<String>,
     pub license: Option<String>,
     pub generator: String,
+    /// For an evolved vocabulary, the digest of the one it was derived
+    /// from. The parent's own record is in the parent, not copied here.
+    pub parent: Option<String>,
+}
+
+/// The digest of the vocabulary `v` was evolved from, if it was evolved.
+pub fn parent_digest(v: &Vocabulary) -> Option<String> {
+    v.provenance.training.as_ref()?.get("evolved_from")?.get("digest")?.as_str().map(str::to_string)
 }
 
 pub fn summarize(v: &Vocabulary) -> Result<Summary> {
@@ -166,6 +174,7 @@ pub fn summarize(v: &Vocabulary) -> Result<Summary> {
         test_vectors: v.test_vectors.len(),
         statistics: v.statistics.clone(),
         corpus_fingerprints: v.provenance.corpus_fingerprints.clone(),
+        parent: parent_digest(v),
         license: v.provenance.license.clone(),
         generator: v.manifest.generator.clone(),
     })

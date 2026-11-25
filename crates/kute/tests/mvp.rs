@@ -723,7 +723,7 @@ fn an_evolved_sequence_is_used_where_the_parent_merges_inside_it() {
     assert_eq!(child.tokens.len(), parent.tokens.len() + 1);
     // the digest must not depend on which release ran the step
     assert_eq!(child.manifest.generator, kute::bpe::sequence::EVOLVE_GENERATOR);
-    assert_eq!(kute::bpe::sequence::EVOLVE_GENERATOR, "kute evolve-2");
+    assert_eq!(kute::bpe::sequence::EVOLVE_GENERATOR, "kute evolve-3");
     assert_eq!(&child.tokens[..parent.tokens.len()], &parent.tokens[..]);
     let tokenizer = engine.tokenizer(child).unwrap();
     let after = tokenizer.encode(&CanonicalInput::symbols(pattern)).unwrap();
@@ -892,4 +892,37 @@ fn the_registry_checks_identity_even_when_an_algorithm_does_not() {
     // sealed over its real content: accepted
     vocab.seal().unwrap();
     assert!(engine.tokenizer(vocab).is_ok());
+}
+
+/// B7 of the v0.7 specification: an evolved vocabulary names its parent by
+/// digest and does not carry the parent's record, so a long line of
+/// descent costs each generation the same.
+#[test]
+fn lineage_is_a_chain_of_digests_and_does_not_grow_with_depth() {
+    let engine = Engine::new();
+    let text = concat!(r#"{"event":"START"}"#, "\n", r#"{"event":"HEAT"}"#, "\n", r#"{"event":"DONE"}"#, "\n").repeat(40);
+    let root = engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &[text.into_bytes()], &config("test:lineage", 8)).unwrap();
+    assert_eq!(vocab::parent_digest(&root), None);
+    assert_eq!(vocab::summarize(&root).unwrap().parent, None);
+    let record = |v: &Vocabulary| serde_json::to_string(&v.provenance.training).unwrap().len();
+    let mut line = vec![root];
+    let mut sizes = Vec::new();
+    for generation in 1..=6 {
+        let parent = line.last().unwrap();
+        let additions = vec![vec![format!("EVENT_{generation}")]];
+        let child = kute::bpe::sequence::evolve(parent, &additions, Version::parse(&format!("0.{}.0", generation + 1)).unwrap()).unwrap();
+        assert_eq!(vocab::parent_digest(&child), Some(parent.digest().unwrap()));
+        assert_eq!(vocab::summarize(&child).unwrap().parent, Some(parent.digest().unwrap()));
+        sizes.push(record(&child));
+        line.push(child);
+    }
+    assert!(sizes.iter().all(|s| *s == sizes[0]), "the record grew with depth: {sizes:?}");
+    // The line can be walked back from the last to the first by digest alone.
+    let by_digest: std::collections::BTreeMap<String, &Vocabulary> = line.iter().map(|v| (v.digest().unwrap(), v)).collect();
+    let (mut at, mut steps) = (line.last().unwrap(), 0);
+    while let Some(parent) = vocab::parent_digest(at) {
+        at = by_digest[&parent];
+        steps += 1;
+    }
+    assert_eq!((steps, at.digest().unwrap()), (6, line[0].digest().unwrap()));
 }

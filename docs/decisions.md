@@ -562,6 +562,26 @@ From the security review of ADR-0031 and ADR-0032 (pull request 20).
 This changes the behaviour of protocol 2 as first written on this branch;
 it has not been released, so the protocol number stays.
 
+## ADR-0034: An evolved vocabulary names its parent by digest only
+
+Evolution rule 2 wrote the parent's whole training record into the child
+(`parent_training`), and the parent's held its own parent's, so every
+generation carried all the earlier ones. Rule 3 (`kute evolve-3`) writes
+`evolved_from: {version, digest}` and the additions, nothing else. The
+parent's record is in the parent, which the digest identifies.
+`vocab::parent_digest` and the `parent` field of a summary read it.
+
+Provenance is inside the digest, so the same step gives a different child
+under rule 3 than under rule 2, and the rule has a new name. A peer on
+v0.6.0 already cannot talk to this one (protocol 1 against 2); the rule
+name makes the difference explicit for anything that compares digests.
+Vocabularies evolved under rule 2 stay valid files and load as before;
+`parent_digest` reads them too.
+
+Not done: nothing checks that the named parent exists or that the child
+really follows from it. Checking needs the parent and the additions, and
+both are available to whoever holds the parent: derive and compare.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

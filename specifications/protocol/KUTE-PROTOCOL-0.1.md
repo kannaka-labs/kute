@@ -96,15 +96,20 @@ vocabularies:
   the merges present so far, and while more than one token remains, the
   first two are joined by a new merge token and the sequence is encoded
   again. Afterwards the addition on its own encodes as one token;
-* the version is replaced, `generator` becomes `kute evolve-2` (the name of
+* the version is replaced, `generator` becomes `kute evolve-3` (the name of
   this rule, so that releases implementing it agree on the digest),
   `statistics.evolved_tokens` is set, and
   `provenance.training` becomes `{evolved_from: {version, digest},
-  additions, parent_training}`;
+  additions}`. The parent is named by digest and its own record is not
+  copied, so a child's size does not depend on how many generations
+  precede it;
 * expected ids of the embedded test vectors are recomputed.
 
+v0.6.0 implemented `kute evolve-2`, which derives the same tokens but
+copied the parent's training record into the child (`parent_training`);
+the digests differ, so it is a different rule.
 Releases up to v0.5.0 implemented an earlier rule (a left fold over the
-bare symbols, with `kute <release>` as generator). A peer on the earlier rule
+bare symbols, with `kute <release>` as generator). A peer on an earlier rule
 derives a different child. Under protocol 1 that was found only afterwards,
 when the digests differed. Under protocol 2 it is found first:
 `CAPABILITIES` lists the rules a peer implements in `evolution_rules`, an

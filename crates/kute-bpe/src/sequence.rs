@@ -371,8 +371,12 @@ impl Tokenizer for SequenceBpeTokenizer {
 /// the digest, so it names the rule of the evolution step and not the
 /// release that ran it: two releases that implement the same rule give the
 /// same child and the same digest. It changes only when the rule does.
-/// Rule 1 (v0.3.0 to v0.5.0) wrote `kute <release>` here.
-pub const EVOLVE_GENERATOR: &str = "kute evolve-2";
+/// Rule 1 (v0.3.0 to v0.5.0) wrote `kute <release>` here. Rule 2 (v0.6.0)
+/// derived the same tokens as rule 3 but copied the parent's whole training
+/// record into the child, so each generation carried all earlier ones; rule
+/// 3 records the parent by digest only. Provenance is part of the digest,
+/// so the two rules give different children and have different names.
+pub const EVOLVE_GENERATOR: &str = "kute evolve-3";
 
 /// Most additions one evolution step accepts.
 pub const MAX_ADDITIONS: usize = 65_536;
@@ -487,7 +491,6 @@ pub fn evolve(parent: &Vocabulary, additions: &[Vec<String>], version: kute_type
     child.provenance.training = Some(serde_json::json!({
         "evolved_from": { "version": parent.manifest.version.to_string(), "digest": parent.digest()? },
         "additions": additions,
-        "parent_training": parent.provenance.training,
     }));
     // Expected ids of the parent's test vectors may change under the new
     // merges; recompute them against the child.
