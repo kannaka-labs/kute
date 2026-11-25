@@ -119,6 +119,23 @@ impl Vocabulary {
     }
 
     /// Compare with another vocabulary by token content.
+    /// The next version of an event vocabulary (`sequence-bpe`): each
+    /// addition is a list of symbol names, one name for a new symbol or
+    /// several for a sequence. Every existing token keeps its id. The
+    /// child is checked against its test vectors before it is returned.
+    /// Whether the child is worth using is a separate question:
+    /// measure it (`kute shadow`).
+    #[pyo3(signature = (additions, *, version))]
+    fn evolve(&self, py: Python<'_>, additions: Vec<Vec<String>>, version: &str) -> PyResult<Self> {
+        let version = Version::parse(version).map_err(|e| PyValueError::new_err(format!("version {version:?}: {e}")))?;
+        let child = py.detach(|| kute::bpe::sequence::evolve(&self.inner, &additions, version)).map_err(err)?;
+        let report = kute::Engine::new().verify(&child).map_err(err)?;
+        if !report.ok() {
+            return Err(PyValueError::new_err(format!("the evolved vocabulary fails its test vectors: {}", report.failures.join("; "))));
+        }
+        Ok(Self::wrap(child))
+    }
+
     fn compare(&self, py: Python<'_>, other: &Vocabulary) -> PyResult<Py<PyAny>> {
         to_python(py, &vocab::compare(&self.inner, &other.inner).map_err(err)?)
     }
@@ -339,11 +356,93 @@ fn discover(
     to_python(py, &found)
 }
 
+fn events_codec(name: Option<&str>) -> PyResult<kute_events::Codec> {
+    name.map_or(Ok(kute_events::Codec::preferred()), kute_events::Codec::parse).map_err(err)
+}
+
+/// Pack JSON Lines of whole event records into a `KUTE-EV1` container.
+///
+/// `source` is `str` or `bytes`, one JSON object a line. `symbol_field`
+/// names the event; `time_field` (a whole number) and `group_field` (the
+/// entity) are optional. Returns `(container, report)`: the container as
+/// `bytes`, and a dict with the header and the sizes. Every field of
+/// every record is kept; `events_unpack` gives them back as canonical
+/// JSON in source order.
+#[pyfunction]
+#[pyo3(signature = (source, *, symbol_field, time_field=None, group_field=None, codec=None))]
+fn events_pack(
+    py: Python<'_>,
+    source: &Bound<'_, PyAny>,
+    symbol_field: String,
+    time_field: Option<String>,
+    group_field: Option<String>,
+    codec: Option<&str>,
+) -> PyResult<(Py<PyBytes>, Py<PyAny>)> {
+    let source = raw_bytes(source)?;
+    let layout = kute_events::Layout { symbol_field, time_field, group_field };
+    let codec = events_codec(codec)?;
+    let (container, report) = py.detach(|| kute_events::pack_with(&source, &layout, codec)).map_err(err)?;
+    Ok((PyBytes::new(py, &container).unbind(), to_python(py, &report)?))
+}
+
+/// The records of a `KUTE-EV1` container, as canonical JSON Lines.
+/// `max_bytes` bounds what a container may ask this process to hold.
+#[pyfunction]
+#[pyo3(signature = (container, *, max_bytes=1 << 30))]
+fn events_unpack(py: Python<'_>, container: &[u8], max_bytes: u64) -> PyResult<Py<PyBytes>> {
+    let records = py.detach(|| kute_events::unpack(container, max_bytes)).map_err(err)?;
+    Ok(PyBytes::new(py, &records).unbind())
+}
+
+/// The header of a `KUTE-EV1` container, without unpacking it.
+#[pyfunction]
+fn events_inspect(py: Python<'_>, container: &[u8]) -> PyResult<Py<PyAny>> {
+    to_python(py, &kute_events::header(container).map_err(err)?.0)
+}
+
+/// Pack a sequence of numbers into a `KUTE-SG1` container.
+///
+/// Without `max_error` every value comes back with the same bits. With
+/// it, every finite value comes back within that absolute error, checked
+/// on each value before the container is returned; values that are not
+/// finite still come back exactly. Returns `(container, report)`.
+#[pyfunction]
+#[pyo3(signature = (values, *, max_error=None, codec=None))]
+fn signals_pack(py: Python<'_>, values: Vec<f64>, max_error: Option<f64>, codec: Option<&str>) -> PyResult<(Py<PyBytes>, Py<PyAny>)> {
+    let mode = max_error.map_or(kute_signals::Mode::Exact, |max_error| kute_signals::Mode::Bounded { max_error });
+    let codec = codec.map_or(Ok(kute_signals::Codec::preferred()), kute_signals::Codec::parse).map_err(err)?;
+    let (container, report) = py.detach(|| kute_signals::pack_with(&values, mode, codec)).map_err(err)?;
+    Ok((PyBytes::new(py, &container).unbind(), to_python(py, &report)?))
+}
+
+/// The values of a `KUTE-SG1` container, as a list of float. A
+/// container that would give other values than its header promises is
+/// refused.
+#[pyfunction]
+#[pyo3(signature = (container, *, max_values=1 << 27))]
+fn signals_unpack(py: Python<'_>, container: &[u8], max_values: u64) -> PyResult<Vec<f64>> {
+    py.detach(|| kute_signals::unpack(container, max_values)).map_err(err)
+}
+
+/// The header of a `KUTE-SG1` container: the contract, the bound, the
+/// largest error incurred and the hash of the values.
+#[pyfunction]
+fn signals_inspect(py: Python<'_>, container: &[u8]) -> PyResult<Py<PyAny>> {
+    to_python(py, &kute_signals::header(container).map_err(err)?)
+}
+
 #[pymodule(name = "kute")]
 fn kute_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Engine>()?;
     m.add_class::<Vocabulary>()?;
     m.add_function(wrap_pyfunction!(discover, m)?)?;
+    m.add_function(wrap_pyfunction!(events_pack, m)?)?;
+    m.add_function(wrap_pyfunction!(events_unpack, m)?)?;
+    m.add_function(wrap_pyfunction!(events_inspect, m)?)?;
+    m.add_function(wrap_pyfunction!(signals_pack, m)?)?;
+    m.add_function(wrap_pyfunction!(signals_unpack, m)?)?;
+    m.add_function(wrap_pyfunction!(signals_inspect, m)?)?;
+    m.add("ZSTD", kute_events::Codec::Zstd.available())?;
     m.add("__version__", kute::KUTE_VERSION)?;
     m.add("KVF_VERSION", kute::KVF_VERSION)?;
     Ok(())
