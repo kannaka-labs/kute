@@ -4,7 +4,8 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.6, experimental. Formats and APIs may change before 1.0.
+Status: v0.7, experimental. Formats and APIs may change before 1.0;
+[docs/stability.md](docs/stability.md) says which, and how.
 
 ## Measured against Hugging Face `tokenizers`
 
@@ -39,7 +40,7 @@ the unreleased trainer on the `next` branch, KUTE trained in 4.2 s against
 pip install kute-engine
 ```
 
-## What works in v0.6
+## What works in v0.7
 
 * A Rust workspace with a generic tokenizer interface and a registry, so new
   algorithms and adapters plug in without changes to the core.
@@ -72,8 +73,22 @@ Added in v0.3:
   or sequences appended and every existing token id unchanged.
 * `kute peer serve` / `kute peer send`: two processes agree on a vocabulary
   by digest, transfer it if needed, extend it together and exchange encoded
-  messages with a receipt. No encryption or authentication. See
+  messages with a receipt. A peer takes nothing new from the other side
+  unless told to (`--accept-vocabularies`, `--accept-proposals`), bounds
+  what it will hold in all, and does not deliver a repeated message twice.
+  With `--tls-cert`, `--tls-key`, an authority file and `--allow
+  <fingerprint>`, the connection is TLS 1.3 with a certificate on both
+  sides and only the named peers are served. A plain socket has to be
+  asked for with `--insecure-plain`. A peer gives out vocabulary files,
+  answers and translations only when told to. See
   `specifications/protocol`.
+* `kute mcp --vocab file.kvf`: encode, decode, inspect, compare and
+  discover as Model Context Protocol tools on standard input and output.
+  Read-only: it works on the vocabularies it was started with and the data
+  in each call, with bounded inputs and outputs. See `docs/mcp.md`.
+* `kute_discover::live` (library only, a prototype): discovery over a
+  stream in state fixed in advance. Past its limits it approximates and
+  reports by how much; within them it equals offline discovery.
 * `kute train --stream-bytes`: training memory that does not grow with
   file size (227 MiB against 959 MiB on a 500 MB input), and a peak-memory
   figure in every training report.
@@ -110,6 +125,24 @@ Added in v0.5:
 * Python: `Engine.train(..., resume_from=, embed_test_vectors=)` and
   `kute.discover(records)`.
 
+Changed in v0.7 (the gates it was built against, with the evidence for
+each and the limitations, are in [docs/release-0.7.md](docs/release-0.7.md);
+what an upgrade from v0.6 has to change is in
+[docs/stability.md](docs/stability.md)):
+
+* Peers authenticate each other with mutual TLS, give nothing away unless
+  told to, and hold to budgets on vocabularies, tokens, inbox and decoded
+  bytes. The protocol number is 2.
+* An evolved vocabulary records its parent by digest (`kute evolve-3`),
+  and `kute evolve` warns when a step makes every token id a byte wider.
+* The JSON adapters refuse duplicate keys and numbers that would not
+  survive, instead of silently choosing.
+* `kute mcp`, streaming discovery (`kute_discover::live`, a prototype),
+  and `examples/log-archive`.
+* Measured: evolution on drifting data, a source-code corpus, and the
+  comparison with `tokenizers` under a matched configuration with one
+  training per process.
+
 Changed in v0.6:
 
 * `kute evolve` builds an added sequence over the parent's own encoding, so
@@ -125,8 +158,9 @@ Changed in v0.6:
 Version numbers here are the repository's own. Measured against the
 development directive of November 2026, v0.6 covers its items D02 to D05
 and D06 to D12 (D06 without a clean timing run); Studio, representation research and integrations
-(D13 to D15) are not built. The requirements document's "v0.2" (REST
-service, registry, MCP) is not built either.
+(D13 to D15) are not built. Of the requirements document's "v0.2" (REST
+service, registry, MCP), v0.7 has the MCP server; the REST service and the
+registry are not built.
 
 ## Quick start
 
@@ -162,6 +196,12 @@ original = engine.decode(tokens, vocabulary=vocab)
 
 Five worked use cases, each independent of the others, are in
 `docs/use-cases.md`.
+
+`examples/log-archive` is a separate application built on the published
+Python package: it archives a public 70 MB server log with an exact round
+trip and checks discovered event sequences on sessions it had not seen.
+Its README gives the commands to reproduce it and says what the numbers
+do and do not show.
 
 ## Layout
 

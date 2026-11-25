@@ -402,6 +402,233 @@ the corpus again; on 90 MB of text that was about 7 of the 17 seconds a
 whole run takes. `sequence-bpe` resumes the same way; the baseline
 algorithms cannot resume.
 
+## ADR-0029: The JSON adapters refuse what canonicalizing would change
+
+The `json`, `jsonl` and `jsonl-events` adapters parse a document and write
+it back in one canonical form. Two kinds of input have no single reading:
+an object that repeats a key, and a number that does not survive (an
+integer beyond 64 bits, a decimal with more digits than a double keeps).
+Until v0.6 the last value of a repeated key was kept and such numbers were
+rounded, both silently, so two different documents could become the same
+bytes and the same tokens.
+
+From v0.7 these inputs are refused with an error that names the key or the
+number. Keys are compared as decoded, so `"a"` and its escaped spelling
+count as one. A decimal is accepted when the double it parses to, written
+back, has the same significant digits: `2.50`, `25e-1` and `0.1` pass,
+`0.1000000000000000055` does not. The adapter option `strict=false`
+restores the earlier behaviour for data that cannot be fixed at the source.
+
+Canonical output is unchanged for every input that is still accepted, so no
+vocabulary digest or recorded vector changes. What changes is that some
+inputs accepted before now fail; that is the migration, and the option is
+the way through it. Not covered: numbers are still held as doubles or
+64-bit integers, so there is no exact decimal type, and `-0` is kept as a
+negative zero as before.
+
+Found later by the property tests over damaged input (gate AC-712): the
+JSON library's default number parser is fast and not always exact, so a
+number such as `1e61` could be written in canonical form, read back as the
+neighbouring double, and written differently. Canonical form was not a
+fixed point for those inputs. The library's exact parser (`float_roundtrip`)
+is now on for the whole workspace.
+
+## ADR-0030: The runtime's vocabulary is sealed where it is loaded
+
+A `Vocabulary` value is plain data with public fields, and its `digest()`
+returns the digest that was recorded. Code can change a field afterwards
+and the value will go on reporting the old digest. Making the fields
+private would break every caller that builds or inspects vocabularies, so
+the value stays open and the boundary is put where it matters: a tokenizer.
+
+`Registry::tokenizer_for`, which `Engine::tokenizer` and every binding go
+through, now checks after the algorithm's own `load` that the vocabulary
+the tokenizer holds carries a digest and that the digest is the hash of
+its content. A tokenizer hands out only shared references to what it
+holds, so from then on the two cannot part. The five built-in algorithms
+already refused a changed vocabulary; the check makes that a property of
+the runtime instead of each algorithm, plug-ins included.
+
+What this costs: one more hash of the vocabulary per load, about 17 ms for
+32,768 tokens on the development laptop (191 ms against 174 ms for a whole
+`kute encode` of a short file). It is paid once per tokenizer, not per
+message. In Python a `Vocabulary` object is frozen and compiles its
+tokenizer on first use, so one object is a persistent session.
+
+What it does not do: an unsealed `Vocabulary` passed around as a value is
+still only as trustworthy as the code that made it, and `digest()` on it
+is a record, not a proof. Code that receives one from outside should call
+`validate()` or load it.
+
+## ADR-0031: Exchange protocol 2: deny by default, budgets in all, the rule named, repeats answered once
+
+The directive for v0.7 asks that the exchange be safe to put in front of a
+peer that is not trusted. Four parts of that need no new dependency and
+are done together as protocol number 2:
+
+* **Deny by default.** `Policy::default()` took vocabularies from the other
+  side; it now takes neither vocabularies nor proposals. `kute peer serve`
+  has `--accept-vocabularies` in place of `--no-new-vocabularies`.
+* **Budgets in all.** Per-item limits did not stop a peer from being filled
+  one acceptable item at a time. There is now a limit on vocabularies held
+  and on tokens over all of them, applied when a vocabulary is announced,
+  again when it arrives, and to a proposal before it is derived; and a
+  limit on the messages and bytes waiting in the inbox, past which a
+  message is answered `busy` and not delivered.
+* **The evolution rule is negotiated.** v0.6.0 changed the rule, and peers
+  on the two rules found out only when their digests differed. The rule is
+  now listed in `CAPABILITIES` and named in `SYMBOL_PROPOSE`; a mismatch is
+  refused before derivation on both sides.
+* **A delivery contract.** A repeated message id with the same container
+  gets its first receipt again and is delivered once; with a different
+  container it is refused. The memory of ids is a bounded window.
+
+The protocol number went up instead of the new fields being optional,
+because a number 1 peer would send proposals without a rule and expect
+vocabularies to be taken by default; refusing it at `HELLO` says so at once.
+
+Not done here, and the reason the protocol is still not for untrusted
+networks: authentication and encryption (so policy is the same for every
+peer), limits on connections, rate and CPU time, and lineage by parent
+digest in place of the copied training record. Those are the next steps of
+the same work package.
+
+## ADR-0032: Peers are authenticated by mutual TLS, and policy follows the certificate
+
+The exchange needed to know who it is talking to before any of ADR-0031's
+policy could differ between peers. The choices were to add signatures to
+the protocol's own messages or to run it over an established authenticated
+transport. The second was taken: TLS 1.3 with a certificate on both sides,
+through `rustls` with its `ring` provider. It gives encryption, replay
+protection within a connection and authentication of both ends, and it is
+not something this project should write itself.
+
+`kute_protocol::tls` is behind the crate feature `tls`, on by default. It
+builds the two configurations, completes the handshake, and returns the
+stream together with the identity of the other side: the SHA-256 of its
+certificate. `Access` maps identities to policies and refuses anyone not
+listed, so being issued a certificate by the trusted authority is necessary
+but not sufficient. The name in `HELLO` stays a label.
+
+Cost: `rustls` and `ring` are new dependencies of the protocol crate and of
+the CLI (`ring` builds C and assembly). The engine crates do not depend on
+them. `rcgen` is a test dependency only; no certificate is shipped.
+
+`kute peer serve` and `kute peer send` take the certificate, key and
+authority files, `--allow <fingerprint>` names who may connect, and `kute
+peer fingerprint` prints the identity of a certificate. Without those
+options the commands still open a plain socket, and say so on stderr. A
+connection announces its own end (TLS `close_notify`) when dropped, and one
+that ends without that notice is an error to the reader, so a cut
+connection is not mistaken for a finished one.
+
+Identity is the certificate, not the key: a renewed certificate for the
+same key has a new fingerprint and has to be allowed again. Removing a
+fingerprint is the only revocation; no revocation list is checked.
+
+Not done: limits on connections and rate are still the caller's, and
+`kute peer serve` still serves one allowed connection and exits.
+
+## ADR-0033: A peer gives nothing away by default, and a plain socket has to be asked for
+
+From the security review of ADR-0031 and ADR-0032 (pull request 20).
+
+* A compressed container can hold thousands of times its size in ids, and
+  the peer inflated it before any limit. Containers from the other side
+  are now refused on the token count in their header
+  (`TokenSequence::from_bytes_bounded`), under `max_message_tokens`
+  (16 Mi by default) and the unit limit.
+* The default policy took nothing but gave everything: any ready peer
+  could fetch a held vocabulary by digest, ask about its symbols and have
+  sequences translated. `Policy` now has `give_vocabularies`,
+  `answer_queries` and `translate`, all off by default, and
+  `vocabularies`, the digests the other side may use at all. A vocabulary
+  that is held but not listed is answered exactly as one that is not
+  held. Delivering a message under a usable vocabulary is the one thing a
+  default peer does.
+* A proposal whose id and version are already held with other content is
+  answered `VOCABULARY_CONFLICT`. It is still derived first: a repeat of
+  the same proposal must be accepted again, and only the derivation tells
+  the two apart. The cost is bounded by the budget checks before it.
+* The inbox budget counts what the inbox keeps: decoded bytes, ids at four
+  bytes each, and the container.
+* `kute peer serve` with TLS refuses a connection that fails the
+  handshake, stalls in it, or is not allowed, and waits for the next one;
+  before, anyone who could reach the port could end the listener. Reads
+  and writes time out (`--timeout`, 30 seconds by default).
+* Without the TLS options, `kute peer serve` and `kute peer send` refuse
+  to run unless given `--insecure-plain`.
+
+This changes the behaviour of protocol 2 as first written on this branch;
+it has not been released, so the protocol number stays.
+
+## ADR-0034: An evolved vocabulary names its parent by digest only
+
+Evolution rule 2 wrote the parent's whole training record into the child
+(`parent_training`), and the parent's held its own parent's, so every
+generation carried all the earlier ones. Rule 3 (`kute evolve-3`) writes
+`evolved_from: {version, digest}` and the additions, nothing else. The
+parent's record is in the parent, which the digest identifies.
+`vocab::parent_digest` and the `parent` field of a summary read it.
+
+Provenance is inside the digest, so the same step gives a different child
+under rule 3 than under rule 2, and the rule has a new name. A peer on
+v0.6.0 already cannot talk to this one (protocol 1 against 2); the rule
+name makes the difference explicit for anything that compares digests.
+Vocabularies evolved under rule 2 stay valid files and load as before;
+`parent_digest` reads them too.
+
+Not done: nothing checks that the named parent exists or that the child
+really follows from it. Checking needs the parent and the additions, and
+both are available to whoever holds the parent: derive and compare.
+
+## ADR-0035: The MCP server is read-only, and lives in the CLI
+
+`kute mcp` offers encode, decode, inspect, compare and discover as Model
+Context Protocol tools on standard input and output (`docs/mcp.md`). The
+specification asks that training and publishing need explicit permission
+and quotas; here they are not offered at all, which is the strictest form
+of that and can be relaxed later with a design of its own. A tool call
+touches only the vocabularies the server was started with and the data in
+the call: no path is ever taken from a caller, so there is no file access
+to police.
+
+The protocol is small enough (four methods, line-delimited JSON) that it is
+written directly on `serde_json` and adds no dependency. It is a module of
+`kute-cli` and not a crate: one more crate to publish for 300 lines did not
+seem worth it, and the tools are the CLI's operations under other names,
+on the same engine.
+
+Not done: the HTTP transport, resources and prompts, and a REST surface.
+
+## ADR-0036: Streaming discovery holds a fixed amount of state and reports what it approximated
+
+`kute_discover::live::Live` takes events one at a time (entity, symbol)
+and counts each entity's contiguous sequences, in state bounded by its
+parameters: symbols known by name, sequences counted at each length,
+entities whose recent symbols are remembered. `state_bytes_bound` is a
+function of the parameters alone, and the report carries the state in use
+beside it.
+
+Counting uses the Misra-Gries summary because its error is one-sided and
+known exactly: a count is never above the truth, and the number of times
+the table was decremented is the most it can be short. Symbols past the
+limit are folded into one, and entities past the limit lose their recent
+symbols, least recently seen first. Those two lose sequences before they
+are counted; the report says how many events were folded and how many
+entities evicted, and gives no bound on what that cost.
+
+While no limit is reached the result equals offline `discover` for
+contiguous patterns (tested: same sequences, support and cohesion). State
+can be saved and restored; a restored run continues to the same state as
+an uninterrupted one, and a checkpoint is checked against its own bounds
+before it is loaded.
+
+This is the prototype the v0.7 specification asks for (C2a, AC-708), not
+C2: there are no gapped pairs, no event time or late-event policy, no
+windows that forget, no transport, no CLI, and the 24-hour replay with
+recorded throughput has not been run. The test streams are synthetic.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

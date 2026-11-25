@@ -1,0 +1,399 @@
+{
+  "data": "synthetic, seeded; see the script for the generator",
+  "seeds": 10,
+  "events_per_half_of_train_and_in_eval": 100000,
+  "settings": {
+    "frozen_size": 192,
+    "patterns_added_at_most": 32
+  },
+  "cases": {
+    "drifting": {
+      "dictionary": {
+        "vocabulary_tokens": {
+          "mean": 55,
+          "min": 55,
+          "max": 55
+        },
+        "tokens": {
+          "mean": 100000,
+          "min": 100000,
+          "max": 100000
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 23450.7,
+          "min": 20734,
+          "max": 25994
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.208,
+          "min": 1.175,
+          "max": 1.2528
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 2.489,
+          "min": 2.1393,
+          "max": 3.0205
+        }
+      },
+      "frozen": {
+        "vocabulary_tokens": {
+          "mean": 192,
+          "min": 192,
+          "max": 192
+        },
+        "tokens": {
+          "mean": 40683.6,
+          "min": 33107,
+          "max": 46744
+        },
+        "escaped_symbols": {
+          "mean": 15,
+          "min": 15,
+          "max": 15
+        },
+        "compressed_bytes": {
+          "mean": 19450.4,
+          "min": 16585,
+          "max": 22123
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        }
+      },
+      "evolved": {
+        "vocabulary_tokens": {
+          "mean": 255.7,
+          "min": 246,
+          "max": 277
+        },
+        "tokens": {
+          "mean": 31150.5,
+          "min": 26088,
+          "max": 36980
+        },
+        "escaped_symbols": {
+          "mean": 3.1,
+          "min": 0,
+          "max": 8
+        },
+        "compressed_bytes": {
+          "mean": 20152.5,
+          "min": 16376,
+          "max": 24072
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.0408,
+          "min": 0.927,
+          "max": 1.1565
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 0.7665,
+          "min": 0.6988,
+          "max": 0.8457
+        }
+      },
+      "retrained": {
+        "vocabulary_tokens": {
+          "mean": 192,
+          "min": 192,
+          "max": 192
+        },
+        "tokens": {
+          "mean": 27472.1,
+          "min": 23484,
+          "max": 30710
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 17503,
+          "min": 15118,
+          "max": 19498
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 0.9007,
+          "min": 0.8813,
+          "max": 0.9189
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 0.6777,
+          "min": 0.6244,
+          "max": 0.72
+        }
+      },
+      "retrained-larger": {
+        "vocabulary_tokens": {
+          "mean": 255.7,
+          "min": 246,
+          "max": 277
+        },
+        "tokens": {
+          "mean": 20047.3,
+          "min": 16772,
+          "max": 22695
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 17245.8,
+          "min": 13553,
+          "max": 22441
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 0.8877,
+          "min": 0.8118,
+          "max": 1.0578
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 0.4935,
+          "min": 0.4618,
+          "max": 0.514
+        }
+      },
+      "mined": {
+        "vocabulary_tokens": {
+          "mean": 270.7,
+          "min": 258,
+          "max": 287
+        },
+        "tokens": {
+          "mean": 27558.8,
+          "min": 25970,
+          "max": 30003
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 21126,
+          "min": 17536,
+          "max": 24162
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.0873,
+          "min": 0.9248,
+          "max": 1.1371
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 0.6838,
+          "min": 0.6026,
+          "max": 0.7844
+        }
+      }
+    },
+    "stationary": {
+      "dictionary": {
+        "vocabulary_tokens": {
+          "mean": 40,
+          "min": 40,
+          "max": 40
+        },
+        "tokens": {
+          "mean": 100000,
+          "min": 100000,
+          "max": 100000
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 21709.9,
+          "min": 19311,
+          "max": 23138
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.5013,
+          "min": 1.4735,
+          "max": 1.5351
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 5.7387,
+          "min": 5.3208,
+          "max": 6.4111
+        }
+      },
+      "frozen": {
+        "vocabulary_tokens": {
+          "mean": 192,
+          "min": 192,
+          "max": 192
+        },
+        "tokens": {
+          "mean": 17518.3,
+          "min": 15598,
+          "max": 18794
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 14478.1,
+          "min": 12643,
+          "max": 15674
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0
+        }
+      },
+      "evolved": {
+        "vocabulary_tokens": {
+          "mean": 227.2,
+          "min": 224,
+          "max": 231
+        },
+        "tokens": {
+          "mean": 17484.2,
+          "min": 15576,
+          "max": 18758
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 14485.8,
+          "min": 12649,
+          "max": 15685
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.0005,
+          "min": 0.9999,
+          "max": 1.001
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 0.9981,
+          "min": 0.9967,
+          "max": 0.9988
+        }
+      },
+      "retrained": {
+        "vocabulary_tokens": {
+          "mean": 192,
+          "min": 192,
+          "max": 192
+        },
+        "tokens": {
+          "mean": 17504.2,
+          "min": 15490,
+          "max": 18839
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 14478.6,
+          "min": 12636,
+          "max": 15723
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.0001,
+          "min": 0.9961,
+          "max": 1.0031
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 0.9991,
+          "min": 0.9931,
+          "max": 1.0028
+        }
+      },
+      "retrained-larger": {
+        "vocabulary_tokens": {
+          "mean": 227.2,
+          "min": 224,
+          "max": 231
+        },
+        "tokens": {
+          "mean": 16758.8,
+          "min": 14673,
+          "max": 18206
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 14454.6,
+          "min": 12587,
+          "max": 15731
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 0.9984,
+          "min": 0.9948,
+          "max": 1.0036
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 0.9562,
+          "min": 0.9407,
+          "max": 0.9691
+        }
+      },
+      "mined": {
+        "vocabulary_tokens": {
+          "mean": 254.2,
+          "min": 239,
+          "max": 268
+        },
+        "tokens": {
+          "mean": 21519.2,
+          "min": 19619,
+          "max": 22632
+        },
+        "escaped_symbols": {
+          "mean": 0,
+          "min": 0,
+          "max": 0
+        },
+        "compressed_bytes": {
+          "mean": 16333.5,
+          "min": 14637,
+          "max": 17921
+        },
+        "bytes_relative_to_frozen": {
+          "mean": 1.1365,
+          "min": 1.0464,
+          "max": 1.3321
+        },
+        "tokens_relative_to_frozen": {
+          "mean": 1.2316,
+          "min": 1.1792,
+          "max": 1.3084
+        }
+      }
+    }
+  }
+}

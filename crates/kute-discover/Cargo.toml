@@ -17,6 +17,4 @@ kute-types.workspace = true
 kute-core.workspace = true
 serde.workspace = true
 rustc-hash.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true

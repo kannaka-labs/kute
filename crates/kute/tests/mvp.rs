@@ -723,7 +723,7 @@ fn an_evolved_sequence_is_used_where_the_parent_merges_inside_it() {
     assert_eq!(child.tokens.len(), parent.tokens.len() + 1);
     // the digest must not depend on which release ran the step
     assert_eq!(child.manifest.generator, kute::bpe::sequence::EVOLVE_GENERATOR);
-    assert_eq!(kute::bpe::sequence::EVOLVE_GENERATOR, "kute evolve-2");
+    assert_eq!(kute::bpe::sequence::EVOLVE_GENERATOR, "kute evolve-3");
     assert_eq!(&child.tokens[..parent.tokens.len()], &parent.tokens[..]);
     let tokenizer = engine.tokenizer(child).unwrap();
     let after = tokenizer.encode(&CanonicalInput::symbols(pattern)).unwrap();
@@ -792,4 +792,137 @@ fn every_evolved_sequence_is_one_token_over_many_parents() {
             assert_eq!(tokenizer.decode(&ids).unwrap().payload, Payload::Symbols(addition.clone()), "round {round}");
         }
     }
+}
+
+/// AC-706/A1: whatever is done to a `Vocabulary` value, a tokenizer either
+/// refuses it or reports the digest of the content it encodes with.
+#[test]
+fn a_loaded_vocabulary_always_reports_the_digest_of_its_content() {
+    let engine = Engine::new();
+    let events = AdapterConfig::default();
+    let log = "{\"event\":\"A\"}
+{\"event\":\"B\"}
+{\"event\":\"A\"}
+{\"event\":\"B\"}
+".repeat(6);
+    let cases: Vec<(&str, &str, Vec<u8>, u32)> = vec![
+        ("bpe", "text", TEXT.repeat(3).into_bytes(), 300),
+        ("bytes", "binary", TEXT.as_bytes().to_vec(), 256),
+        ("char", "text", TEXT.as_bytes().to_vec(), 300),
+        ("dictionary", "jsonl-events", log.clone().into_bytes(), 16),
+        ("sequence-bpe", "jsonl-events", log.into_bytes(), 16),
+    ];
+    for (algorithm, adapter, data, size) in cases {
+        let vocab = engine.train(algorithm, adapter, &events, &[data], &config(&format!("test:seal:{algorithm}"), size)).unwrap();
+        let recorded = vocab.digest().unwrap();
+        assert_eq!(recorded, vocab.compute_digest().unwrap(), "{algorithm}");
+
+        // Loaded as trained: the tokenizer reports that digest.
+        let t = engine.tokenizer(vocab.clone()).unwrap();
+        assert_eq!(t.vocabulary().unwrap().digest().unwrap(), recorded, "{algorithm}");
+
+        // Changed after sealing, digest left in place: refused, whichever field.
+        let mut changes: Vec<(&str, Vocabulary)> = Vec::new();
+        let mut v = vocab.clone();
+        v.manifest.generator = "someone else".into();
+        changes.push(("generator", v));
+        let mut v = vocab.clone();
+        v.statistics.insert("made_up".into(), 1);
+        changes.push(("statistics", v));
+        let mut v = vocab.clone();
+        v.tokens.last_mut().unwrap().frequency = Some(123_456_789);
+        changes.push(("token frequency", v));
+        let mut v = vocab.clone();
+        v.provenance.corpus_fingerprints.push("sha256:00".into());
+        changes.push(("provenance", v));
+        for (what, changed) in changes {
+            assert_eq!(changed.digest().unwrap(), recorded, "{algorithm} {what}: the value still reports the old digest");
+            let err = engine.tokenizer(changed.clone()).err().unwrap_or_else(|| panic!("{algorithm}: a changed {what} was loaded"));
+            assert!(matches!(err, kute::KuteError::Integrity(_)), "{algorithm} {what}: {err}");
+
+            // The same change with the digest removed is a different
+            // vocabulary: it loads, under its own digest.
+            let mut unsealed = changed;
+            unsealed.integrity = None;
+            let t = engine.tokenizer(unsealed.clone()).unwrap();
+            let held = t.vocabulary().unwrap();
+            assert_eq!(held.digest().unwrap(), unsealed.compute_digest().unwrap(), "{algorithm} {what}");
+            assert_ne!(held.digest().unwrap(), recorded, "{algorithm} {what}");
+        }
+    }
+}
+
+/// The check is the registry's, so an algorithm whose `load` validates
+/// nothing still cannot run under a digest that is not its content's.
+#[test]
+fn the_registry_checks_identity_even_when_an_algorithm_does_not() {
+    use kute::{CanonicalInput, CorpusSource, TokenSequence, TokenizerCapabilities};
+    #[derive(Default)]
+    struct Careless(Option<Vocabulary>);
+    impl Tokenizer for Careless {
+        fn train(&mut self, _: &mut dyn CorpusSource, _: &TrainingConfig) -> kute::Result<Vocabulary> {
+            unimplemented!()
+        }
+        fn load(&mut self, vocabulary: Vocabulary) -> kute::Result<()> {
+            self.0 = Some(vocabulary);
+            Ok(())
+        }
+        fn encode(&self, _: &CanonicalInput) -> kute::Result<TokenSequence> {
+            unimplemented!()
+        }
+        fn decode(&self, _: &TokenSequence) -> kute::Result<CanonicalInput> {
+            unimplemented!()
+        }
+        fn vocabulary(&self) -> Option<&Vocabulary> {
+            self.0.as_ref()
+        }
+        fn capabilities(&self) -> TokenizerCapabilities {
+            unimplemented!()
+        }
+    }
+    let mut engine = Engine::new();
+    engine.registry_mut().register_algorithm("careless", || Box::new(Careless::default())).unwrap();
+    let mut vocab = text_vocab(&engine);
+    vocab.manifest.algorithm = "careless".into();
+    // stale digest: refused
+    assert!(matches!(engine.tokenizer(vocab.clone()).err().unwrap(), kute::KuteError::Integrity(_)));
+    // no digest, and the algorithm did not record one: refused
+    vocab.integrity = None;
+    assert!(matches!(engine.tokenizer(vocab.clone()).err().unwrap(), kute::KuteError::Integrity(_)));
+    // sealed over its real content: accepted
+    vocab.seal().unwrap();
+    assert!(engine.tokenizer(vocab).is_ok());
+}
+
+/// B7 of the v0.7 specification: an evolved vocabulary names its parent by
+/// digest and does not carry the parent's record, so a long line of
+/// descent costs each generation the same.
+#[test]
+fn lineage_is_a_chain_of_digests_and_does_not_grow_with_depth() {
+    let engine = Engine::new();
+    let text = concat!(r#"{"event":"START"}"#, "\n", r#"{"event":"HEAT"}"#, "\n", r#"{"event":"DONE"}"#, "\n").repeat(40);
+    let root = engine.train("sequence-bpe", "jsonl-events", &AdapterConfig::default(), &[text.into_bytes()], &config("test:lineage", 8)).unwrap();
+    assert_eq!(vocab::parent_digest(&root), None);
+    assert_eq!(vocab::summarize(&root).unwrap().parent, None);
+    let record = |v: &Vocabulary| serde_json::to_string(&v.provenance.training).unwrap().len();
+    let mut line = vec![root];
+    let mut sizes = Vec::new();
+    for generation in 1..=6 {
+        let parent = line.last().unwrap();
+        let additions = vec![vec![format!("EVENT_{generation}")]];
+        let child = kute::bpe::sequence::evolve(parent, &additions, Version::parse(&format!("0.{}.0", generation + 1)).unwrap()).unwrap();
+        assert_eq!(vocab::parent_digest(&child), Some(parent.digest().unwrap()));
+        assert_eq!(vocab::summarize(&child).unwrap().parent, Some(parent.digest().unwrap()));
+        sizes.push(record(&child));
+        line.push(child);
+    }
+    assert!(sizes.iter().all(|s| *s == sizes[0]), "the record grew with depth: {sizes:?}");
+    // The line can be walked back from the last to the first by digest alone.
+    let by_digest: std::collections::BTreeMap<String, &Vocabulary> = line.iter().map(|v| (v.digest().unwrap(), v)).collect();
+    let (mut at, mut steps) = (line.last().unwrap(), 0);
+    while let Some(parent) = vocab::parent_digest(at) {
+        at = by_digest[&parent];
+        steps += 1;
+    }
+    assert_eq!((steps, at.digest().unwrap()), (6, line[0].digest().unwrap()));
 }

@@ -386,6 +386,47 @@ with a small number; the name table that needs is not counted.
   by `protoc`. Records here hold event names only; timestamps and other
   fields, which these formats are built to carry, are not in the comparison.
 
+## External datasets, and source code (after v0.6.0)
+
+Three datasets that this project did not make are used in these notes.
+They differ in kind, not only in size:
+
+| dataset | what it is | held-out part | where it is used |
+|---|---|---|---|
+| enwik8 | 100 MB of an English Wikipedia dump: prose with XML markup | last 10 MB | compressors, `tokenizers`, `tiktoken` comparisons |
+| HDFS_v1 | block traces of a Hadoop file system, 30 event names | 1,766,436 events | discovery, timing, evolution, compressors |
+| CPython 3.12.7 `Lib` | 1,786 Python source files, 32.5 MB | every tenth file, 2.5 MB | this section |
+
+The code corpus is built by `benchmarks/code_corpus.py` from the release
+tarball (SHA-256 `73ac8fe7...2ab623`): whole files, sorted by path, every
+tenth to the held-out side, three files that are not UTF-8 left out. A
+byte-level BPE vocabulary of 32,768 tokens was trained on the 30.0 MB
+training side with the default split, and the held-out files were encoded
+with it and decoded back exactly: 596,162 tokens for 2,525,866 bytes, 4.24
+bytes per token. Sizes against general-purpose compressors on the same
+held-out bytes (`results/compressors-cpython-lib.json`; one run, sizes
+only):
+
+| method | bytes | shared in advance | ratio | ratio counting what is shared |
+|---|---:|---:|---:|---:|
+| zstd -19 with a 1 MiB dictionary trained on the training side | 401,925 | 1,048,576 | 6.28 | 1.74 |
+| xz -9 | 419,968 | 0 | 6.01 | 6.01 |
+| zstd -19 | 429,227 | 0 | 5.89 | 5.89 |
+| zstd -19 with a 110 KiB trained dictionary | 443,337 | 112,640 | 5.70 | 4.54 |
+| **KUTE compressed container** | 473,280 | 147,575 | 5.34 | 4.07 |
+| gzip -9 | 522,394 | 0 | 4.84 | 4.84 |
+| zstd -3 | 551,107 | 0 | 4.58 | 4.58 |
+
+As on enwik8, the KUTE container is larger than what `xz` and `zstd -19`
+make of the same bytes with nothing shared: 13% and 10% larger here. A
+tokenizer is not a compressor, and on text and code it does not compete
+with one on size. The token count is what it is for.
+
+Limits: one release of one project in one language; the held-out files
+come from the same code base as the training files, written by the same
+people, so this is the easy case for a learned vocabulary. Not compared
+with `tiktoken` or `tokenizers` on this corpus yet, and nothing was timed.
+
 ## Frozen, evolved and retrained event vocabularies (v0.6.0)
 
 `benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by
@@ -432,6 +473,56 @@ Limits: one dataset, one split, one run per row; HDFS_v1 has 30 event names
 and its late half looks much like its early half, so this says nothing about
 data that drifts. Delta encoding, which the directive lists for this row, has
 nothing to work on here: the events are names without values.
+
+## The same matrix on data that drifts (synthetic)
+
+The HDFS run could not say what a frozen vocabulary costs when the data
+changes, because that data does not change. `benchmarks/evolution_drift.py`
+makes data that does. **It is synthetic**, generated from a seed: events
+come in fixed procedures of three to seven event names, with noise between
+them; halfway through the training events the set of procedures changes
+(12 of 25 kept, 18 new ones, 15 new event names), and the held-out events
+come from after the change. The control is the same generator with no
+change. `evolution_matrix.py` is run unchanged on each, for ten seeds;
+100,000 held-out events per run. Every row decoded to its input.
+
+Frozen vocabulary of 160 tokens, means over ten seeds with the least and
+greatest in brackets, relative to the frozen vocabulary of the same run
+(report `results/evolution-drift-synthetic-160.json`):
+
+| vocabulary | tokens in vocabulary | drifting: tokens out | drifting: bytes | no drift: tokens out | no drift: bytes |
+|---|---:|---:|---:|---:|---:|
+| frozen on the early half | 160 | 1 | 1 | 1 | 1 |
+| evolved: frozen plus up to 32 discovered patterns | 224 / 196 | 0.77 (0.70 to 0.85) | 0.94 (0.92 to 0.97) | 1.00 | 1.00 |
+| retrained on everything, size of frozen | 160 | 0.81 (0.76 to 0.85) | 0.94 (0.93 to 0.96) | 1.00 | 1.00 |
+| retrained on everything, size of evolved | 224 / 196 | 0.56 (0.52 to 0.63) | 0.85 (0.84 to 0.88) | 0.92 | 0.99 |
+| dictionary, one token per event name | 55 / 40 | 2.47 | 1.21 | 5.34 | 1.49 |
+
+What this shows, on this generator:
+
+- With drift, the frozen vocabulary met event names it had never seen (15
+  per run, carried by escape) and cost 6% more bytes and about a quarter
+  more tokens than either remedy.
+- Evolving it, without changing any existing token id, did about as well
+  as retraining at the frozen size: 23% fewer tokens and 6% fewer bytes
+  than frozen. Retraining at the size the evolved vocabulary reached was
+  better still (15% fewer bytes), so evolving is not free: it spends its
+  added tokens less well than training from scratch does.
+- Without drift, evolving and retraining changed nothing, as on HDFS.
+
+**Evolving can make things worse.** At a frozen size of 192 the evolved
+vocabulary reached 246 to 277 tokens (report
+`results/evolution-drift-synthetic.json`). In the five seeds where it
+passed 256, a token id no longer fit one byte and the evolved vocabulary
+cost up to 16% more bytes than the frozen one, with fewer tokens; over the
+ten seeds it averaged 4% more bytes (0.93 to 1.16) and 23% fewer tokens.
+`kute evolve` did not warn when a step crossed that line when this was
+measured; it does now.
+
+Limits: synthetic data from one generator, whose drift is a clean switch;
+real processes change in other ways and by other amounts. One vocabulary
+size per table, one evolution step, one run per seed. Nothing here
+measures what an evolved vocabulary is worth to anything downstream.
 
 ## Against Hugging Face `tokenizers` on text (v0.5.0)
 
@@ -496,14 +587,36 @@ trainer gains little from more threads here, while `tokenizers` gets a
 large part of its training speed from them. That is why the training gap
 narrows on the 24-thread machine.
 
+After v0.6.0 the trainer counts the chunks of a long text on every core
+(the merging that follows is still one thread). The vocabulary is the same.
+On the laptop, ten runs with a wheel built from that change (report
+`results/tokenizers-enwik8-10runs-parallel-count.json`): KUTE trained in a
+median of 12.3 s (range 11.2 to 21.2) while `tokenizers`, in the same
+alternating runs, took 31.5 s (30.0 to 88.0). The machine was busier than
+during the table above (`tokenizers` took 27.0 s there), so compare the
+ratio and not the seconds: about 2.6 against 1.8 before. Counting was about
+8 s of a run and is now about 3 s; the rest of training does not use more
+threads yet. Not yet run on the 24-thread machine.
+
+A second change, also after v0.6.0, is in the merging itself: when a pair
+is merged, only the pairs next to it in each word are recounted, where
+before every pair of the word was. The vocabulary is again the same, and a
+test checks the trainer against one that recounts everything before each
+merge. On the laptop, ten runs (report
+`results/tokenizers-enwik8-10runs-local-merge.json`): KUTE trained in a
+median of 4.0 s (range 3.9 to 4.8) and `tokenizers` in 27.0 s (26.0 to
+64.7), a ratio of about 6.7. Encoding was unchanged (0.29 s against 2.66 s
+for a batch of lines). One machine; not yet run on the 24-thread one, where
+`tokenizers` trains in about 10.8 s.
+
 ### The same split on both sides
 
 The tables above compare each library with its default split. `hf_repeat.py
 --matched` gives `tokenizers` KUTE's split pattern (the GPT-4 one, pieces
 isolated, then bytes), so both learn byte-level BPE over the same pieces.
 On a 3 MB sample the two produce the same 59,141 distinct pieces. Laptop,
-ten alternating runs, KUTE built from the `next` branch, whose trainer is
-faster than the released one and gives the same vocabulary (report `results/tokenizers-enwik8-10runs-matched.json`):
+ten alternating runs, KUTE built from `next` after the two trainer changes
+above (report `results/tokenizers-enwik8-10runs-matched.json`):
 
 | | KUTE | tokenizers 0.23.2, KUTE's split |
 |---|---:|---:|
@@ -519,6 +632,67 @@ faster than the released one and gives the same vocabulary (report `results/toke
 * The speed difference does not depend on the split: `tokenizers` took
   27.0 s with its own and 29.9 s with KUTE's.
 * One machine, not idle (see the ranges), one dataset.
+
+### The training time of `tokenizers` depends on what its process did before
+
+The run above trained both libraries repeatedly in one process. The
+reviewer found on a desktop that this changes the result, so
+`hf_repeat.py` now starts a new process for every training, one library
+per process (`--shared-process` keeps the old method). Same laptop, same
+data, matched split, ten runs
+(`results/tokenizers-enwik8-10runs-matched-isolated.json`):
+
+| | KUTE | tokenizers 0.23.2, KUTE's split |
+|---|---:|---:|
+| train, new process each time | 4.0 s (3.9 to 4.2) | 64.4 s (61.4 to 69.5) |
+| encode, one document | 0.28 s | 8.17 s |
+| encode, batch of lines | not run | 3.35 s (3.32 s without offsets) |
+
+`tokenizers` trains about twice as slowly in a new process here as it did
+in the shared one. Three further single runs on the laptop say where that
+comes from:
+
+| what the process did before the training | tokenizers train |
+|---|---:|
+| nothing (three trainings in a row, no encoding) | 68.5, 70.2, 69.8 s |
+| its own encodes of the 10 MB held-out text | 36.7 s |
+| then one KUTE training as well | 34.5 s |
+
+So the faster figure follows `tokenizers`' own large encodes, with or
+without KUTE in the process; a small `encode_batch` beforehand does not
+do it (75.7 s). The cause is not established. On the reviewer's desktop
+the effect has the other sign: 6.9 s for a first training, 11.0 s for
+later ones, and 15 s when sharing a process with KUTE. KUTE's own time
+moves much less (4.0 s here either way; 1.95 s first and 3.2 s later on
+the desktop).
+
+The reviewer then ran the new method on the desktop (24 threads; report
+`results/tokenizers-enwik8-10runs-matched-isolated-desktop.json`), ten
+runs, one training per process:
+
+| | KUTE | tokenizers 0.23.2, KUTE's split |
+|---|---:|---:|
+| train | 1.89 s (1.84 to 1.97) | 7.80 s (7.56 to 7.94) |
+| encode, one document | 0.134 s | 0.82 s |
+| tokens for the held-out text | 2,551,171 | 2,571,668 |
+
+The laptop was then watched through one isolated `tokenizers` training
+(62.0 s), sampled every four seconds: all eight logical processors busy
+for the whole training, the processor at a steady 2.3 times its nominal
+1.3 GHz from start to end (no throttling), 12 GB of 32 GB free throughout,
+no pages read from disk, mains power, the Balanced plan. So the three
+ordinary explanations are ruled out: the laptop (4 cores, 8 threads,
+i7-1065G7) really does take a minute.
+
+What can be said: with one training per process, KUTE trained this
+vocabulary about 4 times faster on a 24-thread desktop and about 16 times
+faster on an 8-thread laptop, each with narrow ranges over ten runs.
+`tokenizers` is 8 times slower on the laptop than on the desktop where
+KUTE is 2 times slower, so the gap between the libraries is wider on the
+smaller machine. Two machines do not make a rule, and one thing is still
+unexplained: on the laptop a `tokenizers` training takes half as long
+after the same process has encoded a large batch. Quote the range and the
+machines, not one number. Encoding does not show the effect.
 
 How to read it:
 

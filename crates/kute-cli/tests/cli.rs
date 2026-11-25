@@ -175,13 +175,22 @@ fn use_case_4_industrial_events() {
     assert_eq!(read(&dir, "industrial-0.2-back.kvf"), read(&dir, "industrial-0.2.kvf"));
     ok(&dir, &["encode", "--vocab", "industrial-0.2.kvf", "--input", "novel.jsonl", "--output", "novel-0.2.kute"]);
     assert!(fails(&dir, &["evolve", "--vocab", "industrial.kvf", "--add", "X", "--new-version", "0.0.1", "--output", "bad.kvf"]).contains("greater"));
+    // A step that takes the vocabulary past 256 tokens says so; a small one does not.
+    assert_eq!(evolved["warnings"], serde_json::json!([]));
+    let many: Vec<String> = (0..260).map(|i| format!("NEW_EVENT_{i}")).collect();
+    let mut args = vec!["evolve", "--vocab", "industrial.kvf", "--new-version", "0.3.0", "--output", "wide.kvf"];
+    for name in &many {
+        args.extend_from_slice(&["--add", name]);
+    }
+    let wide = ok(&dir, &args);
+    assert!(wide["warnings"][0].as_str().unwrap().contains("past 256"), "{}", wide["warnings"]);
     // Two processes: one serves with no vocabulary, the other shares its
     // vocabulary, proposes the new event and sends a file.
     let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
     let address = format!("127.0.0.1:{port}");
     let server = std::process::Command::new(env!("CARGO_BIN_EXE_kute"))
         .current_dir(&dir)
-        .args(["peer", "serve", "--listen", &address, "--accept-proposals", "--output-dir", "received"])
+        .args(["peer", "serve", "--listen", &address, "--insecure-plain", "--accept-vocabularies", "--accept-proposals", "--output-dir", "received"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -189,7 +198,7 @@ fn use_case_4_industrial_events() {
     let mut sent = None;
     for _ in 0..100 {
         let out = kute(&dir, &[
-            "peer", "send", "--connect", &address, "--vocab", "industrial.kvf", "--input", "novel.jsonl",
+            "peer", "send", "--connect", &address, "--insecure-plain", "--vocab", "industrial.kvf", "--input", "novel.jsonl",
             "--propose", "VALVE_7_STUCK", "--new-version", "0.2.0",
         ]);
         if out.status.success() {

@@ -212,9 +212,27 @@ impl Registry {
     }
 
     /// A tokenizer with `vocabulary` installed, chosen by the manifest.
+    /// A tokenizer with `vocabulary` installed.
+    ///
+    /// This is the sealed boundary of the runtime. A `Vocabulary` value is
+    /// plain data with public fields, and its `digest()` reports what was
+    /// recorded; code may have changed the content since. What a tokenizer
+    /// returned from here holds cannot be changed (it hands out only shared
+    /// references), and it is checked here, whatever the algorithm's own
+    /// `load` did: it carries a digest, and that digest is the hash of its
+    /// content. So `tokenizer.vocabulary().digest()` always names the
+    /// vocabulary that is doing the encoding.
     pub fn tokenizer_for(&self, vocabulary: Vocabulary) -> Result<Box<dyn Tokenizer>> {
         let mut t = self.tokenizer(&vocabulary.manifest.algorithm)?;
         t.load(vocabulary)?;
+        let held = t.vocabulary().ok_or_else(|| KuteError::InvalidVocabulary("the tokenizer holds no vocabulary after loading one".into()))?;
+        let Some(integrity) = &held.integrity else {
+            return Err(KuteError::Integrity("the tokenizer loaded a vocabulary without recording its digest".into()));
+        };
+        let actual = held.compute_digest()?;
+        if actual != integrity.digest {
+            return Err(KuteError::Integrity(format!("recorded digest {} does not match content digest {actual}", integrity.digest)));
+        }
         Ok(t)
     }
 
@@ -334,6 +352,32 @@ pub fn decoded_units(vocabulary: &Vocabulary, tokens: &TokenSequence) -> Result<
             return Err(KuteError::UnknownToken(id as u32));
         };
         total = total.saturating_add(units);
+    }
+    Ok(total)
+}
+
+/// A lower bound on the bytes `tokens` decodes to. For a byte vocabulary it
+/// is the decoded length. For a symbol vocabulary it is the total length of
+/// the symbol names, before the adapter writes them out, which only adds to
+/// it. A symbol may be up to 1024 bytes long, so the number of symbols
+/// ([`decoded_units`]) says little about the bytes; this does.
+pub fn decoded_bytes_at_least(vocabulary: &Vocabulary, tokens: &TokenSequence) -> Result<u64> {
+    let size = |payload: &TokenPayload| match payload {
+        TokenPayload::Bytes(b) => b.len() as u64,
+        TokenPayload::Symbols(s) => s.iter().map(|symbol| symbol.len() as u64).sum(),
+    };
+    let sizes: Vec<u64> = vocabulary.tokens.iter().map(|t| size(&t.payload)).collect();
+    let mut total: u64 = 0;
+    for &id in &tokens.ids {
+        let id = id as usize;
+        let bytes = if id < sizes.len() {
+            sizes[id]
+        } else if id - sizes.len() < tokens.escapes.len() {
+            tokens.escapes[id - sizes.len()].len() as u64
+        } else {
+            return Err(KuteError::UnknownToken(id as u32));
+        };
+        total = total.saturating_add(bytes);
     }
     Ok(total)
 }

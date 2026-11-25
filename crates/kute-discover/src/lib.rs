@@ -11,6 +11,8 @@
 //! A pattern is a regularity in the order of symbols. Nothing here says what
 //! a pattern means or what causes it.
 
+pub mod live;
+
 use kute_core::CorpusFingerprint;
 use kute_types::{CanonicalInput, KuteError, Modality, Payload, Result, TokenPayload};
 use rustc_hash::{FxHashMap, FxHashSet};

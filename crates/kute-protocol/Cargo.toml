@@ -17,3 +17,14 @@ kute.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"], optional = true }
+
+[features]
+default = ["tls"]
+# Mutual TLS transport (`kute_protocol::tls`).
+tls = ["dep:rustls"]
+
+[dev-dependencies]
+kute-bench.workspace = true
+rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

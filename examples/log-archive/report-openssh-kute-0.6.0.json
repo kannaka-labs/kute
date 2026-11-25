@@ -1,0 +1,269 @@
+{
+  "kute_package": "0.6.0",
+  "log": {
+    "file": "OpenSSH_full.log",
+    "lines": 638947,
+    "bytes": 70536064,
+    "sha256": "aecae85174ea0c4b324bb2076fa8f1452b23ecd1fed8e69ba3a0c6ec5452adb3"
+  },
+  "split": {
+    "lines_learned": 511157,
+    "lines_held_out": 127790
+  },
+  "archive": {
+    "held_out_bytes": 14273135,
+    "tokens": 4870481,
+    "bytes_per_token": 2.931,
+    "round_trip_exact": true,
+    "packed_ids_bytes": 9740962,
+    "id_width_bytes": 2,
+    "packed_ids_then_xz_bytes": 501064,
+    "vocabulary_file_bytes": 490685,
+    "vocabulary_digest": "sha256:96e24eb4065ac407a519bb781f5bb3b7c97246fdc1e210bcb017baf9a915a03b",
+    "for_comparison": {
+      "xz_9_of_held_out_bytes": 712268,
+      "zlib_9_of_held_out_bytes": 877282
+    },
+    "seconds": {
+      "train": 3.29,
+      "encode": 0.28,
+      "decode": 0.12
+    }
+  },
+  "patterns": {
+    "sessions_learned": 32362,
+    "sessions_held_out": 19337,
+    "event_names": 36,
+    "patterns_reported": 217,
+    "checked": [
+      {
+        "symbols": [
+          "E2",
+          "E33"
+        ],
+        "support_learned": 120792,
+        "per_1000_events_learned": 236.31,
+        "support_held_out": 19908,
+        "per_1000_events_held_out": 155.79
+      },
+      {
+        "symbols": [
+          "E33",
+          "E36"
+        ],
+        "support_learned": 66163,
+        "per_1000_events_learned": 129.44,
+        "support_held_out": 112,
+        "per_1000_events_held_out": 0.88
+      },
+      {
+        "symbols": [
+          "E2",
+          "E33",
+          "E36"
+        ],
+        "support_learned": 66135,
+        "per_1000_events_learned": 129.38,
+        "support_held_out": 97,
+        "per_1000_events_held_out": 0.76
+      },
+      {
+        "symbols": [
+          "E8",
+          "E29"
+        ],
+        "support_learned": 19943,
+        "per_1000_events_learned": 39.02,
+        "support_held_out": 16882,
+        "per_1000_events_held_out": 132.11
+      },
+      {
+        "symbols": [
+          "E23",
+          "E25"
+        ],
+        "support_learned": 16113,
+        "per_1000_events_learned": 31.52,
+        "support_held_out": 3735,
+        "per_1000_events_held_out": 29.23
+      },
+      {
+        "symbols": [
+          "E38",
+          "E19"
+        ],
+        "support_learned": 11952,
+        "per_1000_events_learned": 23.38,
+        "support_held_out": 2629,
+        "per_1000_events_held_out": 20.57
+      },
+      {
+        "symbols": [
+          "E2",
+          "E33",
+          "E26"
+        ],
+        "support_learned": 34093,
+        "per_1000_events_learned": 66.7,
+        "support_held_out": 2698,
+        "per_1000_events_held_out": 21.11
+      },
+      {
+        "symbols": [
+          "E33",
+          "E26"
+        ],
+        "support_learned": 34095,
+        "per_1000_events_learned": 66.7,
+        "support_held_out": 2698,
+        "per_1000_events_held_out": 21.11
+      },
+      {
+        "symbols": [
+          "E38",
+          "E19",
+          "E23",
+          "E25"
+        ],
+        "support_learned": 11771,
+        "per_1000_events_learned": 23.03,
+        "support_held_out": 2581,
+        "per_1000_events_held_out": 20.2
+      },
+      {
+        "symbols": [
+          "E26",
+          "E2",
+          "E33"
+        ],
+        "support_learned": 30552,
+        "per_1000_events_learned": 59.77,
+        "support_held_out": 226,
+        "per_1000_events_held_out": 1.77
+      },
+      {
+        "symbols": [
+          "E2",
+          "E33",
+          "E15"
+        ],
+        "support_learned": 19955,
+        "per_1000_events_learned": 39.04,
+        "support_held_out": 17011,
+        "per_1000_events_held_out": 133.12
+      },
+      {
+        "symbols": [
+          "E33",
+          "E26",
+          "E2",
+          "E33"
+        ],
+        "support_learned": 25031,
+        "per_1000_events_learned": 48.97,
+        "support_held_out": 116,
+        "per_1000_events_held_out": 0.91
+      },
+      {
+        "symbols": [
+          "E2",
+          "E33",
+          "E26",
+          "E2",
+          "E33"
+        ],
+        "support_learned": 25030,
+        "per_1000_events_learned": 48.97,
+        "support_held_out": 116,
+        "per_1000_events_held_out": 0.91
+      },
+      {
+        "symbols": [
+          "E2",
+          "E33",
+          "E15",
+          "E14"
+        ],
+        "support_learned": 19577,
+        "per_1000_events_learned": 38.3,
+        "support_held_out": 16991,
+        "per_1000_events_held_out": 132.96
+      },
+      {
+        "symbols": [
+          "E2",
+          "E33",
+          "E15",
+          "E14",
+          "E8",
+          "E29"
+        ],
+        "support_learned": 19576,
+        "per_1000_events_learned": 38.3,
+        "support_held_out": 16865,
+        "per_1000_events_held_out": 131.97
+      },
+      {
+        "symbols": [
+          "E36",
+          "E2"
+        ],
+        "support_learned": 33365,
+        "per_1000_events_learned": 65.27,
+        "support_held_out": 24,
+        "per_1000_events_held_out": 0.19
+      },
+      {
+        "symbols": [
+          "E36",
+          "E2",
+          "E33"
+        ],
+        "support_learned": 33364,
+        "per_1000_events_learned": 65.27,
+        "support_held_out": 24,
+        "per_1000_events_held_out": 0.19
+      },
+      {
+        "symbols": [
+          "E33",
+          "E36",
+          "E2"
+        ],
+        "support_learned": 32020,
+        "per_1000_events_learned": 62.64,
+        "support_held_out": 2,
+        "per_1000_events_held_out": 0.02
+      },
+      {
+        "symbols": [
+          "E33",
+          "E36",
+          "E2",
+          "E33"
+        ],
+        "support_learned": 32019,
+        "per_1000_events_learned": 62.64,
+        "support_held_out": 2,
+        "per_1000_events_held_out": 0.02
+      },
+      {
+        "symbols": [
+          "E2",
+          "E33",
+          "E36",
+          "E2"
+        ],
+        "support_learned": 32001,
+        "per_1000_events_learned": 62.61,
+        "support_held_out": 1,
+        "per_1000_events_held_out": 0.01
+      }
+    ],
+    "checked_seen_again": 20,
+    "checked_at_half_the_learned_rate_or_more": 8,
+    "seconds": {
+      "discover": 0.35
+    }
+  }
+}
