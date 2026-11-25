@@ -110,7 +110,12 @@ pub fn inner_product(a: &[(f32, f32)], b: &[(f32, f32)]) -> Result<(f32, f32)> {
     if a.len() != b.len() {
         return Err(KuteError::InvalidInput(format!("inner product of vectors with dimensions {} and {}", a.len(), b.len())));
     }
-    Ok(a.iter().zip(b).fold((0.0, 0.0), |(re, im), (&(ar, ai), &(br, bi))| {
+    // Summed in f64: in f32 the rounding of the sum grows with the
+    // dimension (about 2e-4 at 4,096), which is more than the tolerance
+    // two implementations are asked to agree within.
+    let (re, im) = a.iter().zip(b).fold((0.0f64, 0.0f64), |(re, im), (&(ar, ai), &(br, bi))| {
+        let (ar, ai, br, bi) = (f64::from(ar), f64::from(ai), f64::from(br), f64::from(bi));
         (re + ar * br + ai * bi, im + ai * br - ar * bi)
-    }))
+    });
+    Ok((re as f32, im as f32))
 }

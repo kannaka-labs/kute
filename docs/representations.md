@@ -8,8 +8,8 @@ measurements of retrieval, reconstruction, noise tolerance, capacity and
 cost, with negative results published.
 
 This is the first pass. **The result is negative**: on real event logs
-the vectors did what exact counting does, no better, at hundreds of
-times the storage. Nothing here supports a claim that these
+the vectors did what exact counting does, no better, at over a thousand
+times the storage (8,192 bytes for a window that is six). Nothing here supports a claim that these
 representations carry meaning, and nothing about any medium or dynamics
 that might consume them was measured.
 
@@ -51,8 +51,12 @@ different dimensions are refused.
 sines and cosines come from the platform. Two implementations of one
 identity agree if the similarity of any two unit-energy vectors differs
 by at most `1e-4` (`PORTABLE_TOLERANCE`). A test pins three recorded
-similarities and runs on Linux and Windows in CI. That is two platforms
-and one compiler family, which is a start and not a proof.
+similarities at each of three dimensions (256, 1,024, 4,096) and runs
+in CI on Linux and Windows on x86-64 and on macOS on ARM. The inner
+product is summed in `f64`: summed in `f32`, its rounding grows with
+the dimension and reaches about 2e-4 at 4,096, past the tolerance (the
+reviewer's arithmetic; the first version had it so). Three systems, two
+processor families and one compiler: a start and not a proof.
 
 ## Synthetic sequences: the arithmetic works as the textbooks say
 
@@ -77,6 +81,20 @@ says nothing about any data.
 
 ## Real event logs: no better than counting
 
+**What could not have come out otherwise.** With phases from a hash,
+the expected similarity of two bundles is the cosine of their event
+counts, and of two permute-bundles the share of positions that match.
+So "bundle equals counts" and "permute-bundle equals positions" hold on
+any data: those rows check the implementation and are not findings
+about the logs. The task cannot favour the vectors, and a reader should
+not take their matching the baselines as evidence of anything. What the
+logs contribute is the gap between the two families: 0.23 against 0.83,
+order matters here.
+
+The windows are the distinct ones, taken in the order of lines, per
+entity; a reused process id joins the end of one session to the start
+of the next.
+
 Windows of six consecutive events of one entity, from two real logs:
 OpenSSH (638,947 events, 38 distinct, entity = process; 1,915 distinct
 windows, 1,041 of them a reordering of another) and HDFS (2,000,000
@@ -95,10 +113,10 @@ nearest among k earns 1/k):
 |---|---:|---:|---:|---:|---:|
 | OpenSSH, 100 | 0.77 | 0.76 | 0.98 | 0.97 | 0.01 |
 | HDFS, 100 | 0.65 | 0.67 | 0.98 | 0.99 | 0.00 |
-| HDFS, 1,000 | 0.23 | 0.22 | 0.83 | 0.84 | 0.00 |
+| HDFS, 1,000 | 0.23 | 0.23 | 0.83 | 0.84 | 0.00 |
 
-Vector columns are at 1,024 dimensions; 256 and 4,096 give the same
-figures within two points. Reading it:
+Vector columns are at 1,024 dimensions; in this table (not the next)
+256 and 4,096 give the same figures within two points. Reading it:
 
 * Bundle equals counts, and permute-bundle equals positions, to within
   the noise of 500 queries. Order matters a great deal on these logs
@@ -126,10 +144,15 @@ Share of (stored, not stored) pairs ranked rightly; 0.5 is chance:
   same common events. Neither can the exact baselines summed the same
   way, so that is the method (a sum of everything) and not the vectors.
 * Bind-chain can, because it behaves as a hash of the exact window, and
-  the memory as a set of hashes. Its capacity is what one would expect:
-  1,000 windows need about 4,096 dimensions (32 kB) to be told apart
-  98% of the time. The 1,000 windows themselves are 6 kB as bytes, and
-  an ordinary set answers the question exactly.
+  the memory as a set of hashes. Its figures land on the standard law
+  for such a memory, AUC = Phi(sqrt(D/N)) for D dimensions and N
+  windows: 0.945, 0.999 and 1.000 for 100 windows, and 0.694, 0.844 and
+  0.979 for 1,000, against the 0.92 to 0.93, 1.00, 1.00 and 0.69, 0.83,
+  0.98 measured. About four dimensions a window for an AUC of 0.98.
+* An AUC of 0.98 is not "told apart 98% of the time": at any one
+  threshold it is wrong about 7 to 8% of the time on each side. The
+  1,000 windows themselves are 6 kB as bytes against 32 kB for the
+  vector, and an ordinary set answers the question exactly.
 
 ## What this does and does not say
 

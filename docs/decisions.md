@@ -999,8 +999,10 @@ Decided:
   dimension, configuration, and the base mapping and its version.
   Vectors under different identities are not compared.
 * Portable tolerance: similarities of unit-energy vectors agree within
-  1e-4 between implementations. Pinned by a test that runs on two
-  platforms in CI.
+  1e-4 between implementations, the inner product being summed in f64
+  so that the margin does not shrink with the dimension. Pinned at
+  three dimensions by a test that runs on three systems and two
+  processor families in CI.
 * Measurements compare against exact baselines that use no vectors
   (counts, positions), and ties are split, after a first scoring that
   counted ties as misses made the vectors look better than the exact

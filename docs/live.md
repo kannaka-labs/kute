@@ -110,24 +110,51 @@ counted. It cannot help when more entities are active inside the limit
 than there are places. The time is the event's own, so a checkpoint
 with a limit carries each entity's last time.
 
-Measured on the OpenSSH log (638,947 events, 32,420 process ids, one
-pane, 16,384 places, a lateness of 90,000 s to cover one line the log
-has a day out of order):
+Measured on the OpenSSH log (638,947 events, 32,420 process ids), and
+reproduced to the digit by the reviewer on a copy of their own:
 
-| | evicted | sequences reported |
+    kute live openssh.jsonl --symbol-field event --time-field t --group-field pid \
+        --pane 100000000 --lateness 90000 --max-buffered 1000000 \
+        --max-patterns 100000 --max-entities 16384 [--idle 600] [--end-on E29]
+
+(The lateness covers one line the log has a day out of order, and the
+buffer must be large enough to hold it: with the default buffer every
+run has forced releases and none is exact.)
+
+| 16,384 places | evicted | sequences reported |
 |---|---:|---:|
 | neither | 94,254 | 150 |
 | `--end-on E29` (the session-closing line) | 57,372 | 202 |
 | `--idle 600` | 0 | 55 |
 | both | 0 | 55 |
 
-With the limit, 16,384 places report exactly what 1,000,000 places
-report. The limit's size hardly matters on this log: of the 124,750
-gaps over a minute between events of one process id, 103,078 are over a
-day, which is the id being used again; 60, 600 and 3,600 s all leave no
-evictions. The 95 sequences reported only without the limit were not
-examined one by one, so this shows what the limit removes and not that
-each removed one was false.
+With `--idle 600`, how few places still give the report a million give:
+
+| places | evicted | same sequences and supports as 1,000,000 places | `idle_ended` |
+|---:|---:|---|---:|
+| 1,000,000 | 0 | (the reference) | 124,719 |
+| 16,384 | 0 | yes, and the report is exact | 142,028 |
+| 512 | 520 | yes | 156,303 |
+| 64 | 133,425 | no | 23,675 |
+
+So 512 places do here what a million do. `idle_ended` depends on the
+places, as the last column shows: it counts sequences let go for room
+as well as ones cut on return, so compare it only between runs with
+the same limit.
+
+Without the limit and with places for everyone, the log reports 633
+sequences; with it, 55. Both counts are measured. What the 578 are is
+not: the limit stops joins across a reused process id, and it also
+cuts real sessions that pause for more than ten minutes, and the two
+were not separated. The limit's size hardly matters on this log: of
+the 124,750 gaps over a minute between events of one process id,
+103,078 are over a day; 60, 600 and 3,600 s all leave no evictions at
+16,384 places.
+
+A checkpoint written with a limit is refused if resumed without it,
+with another value, or the other way round (the reviewer tried each);
+resumed with the same options it goes on to the reports of an
+uninterrupted run.
 
 Figures given here before (evictions 38,931 falling to 8,196) were
 measured on a file whose times were wrong: the log runs from December

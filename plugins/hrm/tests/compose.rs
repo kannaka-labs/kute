@@ -88,20 +88,22 @@ fn the_identity_names_everything_that_fixes_the_vectors() {
     assert!(Composer::new(Algorithm::Bundle, 0).is_err());
 }
 
-/// Values recorded on one machine. Another platform must land within the
-/// portable tolerance, which is what the tolerance is for.
+/// Values recorded on one machine (x86-64, Windows), at three dimensions.
+/// Another platform must land within the portable tolerance, which is
+/// what the tolerance is for. CI runs this on Linux and Windows on
+/// x86-64 and on macOS on ARM.
 #[test]
 fn similarities_agree_with_the_recorded_values_within_the_portable_tolerance() {
-    let recorded = [RECORDED_BUNDLE, RECORDED_PERMUTE, RECORDED_CHAIN];
-    for (algorithm, expected) in Algorithm::ALL.into_iter().zip(recorded) {
-        let composer = Composer::new(algorithm, 1024).unwrap();
-        let first = items(&composer, &WORDS[..6]);
-        let second = items(&composer, &["alpha", "bravo", "delta", "charlie", "echo", "kilo"]);
-        let s = similarity(&composer.compose(&refs(&first)).unwrap(), &composer.compose(&refs(&second)).unwrap()).unwrap();
-        assert!((s - expected).abs() <= PORTABLE_TOLERANCE, "{algorithm:?}: {s} against the recorded {expected}");
+    for (dimension, recorded) in RECORDED {
+        for (algorithm, expected) in Algorithm::ALL.into_iter().zip(recorded) {
+            let composer = Composer::new(algorithm, dimension).unwrap();
+            let first = items(&composer, &WORDS[..6]);
+            let second = items(&composer, &["alpha", "bravo", "delta", "charlie", "echo", "kilo"]);
+            let s = similarity(&composer.compose(&refs(&first)).unwrap(), &composer.compose(&refs(&second)).unwrap()).unwrap();
+            assert!((s - expected).abs() <= PORTABLE_TOLERANCE, "{algorithm:?} at {dimension}: {s} against the recorded {expected}");
+        }
     }
 }
 
-const RECORDED_BUNDLE: f32 = 0.836_433_77;
-const RECORDED_PERMUTE: f32 = 0.490_797_94;
-const RECORDED_CHAIN: f32 = 0.010_975_849;
+/// Bundle, permute-bundle, bind-chain.
+const RECORDED: [(usize, [f32; 3]); 3] = [(256, [0.836_109_8, 0.499_329_75, 0.058_407_84]), (1024, [0.836_433_65, 0.490_797_73, 0.010_975_848]), (4096, [0.831_624, 0.507_420_84, 0.009_892_477])];

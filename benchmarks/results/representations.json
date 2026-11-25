@@ -76,7 +76,7 @@
           "bind-chain/4096": 1.0,
           "bundle/1024": 0.4965,
           "bundle/256": 0.5009,
-          "bundle/4096": 0.5013,
+          "bundle/4096": 0.5014,
           "exact_counts": 0.4997,
           "exact_positions": 0.5535,
           "permute-bundle/1024": 0.5494,
@@ -99,12 +99,12 @@
       "nearest_window_note": "each stored window kept as its own vector; the query is a stored window with one event replaced; credit 1 when the original is the single nearest, 1/k when it ties for nearest with k - 1 others",
       "nearest_window_precision": [
         {
-          "bind-chain/1024": 0.126,
+          "bind-chain/1024": 0.125,
           "bind-chain/256": 0.11,
           "bind-chain/4096": 0.104,
-          "bundle/1024": 0.871,
-          "bundle/256": 0.879,
-          "bundle/4096": 0.879,
+          "bundle/1024": 0.879,
+          "bundle/256": 0.872,
+          "bundle/4096": 0.876,
           "damage": "one event of six replaced by another",
           "exact_counts": 0.875,
           "exact_positions": 0.997,
@@ -118,9 +118,9 @@
           "bind-chain/1024": 0.004,
           "bind-chain/256": 0.008,
           "bind-chain/4096": 0.012,
-          "bundle/1024": 0.6693,
-          "bundle/256": 0.6507,
-          "bundle/4096": 0.6593,
+          "bundle/1024": 0.6687,
+          "bundle/256": 0.6523,
+          "bundle/4096": 0.661,
           "damage": "one event of six replaced by another",
           "exact_counts": 0.6505,
           "exact_positions": 0.981,
@@ -134,9 +134,9 @@
           "bind-chain/1024": 0.0,
           "bind-chain/256": 0.0,
           "bind-chain/4096": 0.0,
-          "bundle/1024": 0.2215,
-          "bundle/256": 0.2148,
-          "bundle/4096": 0.2339,
+          "bundle/1024": 0.2257,
+          "bundle/256": 0.2187,
+          "bundle/4096": 0.2216,
           "damage": "one event of six replaced by another",
           "exact_counts": 0.2299,
           "exact_positions": 0.8341,
@@ -167,9 +167,9 @@
           "bind-chain/1024": 1.0,
           "bind-chain/256": 0.9246,
           "bind-chain/4096": 1.0,
-          "bundle/1024": 0.5564,
+          "bundle/1024": 0.5563,
           "bundle/256": 0.5565,
-          "bundle/4096": 0.5572,
+          "bundle/4096": 0.5573,
           "exact_counts": 0.5585,
           "exact_positions": 0.6271,
           "permute-bundle/1024": 0.634,
@@ -184,7 +184,7 @@
           "bind-chain/4096": 0.9758,
           "bundle/1024": 0.4919,
           "bundle/256": 0.4906,
-          "bundle/4096": 0.4914,
+          "bundle/4096": 0.4913,
           "exact_counts": 0.4897,
           "exact_positions": 0.5037,
           "permute-bundle/1024": 0.5005,
@@ -535,72 +535,72 @@
         "algorithm": "bundle",
         "bytes_per_vector": 2048,
         "dimension": 256,
-        "microseconds_per_similarity": 0.722,
-        "microseconds_to_compose_six_tokens": 2.8245
+        "microseconds_per_similarity": 0.7129,
+        "microseconds_to_compose_six_tokens": 3.228
       },
       {
         "_": true,
         "algorithm": "permute-bundle",
         "bytes_per_vector": 2048,
         "dimension": 256,
-        "microseconds_per_similarity": 0.7427,
-        "microseconds_to_compose_six_tokens": 3.0265
+        "microseconds_per_similarity": 0.6756,
+        "microseconds_to_compose_six_tokens": 3.3375
       },
       {
         "_": true,
         "algorithm": "bind-chain",
         "bytes_per_vector": 2048,
         "dimension": 256,
-        "microseconds_per_similarity": 0.8025,
-        "microseconds_to_compose_six_tokens": 3.78
+        "microseconds_per_similarity": 0.6873,
+        "microseconds_to_compose_six_tokens": 4.816
       },
       {
         "_": true,
         "algorithm": "bundle",
         "bytes_per_vector": 8192,
         "dimension": 1024,
-        "microseconds_per_similarity": 2.8476,
-        "microseconds_to_compose_six_tokens": 12.29
+        "microseconds_per_similarity": 2.8065,
+        "microseconds_to_compose_six_tokens": 12.333
       },
       {
         "_": true,
         "algorithm": "permute-bundle",
         "bytes_per_vector": 8192,
         "dimension": 1024,
-        "microseconds_per_similarity": 3.2099,
-        "microseconds_to_compose_six_tokens": 13.0935
+        "microseconds_per_similarity": 4.5189,
+        "microseconds_to_compose_six_tokens": 15.961
       },
       {
         "_": true,
         "algorithm": "bind-chain",
         "bytes_per_vector": 8192,
         "dimension": 1024,
-        "microseconds_per_similarity": 2.767,
-        "microseconds_to_compose_six_tokens": 12.19
+        "microseconds_per_similarity": 2.6159,
+        "microseconds_to_compose_six_tokens": 11.844
       },
       {
         "_": true,
         "algorithm": "bundle",
         "bytes_per_vector": 32768,
         "dimension": 4096,
-        "microseconds_per_similarity": 10.8932,
-        "microseconds_to_compose_six_tokens": 46.0665
+        "microseconds_per_similarity": 10.9974,
+        "microseconds_to_compose_six_tokens": 45.16
       },
       {
         "_": true,
         "algorithm": "permute-bundle",
         "bytes_per_vector": 32768,
         "dimension": 4096,
-        "microseconds_per_similarity": 17.832,
-        "microseconds_to_compose_six_tokens": 66.352
+        "microseconds_per_similarity": 11.3335,
+        "microseconds_to_compose_six_tokens": 45.7555
       },
       {
         "_": true,
         "algorithm": "bind-chain",
         "bytes_per_vector": 32768,
         "dimension": 4096,
-        "microseconds_per_similarity": 11.6693,
-        "microseconds_to_compose_six_tokens": 49.002
+        "microseconds_per_similarity": 10.9695,
+        "microseconds_to_compose_six_tokens": 47.862
       }
     ],
     "data": "synthetic: made-up tokens drawn uniformly; measures the arithmetic only",
