@@ -103,6 +103,31 @@ impl Server {
         }
     }
 
+    /// For the registry routes of the HTTP service: what is held, with
+    /// the key names of the signatures each file carries. The signatures
+    /// are listed as the files state them and are not checked here; the
+    /// one who fetches checks them against keys of their own choosing.
+    pub fn registry_list(&self) -> Value {
+        let list: Vec<Value> = self
+            .held
+            .iter()
+            .map(|h| {
+                let mut entry = Self::reference(h);
+                entry["algorithm"] = json!(h.vocabulary.manifest.algorithm);
+                entry["tokens"] = json!(h.vocabulary.len());
+                entry["signed_by"] = json!(h.vocabulary.integrity.as_ref().map(|i| i.signatures.iter().map(|s| s.key_id.clone()).collect::<Vec<_>>()).unwrap_or_default());
+                entry
+            })
+            .collect();
+        json!({ "vocabularies": list })
+    }
+
+    /// The file of the held vocabulary with exactly this digest, with
+    /// the signatures it was loaded with.
+    pub fn registry_file(&self, digest: &str) -> Option<kute::Result<Vec<u8>>> {
+        self.held.iter().find(|h| h.digest == digest).map(|h| vocab::to_vec(&h.vocabulary))
+    }
+
     fn named(&self, args: &Value, field: &str) -> Result<&Held, Failure> {
         self.find(text_arg(args, field)?.ok_or_else(|| format!("{field} is required"))?)
     }

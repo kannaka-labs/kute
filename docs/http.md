@@ -52,6 +52,61 @@ how a vocabulary is named.
 
 One request per connection: every answer carries `Connection: close`.
 
+## Registry (after 0.8.1)
+
+Started with `--registry`, the service also gives the files of the
+vocabularies it was started with to whoever asks. It is off unless asked
+for, and without it these paths answer 404.
+
+| request | answer |
+|---|---|
+| `GET /v1/vocabularies` | what is held: id, version, digest, algorithm, tokens, and `signed_by`, the key names of the signatures each file carries, as the file states them |
+| `GET /v1/vocabularies/sha256:<64 hex>` | that vocabulary's KVF file, with the signatures it was loaded with; 404 if none with that digest is held |
+
+It is read-only: nothing can be sent to it, and any other method is
+405. A file is asked for by the digest of its content and by nothing
+else; a name, a version or a path is 404.
+
+`--registry-only` makes the process a registry and nothing else: the
+five operations answer 404 and `capabilities` lists none, so a caller
+cannot make it compute. It cannot be combined with `--studio`.
+
+The other side is `kute fetch`:
+
+    kute serve --vocab signed.kvf --registry-only
+    kute fetch --from http://127.0.0.1:8787 --list
+    kute fetch --from http://127.0.0.1:8787 --digest sha256:... \
+               --output got.kvf --trusted-key <BASE64>
+
+`fetch` recomputes the digest from what arrives and writes the file only
+if it is the digest asked for and the vocabulary passes its own test
+vectors; with `--trusted-key`, only if one of those keys signed it, as
+`kute verify` checks. It needs a stated `Content-Length`, takes at most
+`--max-bytes` (256 MiB unless told), and gives the whole exchange
+`--timeout` seconds (60). `--list` prints what the registry says it
+holds and checks nothing.
+
+What this is and is not:
+
+* The registry and the network are not trusted with what you get: a
+  registry that sends other content, or anyone who changes it on the
+  way, gets nothing written. They are trusted with nothing else either,
+  and that is all the protection there is: the connection is plain
+  HTTP, so both can see what was asked for and what was sent, and can
+  refuse or stall. `https://` addresses are refused, not built.
+* The digest has to come from somewhere you trust. The listing is the
+  registry's own account. A digest read from the listing and fetched
+  without `--trusted-key` proves only that the registry sent what it
+  said it would.
+* To be reached from another machine the service must listen on an
+  address that is not loopback, which needs `--insecure-remote` and
+  means what that option says: no TLS and no authentication, and anyone
+  who can reach it can take every file it holds. Use `--registry-only`
+  there.
+* No uploads, no accounts, no search, no federation between registries,
+  no expiry or revocation. The registry holds the files named when it
+  started and no others.
+
 ## Errors
 
 Every answer is JSON. A failure is `{"error": {"code": ..., "message": ...}}`

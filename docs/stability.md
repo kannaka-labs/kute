@@ -44,6 +44,7 @@ someone building on it knows what a new release may do to them.
 | `mcp` | experimental | See `docs/mcp.md`. |
 | `keygen`, `sign`, `verify`, the signature scheme, `peer serve --require-signature-from` | experimental | See `docs/signing.md`. |
 | `serve --studio` | experimental | See `docs/studio.md`. |
+| `serve --registry`, `serve --registry-only`, `fetch`, `GET /v1/vocabularies` | experimental | After 0.8.1. See `docs/http.md`. |
 | `predict`, `kute_discover::predict` | experimental | See `docs/predict.md`. |
 | `shadow` | experimental | See `docs/shadow.md`. |
 | `live`, `kute_discover::watch`, its checkpoint | experimental | See `docs/live.md`. |

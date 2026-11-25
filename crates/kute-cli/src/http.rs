@@ -44,6 +44,12 @@ pub struct Options {
     pub any_host: bool,
     /// Serve the Studio page under `/studio`.
     pub studio: bool,
+    /// Give the files of the held vocabularies to whoever asks, under
+    /// `/v1/vocabularies`. Off, those paths do not exist.
+    pub registry: bool,
+    /// Answer the five operations. Off, the service is a registry and
+    /// nothing else: no caller can make it compute.
+    pub operations: bool,
 }
 
 /// The Studio page: three files compiled into the binary. The page loads
@@ -61,7 +67,7 @@ const STUDIO_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 's
 
 impl Default for Options {
     fn default() -> Self {
-        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false }
+        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true }
     }
 }
 
@@ -72,14 +78,16 @@ struct Reply {
     allow: Option<&'static str>,
     /// A file of the Studio page, as (content type, text), sent instead of `body`.
     page: Option<(&'static str, &'static str)>,
+    /// A vocabulary file, sent instead of `body`.
+    file: Option<Box<[u8]>>,
 }
 
 fn problem(status: u16, reason: &'static str, code: &str, message: impl Into<String>) -> Reply {
-    Reply { status, reason, body: json!({ "error": { "code": code, "message": message.into() } }), allow: None, page: None }
+    Reply { status, reason, body: json!({ "error": { "code": code, "message": message.into() } }), allow: None, page: None, file: None }
 }
 
 fn ok(body: Value) -> Reply {
-    Reply { status: 200, reason: "OK", body, allow: None, page: None }
+    Reply { status: 200, reason: "OK", body, allow: None, page: None, file: None }
 }
 
 struct Request {
@@ -222,11 +230,33 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         };
         held["api"] = json!("v1");
         held["software"] = json!(format!("kute {}", kute::KUTE_VERSION));
-        held["operations"] = json!(OPERATIONS);
+        held["operations"] = if options.operations { json!(OPERATIONS) } else { json!([]) };
+        held["registry"] = json!(options.registry);
         held["limits"]["max_body_bytes"] = json!(options.max_body_bytes);
         return ok(held);
     }
-    if !OPERATIONS.contains(&operation) {
+    if operation == "vocabularies" || operation.starts_with("vocabularies/") {
+        // Without the option the paths do not exist, and the answer does
+        // not say what is held.
+        if !options.registry {
+            return problem(404, "Not Found", "not_found", "this service does not give vocabulary files");
+        }
+        if request.method != "GET" {
+            return Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "vocabularies are read with GET; nothing can be sent to this registry") };
+        }
+        let Some(digest) = operation.strip_prefix("vocabularies/") else { return ok(server.registry_list()) };
+        // Only a digest reaches the lookup: a file is named by the hash
+        // of its content and by nothing else.
+        if !crate::registry::is_digest(digest) {
+            return problem(404, "Not Found", "not_found", "a vocabulary is asked for by its digest: sha256: and 64 lowercase hex digits");
+        }
+        return match server.registry_file(digest) {
+            Some(Ok(file)) => Reply { file: Some(file.into_boxed_slice()), ..ok(Value::Null) },
+            Some(Err(_)) => problem(500, "Internal Server Error", "internal", "the vocabulary could not be written out"),
+            None => problem(404, "Not Found", "not_found", "no vocabulary with that digest is held here"),
+        };
+    }
+    if !OPERATIONS.contains(&operation) || !options.operations {
         return problem(404, "Not Found", "not_found", format!("there is no operation {operation:?}"));
     }
     if request.method != "POST" {
@@ -252,9 +282,10 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
 }
 
 fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
-    let (content_type, body) = match reply.page {
-        Some((content_type, text)) => (content_type, text.as_bytes().to_vec()),
-        None => ("application/json", serde_json::to_vec(&reply.body).unwrap_or_else(|_| b"{}".to_vec())),
+    let (content_type, body) = match (reply.page, &reply.file) {
+        (Some((content_type, text)), _) => (content_type, text.as_bytes().to_vec()),
+        (None, Some(file)) => ("application/json", file.to_vec()),
+        (None, None) => ("application/json", serde_json::to_vec(&reply.body).unwrap_or_else(|_| b"{}".to_vec())),
     };
     let mut head = format!(
         "HTTP/1.1 {} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n",

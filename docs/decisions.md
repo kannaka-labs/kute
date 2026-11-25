@@ -1163,9 +1163,43 @@ hand as well: the workspace has one `Mutex` (the job queue in
 `kute-cli/src/http.rs`), locked in a `let`, and no `RefCell` or
 `RwLock`; no guard is taken in an `if let` condition.
 
+## ADR-0054: A registry is the HTTP service giving held files by digest, and a client that checks them
+
+Status: accepted.
+
+The specification's B8 asks for a registry after signing. Chosen for
+0.9, the least that is one: `kute serve --registry` answers
+`GET /v1/vocabularies` (a listing) and `GET /v1/vocabularies/<digest>`
+(the file), and `kute fetch` takes a file by digest.
+
+* Content-addressed only. A file is asked for by the hash of its
+  content. The client recomputes the hash from what arrives, runs the
+  vocabulary's test vectors, and with `--trusted-key` checks a
+  signature with the code `kute verify` uses. So the registry and the
+  network need not be trusted for integrity, and no TLS client was
+  added to get it. Resolving a name to a digest was left out: that is
+  the step where a registry would have to be believed.
+* Read-only. Nothing can be sent to it. It holds what it was started
+  with.
+* Off by default, like every other way of giving a vocabulary away
+  (ADR-0033), and `--registry-only` turns the five operations off so
+  that a registry put on a network cannot be made to compute.
+* Plain HTTP, written on `std::net` with every bound in one file, as
+  the service is. Confidentiality is not provided and the documents say
+  so. `https://` is refused by name.
+
+Not built: uploads, accounts, search, federation, mirrors, expiry,
+revocation, TLS. Federation in particular needs a decision about whose
+listing is believed, which nothing here has needed yet.
+
+Checked by tests against sockets that send another vocabulary, the
+right one with its signature removed, altered content, a body cut
+short, no stated length, a length past the limit, something that is
+not HTTP, and a stall; in each nothing is written.
+
 ## Deferred
 
-Registry service and signing, import from other tokenizer formats,
+Import from other tokenizer formats,
 checkpoints written during a run, units and relationships between
 entities, timestamps in token containers, entropy-coded containers, and
 adapters for DNA, telemetry, mathematics and quantum circuits.

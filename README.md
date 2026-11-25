@@ -92,8 +92,8 @@ Added in v0.3:
 * `kute keygen`, `kute sign`, `kute verify`: Ed25519 signatures on a
   vocabulary, over its digest, which does not change. Nothing checks
   them unless you run `kute verify` with the keys you trust, or serve
-  with `kute peer serve --require-signature-from`; there is no
-  registry. See `docs/signing.md`.
+  with `kute peer serve --require-signature-from`. See
+  `docs/signing.md`.
 * `kute serve --studio`: a page, built into the binary and served on
   this machine only, for looking at vocabularies, encodings, recurring
   sequences in a corpus you give it, and report files. It shows what
@@ -184,7 +184,8 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
-* Not built: a registry or federation, expiry or revocation of keys,
+* Not built: federation between registries, uploads to one, TLS for
+  the HTTP service, expiry or revocation of keys,
   learned representations.
 
 Changed in v0.7 (the gates it was built against, with the evidence for
@@ -222,7 +223,8 @@ development directive of November 2026, v0.6 covers its items D02 to D05
 and D06 to D12 (D06 without a clean timing run); Studio, representation research and integrations
 (D13 to D15) are not built. Of the requirements document's "v0.2" (REST
 service, registry, MCP), v0.7 has the MCP server and v0.8 the REST
-service; the registry is not built. Measured against the v0.7 development
+service; a read-only registry is on the development branch after
+v0.8.1 (`docs/http.md`). Measured against the v0.7 development
 specification, every item has a first pass in v0.8; three of them (layered
 vocabularies, composed representations, QueenSync) ended in a negative
 result.

@@ -57,7 +57,10 @@ take from the file. So:
   `kute serve` read and keep signatures and check none. `kute verify`
   checks a file; `kute peer serve --require-signature-from` checks what
   the other side sends (below).
-* **No registry, no chain of keys, no expiry, no revocation.** The list
+* **No chain of keys, no expiry, no revocation.** A registry exists
+  after 0.8.1 (`kute serve --registry`, `kute fetch`; `docs/http.md`)
+  and distributes files, not trust: `kute fetch --trusted-key` checks a
+  signature exactly as `kute verify` does, against keys you pass. The list
   of keys you trust is the `--trusted-key` options you pass. To stop
   trusting a key, stop passing it.
 * **No protection for the private key** beyond file permissions.
@@ -112,5 +115,5 @@ What it leaves alone:
 Reviewed by reading every place a received vocabulary is kept or used;
 no way past the check was found. That is one reader, not a proof.
 
-These are the first two steps of the specification's B8. A registry and
-federation are not built.
+These are the first two steps of the specification's B8. A read-only
+registry followed (`docs/http.md`). Federation is not built.
