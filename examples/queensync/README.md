@@ -30,6 +30,10 @@ traffic.
    that it was forced when it was, so that the path runs every time and
    not only when the data approves. It runs the tasks under both
    vocabularies, to show whether the decision was right.
+   The candidate is also offered three times to a worker that takes
+   vocabularies only from the queen's key (`kute peer serve
+   --require-signature-from`): unsigned, signed by another key, and
+   signed by the queen (`kute sign`).
 6. Two in a hundred of those tasks contain message kinds and keys that
    no vocabulary has seen. They are carried by escape.
 
@@ -41,8 +45,9 @@ connection is plain loopback so the count is the protocol alone.
 
 ## What was measured
 
-`report-kute-0.7.0-next.json`, one run, seed fixed in the script. Sizes
-are reproducible; times are not.
+`report-kute-0.8.1-next.json`, one run, seed fixed in the script. Sizes
+are reproducible; times are not. Apart from the signed step, which is
+new, every size in it equals the run recorded on 0.7.0.
 
 | | |
 |---|---|
@@ -52,6 +57,9 @@ are reproducible; times are not.
 | bytes on the socket, each completed task | 701 (both directions, with handshake and receipts) |
 | sending the vocabulary on first contact | 86,766 bytes on the socket for a 64,122-byte file |
 | negotiating the candidate (forced: the decision was reject) | 2,068 bytes on the socket; the same digest on both sides |
+| the candidate offered unsigned to a worker that requires the queen's signature | refused, told why; 0 of 100 tasks; 93,432 bytes on the socket before the refusal |
+| the same, signed by a key the worker was not told of | refused, told why; 0 of 100 tasks; 93,781 bytes |
+| the same, signed by the queen | taken; 100 of 100 tasks; the worker's copy verifies and has the digest of the unsigned file; the signature adds 267 bytes to the file |
 | a dropped connection | sender reports failure; nothing delivered; sending the batch again delivers all 100. No resuming part way |
 | time for a batch of 100 tasks | about 1.2 s under either vocabulary, a new process and connection each batch |
 | language model tokens | not measured, and unchanged by construction: see below |
@@ -122,13 +130,17 @@ it. Nothing here reduces what a language model is charged for.
 
 ## Not built
 
-* The vocabulary is not signed here. It is identified by its digest,
-  and in a real deployment arrives over a connection authenticated with
+* Signing and negotiating by proposal are two paths, not one. A peer
+  that requires signatures refuses proposals, since nobody has signed
+  the vocabulary a proposal derives; so the signed candidate is sent
+  whole (about 93 kB on the socket here) where the proposal cost 2 kB.
+  A refusal also comes after the whole file has been sent: the worker
+  cannot check a signature on content it has not received. There is no
+  registry, expiry or revocation of keys (`docs/signing.md`), and the
+  connection here is plain loopback, where a deployment would use
   certificates on both sides (`kute peer` with TLS, tested in the
-  engine). `kute sign`, `kute verify` and a peer that requires a
-  signature exist (`docs/signing.md`). This example does not use them:
-  it negotiates by proposal, and a peer that requires signatures
-  refuses proposals, since nobody has signed the vocabulary a proposal
-  derives.
+  engine).
+* A signature says who vouches for a file. The candidate signed here is
+  the one the shadow comparison rejected.
 * No resuming a batch part way after a dropped connection.
 * Latency of a single message. Each batch here is a new process.

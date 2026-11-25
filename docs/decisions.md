@@ -1070,6 +1070,31 @@ that is allowed to break.
 
 Not done: a Rust-only Zstandard reader for builds without the feature.
 
+## ADR-0052: QueenSync distributes the candidate signed as well as by proposal
+
+Status: accepted.
+
+The specification's E2 says "negotiate a signed vocabulary". The
+example negotiated by proposal and said the vocabulary was not signed,
+because signing came later (ADR-0044, ADR-0047).
+
+Decided: a second path in the same script. The candidate is offered to
+a worker that requires the queen's signature three times: unsigned,
+signed by another key, signed by the queen. The first two must be
+refused with nothing delivered and the third taken; the report says
+what each cost. Still made of released commands only.
+
+The two paths stay two. A peer that requires signatures refuses
+proposals (ADR-0047), so "negotiated" and "signed" are not one act
+here: the signed vocabulary is sent whole. Measured: about 93 kB on the
+socket for the signed path against 2 kB for the proposal, and a refusal
+comes only after the file has been sent.
+
+Not done: signing what a proposal derives (each side would have to
+sign its own derivation, or the proposer sign the result and send the
+signature alone, 267 bytes here). That would join the two paths and is
+the obvious next step if the signed path is to be cheap.
+
 ## ADR-0051: Rust edition 2024
 
 Status: accepted.
