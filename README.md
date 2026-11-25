@@ -91,8 +91,9 @@ Added in v0.3:
   in each call, with bounded inputs and outputs. See `docs/mcp.md`.
 * `kute keygen`, `kute sign`, `kute verify`: Ed25519 signatures on a
   vocabulary, over its digest, which does not change. Nothing checks
-  them unless you run `kute verify` with the keys you trust; there is
-  no registry. See `docs/signing.md`.
+  them unless you run `kute verify` with the keys you trust, or serve
+  with `kute peer serve --require-signature-from`; there is no
+  registry. See `docs/signing.md`.
 * `kute serve --studio`: a page, built into the binary and served on
   this machine only, for looking at vocabularies, encodings, recurring
   sequences in a corpus you give it, and report files. It shows what

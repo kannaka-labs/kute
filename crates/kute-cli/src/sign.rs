@@ -139,6 +139,37 @@ pub fn verify(vocab_path: &Path, trusted: &[String]) -> kute::Result<(Value, boo
     }
     let keys = trusted.iter().map(|t| public_of(t)).collect::<kute::Result<Vec<_>>>()?;
     let vocabulary = vocab::load(vocab_path)?;
+    let (digest, rows, held) = check(&vocabulary, &keys)?;
+    let verified = held > 0;
+    Ok((
+        json!({
+            "vocabulary": vocab_path,
+            "digest": digest,
+            "signatures": rows,
+            "trusted_keys_given": keys.iter().map(|k| key_id(k)).collect::<Vec<_>>(),
+            "trusted_keys_with_a_valid_signature": held,
+            "verified": verified,
+            "means": "a valid signature says the holder of that key signed this exact content. It says nothing about whether the content is good, and nothing about who holds the key.",
+        }),
+        verified,
+    ))
+}
+
+/// A test for `kute peer serve --require-signature-from`: passes a
+/// vocabulary that carries a valid signature from one of `trusted`.
+pub fn gate(trusted: &[String]) -> kute::Result<impl Fn(&kute::Vocabulary) -> Result<(), String> + Send + 'static> {
+    let keys = trusted.iter().map(|t| public_of(t)).collect::<kute::Result<Vec<_>>>()?;
+    Ok(move |vocabulary: &kute::Vocabulary| match check(vocabulary, &keys) {
+        Ok((_, _, held)) if held > 0 => Ok(()),
+        Ok((_, rows, _)) if rows.is_empty() => Err("it carries no signature, and this peer requires one from a key it trusts".to_string()),
+        Ok(_) => Err("none of its signatures is a valid one from a key this peer trusts".to_string()),
+        Err(e) => Err(e.to_string()),
+    })
+}
+
+/// The digest computed from content, each signature's standing against
+/// `keys`, and how many of the keys have a valid signature.
+fn check(vocabulary: &kute::Vocabulary, keys: &[Vec<u8>]) -> kute::Result<(String, Vec<Value>, usize)> {
     let digest = vocabulary.compute_digest()?;
     let signatures = vocabulary.integrity.as_ref().map(|i| i.signatures.clone()).unwrap_or_default();
     if signatures.len() > MAX_SIGNATURES {
@@ -170,17 +201,5 @@ pub fn verify(vocab_path: &Path, trusted: &[String]) -> kute::Result<(Value, boo
         rows.push(json!({ "key_id": signature.key_id, "algorithm": signature.algorithm, "status": status }));
     }
     let held = holding.len();
-    let verified = held > 0;
-    Ok((
-        json!({
-            "vocabulary": vocab_path,
-            "digest": digest,
-            "signatures": rows,
-            "trusted_keys_given": keys.iter().map(|k| key_id(k)).collect::<Vec<_>>(),
-            "trusted_keys_with_a_valid_signature": held,
-            "verified": verified,
-            "means": "a valid signature says the holder of that key signed this exact content. It says nothing about whether the content is good, and nothing about who holds the key.",
-        }),
-        verified,
-    ))
+    Ok((digest, rows, held))
 }

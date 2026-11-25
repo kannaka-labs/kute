@@ -639,3 +639,32 @@ fn long_symbols_are_bounded_by_their_bytes_not_only_their_count() {
     // The same symbol sent once is delivered.
     assert!(matches!(receiver.handle(Message::EncodedMessage { id: 6, container })[0], Message::Ack { .. }));
 }
+
+/// B8: a peer can be given a test that a vocabulary from the other side
+/// must pass. One that fails it is refused and not held; and while the
+/// test is set, a proposal is refused, because the vocabulary it would
+/// derive is one the test never saw.
+#[test]
+fn a_vocabulary_that_fails_the_peers_check_is_not_taken() {
+    let wanted = train("test:protocol:wanted", &CYCLE);
+    let unwanted = train("test:protocol:unwanted", &["A", "B", "C"]);
+    let mut peer = ready_peer(Policy { accept_proposals: true, answer_queries: true, ..open() });
+    peer.require_vocabulary_check(Box::new(|v| if v.id().to_string().ends_with(":wanted") { Ok(()) } else { Err("its name is not on the list".into()) }));
+
+    let reply = give(&mut peer, &unwanted);
+    assert_eq!(code(&reply), ErrorCode::Refused);
+    assert!(matches!(&reply[0], Message::Error { message, .. } if message.contains("its name is not on the list")), "{reply:?}");
+    let digest = unwanted.compute_digest().unwrap();
+    assert_eq!(code(&peer.handle(Message::SymbolQuery { digest, symbols: vec!["A".into()] })), ErrorCode::UnknownVocabulary, "a refused vocabulary must not be held");
+
+    assert!(matches!(give(&mut peer, &wanted)[0], Message::VocabAccept { .. }));
+    let digest = wanted.compute_digest().unwrap();
+    let propose = Message::SymbolPropose { digest, additions: vec![vec!["VALVE_STUCK".into()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    assert_eq!(code(&peer.handle(propose.clone())), ErrorCode::Refused);
+
+    // Without a check, both are taken as before.
+    let mut plain = ready_peer(Policy { accept_proposals: true, ..open() });
+    assert!(matches!(give(&mut plain, &unwanted)[0], Message::VocabAccept { .. }));
+    assert!(matches!(give(&mut plain, &wanted)[0], Message::VocabAccept { .. }));
+    assert!(matches!(plain.handle(propose)[0], Message::VocabAccept { .. }));
+}

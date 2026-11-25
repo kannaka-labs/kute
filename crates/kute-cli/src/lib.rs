@@ -477,6 +477,12 @@ enum PeerAction {
         /// Let the other side extend vocabularies held here.
         #[arg(long)]
         accept_proposals: bool,
+        /// Take a vocabulary from the other side only if it carries a
+        /// valid signature from one of these keys (the base64 public key
+        /// `kute keygen` prints). Repeatable. Vocabularies given with
+        /// --vocab are yours and are not checked.
+        #[arg(long, value_name = "PUBLIC_KEY", requires = "accept_vocabularies", conflicts_with = "accept_proposals")]
+        require_signature_from: Vec<String>,
         /// Send a held vocabulary's file to the other side when it asks.
         #[arg(long)]
         give_vocabularies: bool,
@@ -593,6 +599,7 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             vocab: held,
             accept_vocabularies,
             accept_proposals,
+            require_signature_from,
             give_vocabularies,
             answer_queries,
             translate,
@@ -609,6 +616,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             if tls_cert.is_none() && !insecure_plain {
                 return Err(KuteError::InvalidConfig(NO_TRANSPORT.into()));
             }
+            // Read the trusted keys before listening: a key that cannot be
+            // read is the operator's mistake, to be told now and not to
+            // whoever connects first.
+            let gate = if require_signature_from.is_empty() { None } else { Some(sign::gate(&require_signature_from)?) };
             let timeout = (timeout > 0).then(|| std::time::Duration::from_secs(timeout));
             let secured = match (&tls_cert, &tls_key, &tls_client_ca) {
                 (Some(cert), Some(key), Some(ca)) => {
@@ -643,6 +654,9 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 }
             };
             let mut peer = Peer::new("kute", engine, policy);
+            if let Some(gate) = gate {
+                peer.require_vocabulary_check(Box::new(gate));
+            }
             for path in &held {
                 peer.add_vocabulary(vocab::load(path)?)?;
             }

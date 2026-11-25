@@ -42,7 +42,7 @@ someone building on it knows what a new release may do to them.
 | `discover` | provisional | The report's fields are still settling. |
 | `peer serve`, `peer send`, `peer fingerprint` | provisional | Follows the protocol's class. |
 | `mcp` | experimental | See `docs/mcp.md`. |
-| `keygen`, `sign`, `verify`, the signature scheme | experimental | See `docs/signing.md`. |
+| `keygen`, `sign`, `verify`, the signature scheme, `peer serve --require-signature-from` | experimental | See `docs/signing.md`. |
 | `serve --studio` | experimental | See `docs/studio.md`. |
 | `predict`, `kute_discover::predict` | experimental | See `docs/predict.md`. |
 | `shadow` | experimental | See `docs/shadow.md`. |

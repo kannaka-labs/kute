@@ -53,9 +53,10 @@ take from the file. So:
 
 * **It does not say the vocabulary is good**, only that the key holder
   signed it. It does not say who holds the key.
-* **Nothing checks signatures unless you run `kute verify`.** Loading,
-  encoding, `kute peer` and `kute serve` read and keep signatures and
-  check none. A peer accepting vocabularies does not yet require one.
+* **Nothing checks signatures unless you ask.** Loading, encoding and
+  `kute serve` read and keep signatures and check none. `kute verify`
+  checks a file; `kute peer serve --require-signature-from` checks what
+  the other side sends (below).
 * **No registry, no chain of keys, no expiry, no revocation.** The list
   of keys you trust is the `--trusted-key` options you pass. To stop
   trusting a key, stop passing it.
@@ -63,5 +64,31 @@ take from the file. So:
 * A signature can be removed from a file by anyone; that leaves an
   unsigned vocabulary, which verifies against nothing.
 
-This is the first step of the specification's B8. A registry and
+## A peer that takes only signed vocabularies
+
+    kute peer serve --listen 127.0.0.1:7000 --accept-vocabularies \
+        --require-signature-from <public key> ...
+
+With this option (repeatable), a vocabulary the other side sends is
+taken only if it carries a valid signature from one of the keys named.
+One that is unsigned, signed by another key, or carrying a signature
+made for other content is refused, nothing is kept, and the sender is
+told why. The check is made on the content received, after its digest
+has been recomputed.
+
+What it leaves alone:
+
+* Vocabularies you give the peer yourself with `--vocab` are not
+  checked. You chose them.
+* It cannot be combined with `--accept-proposals`. A proposal makes the
+  peer derive a new vocabulary from one it holds, and nobody has signed
+  the result; a peer that requires signatures refuses proposals. To
+  extend a vocabulary between such peers, evolve it, sign it and send
+  it whole.
+* It is a second lock, not a replacement for the first. Who may connect
+  at all is still the TLS certificate and `--allow`. The signature says
+  who vouches for the vocabulary, which need not be who delivers it.
+* A malformed key is refused when the command starts, before it listens.
+
+These are the first two steps of the specification's B8. A registry and
 federation are not built.

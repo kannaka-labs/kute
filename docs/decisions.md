@@ -953,6 +953,34 @@ in frequency order. That would change every digest and the tiktoken
 export, and would want its own measurement on event vocabularies, where
 most ids are one byte already.
 
+## ADR-0047: A peer may require a signature on a vocabulary it is sent; the protocol only carries the question
+
+Status: accepted, experimental.
+
+ADR-0044 left signatures checked by nothing but `kute verify`. The next
+step of B8 is a peer that refuses an unsigned vocabulary.
+
+Decided:
+
+* `kute-protocol` gains no cryptography. `Peer::require_vocabulary_check`
+  takes a function from a vocabulary to accept or a reason; it is called
+  on a vocabulary received, after its digest is recomputed and matched
+  and before it is held. The CLI supplies the Ed25519 check from the
+  same code as `kute verify`.
+* While a check is set, proposals are refused. A proposal derives a
+  vocabulary on the receiving side that no signer has seen; accepting it
+  would let the other side put an unsigned vocabulary into a peer that
+  requires signed ones. The CLI refuses the two options together.
+* Vocabularies the operator loads are not checked.
+* The requirement is per peer process, not per allowed fingerprint. A
+  per-fingerprint set of trusted keys would belong in `tls::Access`
+  and is not built.
+* The wire format is unchanged: the refusal is the existing `Refused`
+  error with the reason, so an older sender understands it.
+
+Not built: a registry, key distribution, expiry, revocation, threshold
+rules (two of three keys), signing a proposal.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
