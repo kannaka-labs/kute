@@ -293,7 +293,8 @@ impl Server {
         ])
     }
 
-    fn call(&self, name: &str, args: &Value) -> Result<Value, Failure> {
+    /// Run one tool by name. The HTTP service calls the same function.
+    pub fn call(&self, name: &str, args: &Value) -> Result<Value, String> {
         if !args.is_object() {
             return Err("arguments must be an object".into());
         }

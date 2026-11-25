@@ -3,6 +3,7 @@
 //! Results go to stdout as JSON (or raw bytes for `decode`), messages to
 //! stderr. Exit status is 0 on success and 1 on any error.
 
+pub mod http;
 pub mod mcp;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -152,6 +153,34 @@ enum Command {
         /// Most bytes one decode call gives back.
         #[arg(long, default_value_t = 4_194_304)]
         max_output_bytes: u64,
+    },
+    /// Serve encode, decode, inspect, compare and discover over HTTP, under
+    /// /v1/. Read-only, like `kute mcp`, and through the same code. No TLS
+    /// and no authentication: it listens on loopback unless told otherwise.
+    Serve {
+        /// Vocabularies the operations may use. Repeatable.
+        #[arg(long)]
+        vocab: Vec<PathBuf>,
+        /// Address to listen on. Port 0 picks a free one; the address in
+        /// use is printed as JSON on standard output.
+        #[arg(long, default_value = "127.0.0.1:8787")]
+        listen: String,
+        /// Allow an address that is not loopback. Anyone who can reach it
+        /// can use it: there is no TLS and no authentication.
+        #[arg(long)]
+        insecure_remote: bool,
+        /// Most bytes of input in one encode or discover call.
+        #[arg(long, default_value_t = 1_048_576)]
+        max_input_bytes: u64,
+        /// Most bytes one decode call gives back.
+        #[arg(long, default_value_t = 4_194_304)]
+        max_output_bytes: u64,
+        /// Requests handled at once.
+        #[arg(long, default_value_t = 4)]
+        workers: usize,
+        /// Seconds a request may take to arrive.
+        #[arg(long, default_value_t = 10)]
+        timeout: u64,
     },
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
@@ -987,6 +1016,22 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             let server = mcp::Server::new(engine, vocabularies, limits)?;
             server.serve(std::io::stdin().lock(), std::io::stdout().lock())?;
             Ok(())
+        }
+        Command::Serve { vocab: paths, listen, insecure_remote, max_input_bytes, max_output_bytes, workers, timeout } => {
+            let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
+            let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);
+            let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_body_bytes, ..Default::default() };
+            let server = mcp::Server::new(engine, vocabularies, limits)?;
+            let listener = std::net::TcpListener::bind(&listen)?;
+            let address = listener.local_addr()?;
+            if !http::is_loopback(&address) && !insecure_remote {
+                return Err(KuteError::InvalidConfig(format!(
+                    "{address} is not a loopback address, and this service has no TLS and no authentication; pass --insecure-remote to serve it anyway"
+                )));
+            }
+            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address) }))?;
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), ..Default::default() };
+            http::serve(server, listener, options)
         }
         Command::Capabilities => {
             let registry = engine.registry();

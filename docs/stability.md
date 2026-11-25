@@ -42,6 +42,7 @@ someone building on it knows what a new release may do to them.
 | `discover` | provisional | The report's fields are still settling. |
 | `peer serve`, `peer send`, `peer fingerprint` | provisional | Follows the protocol's class. |
 | `mcp` | experimental | See `docs/mcp.md`. |
+| `serve` (HTTP, `/v1/`) | experimental | See `docs/http.md`. A breaking change to the interface arrives as a new path version. |
 
 ## Libraries
 

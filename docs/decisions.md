@@ -629,6 +629,37 @@ C2: there are no gapped pairs, no event time or late-event policy, no
 windows that forget, no transport, no CLI, and the 24-hour replay with
 recorded throughput has not been run. The test streams are synthetic.
 
+## ADR-0037: The HTTP service is the MCP server's operations behind a hand-written, bounded listener
+
+The v0.7 specification lists a REST surface beside MCP (E1): versioned
+encode, decode, discover, inspect, compare and capabilities with bounded
+payloads. `kute serve` provides it by calling the same function the MCP
+server calls for each tool, so the two cannot drift apart, and adds only
+the transport.
+
+The transport is written on `std::net`, about 250 lines, instead of
+taking an HTTP framework. The service needs one request per connection,
+JSON in and out, and nothing else; a framework would bring an async
+runtime and defaults (keep-alive, pipelining, chunked bodies, generous
+header limits) that each need a bound found and set. Written out, every
+bound is visible in one file: workers, queue, read deadline, header block,
+body length checked before reading. What it gives up is everything a
+framework does well, and it must never grow into one: if TLS, HTTP/2 or
+streaming are wanted, the answer is a proxy in front or a real library,
+not more code here.
+
+It has no TLS and no authentication, so it binds loopback by default and
+needs `--insecure-remote` otherwise, in the manner of ADR-0033. Loopback
+is reachable from a browser, so it also refuses a `Host` that is not a
+loopback name (DNS rebinding) and a body not declared as JSON (a form
+post from another origin), and sends no cross-origin headers.
+
+Not offered: training and jobs, which the specification lists for REST
+with "explicit permission and quotas". They write files and run for
+minutes; they need the permission model first and are left out until it
+exists. Time spent inside one operation is not bounded, and there is no
+per-client rate limit.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
