@@ -402,6 +402,30 @@ the corpus again; on 90 MB of text that was about 7 of the 17 seconds a
 whole run takes. `sequence-bpe` resumes the same way; the baseline
 algorithms cannot resume.
 
+## ADR-0029: The JSON adapters refuse what canonicalizing would change
+
+The `json`, `jsonl` and `jsonl-events` adapters parse a document and write
+it back in one canonical form. Two kinds of input have no single reading:
+an object that repeats a key, and a number that does not survive (an
+integer beyond 64 bits, a decimal with more digits than a double keeps).
+Until v0.6 the last value of a repeated key was kept and such numbers were
+rounded, both silently, so two different documents could become the same
+bytes and the same tokens.
+
+From v0.7 these inputs are refused with an error that names the key or the
+number. Keys are compared as decoded, so `"a"` and its escaped spelling
+count as one. A decimal is accepted when the double it parses to, written
+back, has the same significant digits: `2.50`, `25e-1` and `0.1` pass,
+`0.1000000000000000055` does not. The adapter option `strict=false`
+restores the earlier behaviour for data that cannot be fixed at the source.
+
+Canonical output is unchanged for every input that is still accepted, so no
+vocabulary digest or recorded vector changes. What changes is that some
+inputs accepted before now fail; that is the migration, and the option is
+the way through it. Not covered: numbers are still held as doubles or
+64-bit integers, so there is no exact decimal type, and `-0` is kept as a
+negative zero as before.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
