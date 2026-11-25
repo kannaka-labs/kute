@@ -145,6 +145,27 @@ fn the_operations_work_over_http_and_agree_with_the_command_line() {
     let records: Vec<Vec<&str>> = (0..30).map(|_| vec!["A", "B", "C", "A", "B", "C"]).collect();
     let found = service.ok("discover", json!({ "records": records }));
     assert!(found["patterns"].as_array().unwrap().iter().any(|p| p["symbols"] == json!(["A", "B", "C"])), "{found}");
+    assert!(found.get("timing").is_none(), "no times given, no timing");
+    // With a time for each symbol, each pattern is also measured: here
+    // A, B, C are 0, 2 and 7 ticks into every cycle of 10.
+    let times: Vec<Vec<i64>> = (0..30).map(|r| (0..6).map(|i| r * 1000 + (i / 3) * 10 + [0, 2, 7][(i % 3) as usize]).collect()).collect();
+    let timed = service.ok("discover", json!({ "records": records, "times": times }));
+    assert_eq!(timed["patterns"], found["patterns"], "times do not change what is found");
+    let abc = timed["patterns"].as_array().unwrap().iter().position(|p| p["symbols"] == json!(["A", "B", "C"])).unwrap();
+    let row = timed["timing"].as_array().unwrap().iter().find(|t| t["pattern"] == abc).unwrap();
+    assert_eq!((row["duration"]["occurrences"].clone(), row["duration"]["min"].clone(), row["duration"]["median"].clone(), row["duration"]["max"].clone()), (json!(60), json!(7), json!(7), json!(7)), "{row}");
+    // Times that do not line up, go back, or come without records are refused.
+    let mut short = times.clone();
+    short[3].pop();
+    assert!(service.refused("discover", json!({ "records": records, "times": short })).contains("aligned"));
+    let mut back = times.clone();
+    back[0][1] = -5;
+    assert!(service.refused("discover", json!({ "records": records, "times": back })).contains("backwards"));
+    assert!(service.refused("discover", json!({ "records": records, "times": times[..29] })).contains("29 lists"));
+    assert!(service.refused("discover", json!({ "lines": "A B
+A B
+", "times": [[1, 2]] })).contains("records"));
+    assert!(service.refused("discover", json!({ "records": records, "times": [["x"]] })).contains("whole numbers"));
 
     // What an operation refuses is a 422 with its reason.
     assert!(service.refused("encode", json!({ "vocabulary": "no:such", "text": "x" })).contains("no:such"));

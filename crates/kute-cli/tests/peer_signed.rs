@@ -27,11 +27,17 @@ fn ok(dir: &Path, args: &[&str]) -> Value {
 /// and a sender offering `vocab`. Returns the sender's output and what
 /// the server received.
 fn exchange(dir: &Path, name: &str, trusted: &[&str], vocab: &str) -> (Output, Vec<PathBuf>) {
+    exchange_with(dir, name, trusted, vocab, &[], &[])
+}
+
+/// [`exchange`] with more options for the server and for the sender.
+fn exchange_with(dir: &Path, name: &str, trusted: &[&str], vocab: &str, serve: &[&str], send: &[&str]) -> (Output, Vec<PathBuf>) {
     // The server picks the port and says which.
     let mut args = vec!["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--accept-vocabularies", "--output-dir", name, "--timeout", "20"];
     for key in trusted {
         args.extend_from_slice(&["--require-signature-from", key]);
     }
+    args.extend_from_slice(serve);
     let mut server = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(dir).args(&args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     // It says when it is listening; send only then.
     // The reader is kept until the server has ended. Dropping it closes
@@ -43,7 +49,9 @@ fn exchange(dir: &Path, name: &str, trusted: &[&str], vocab: &str) -> (Output, V
     errors.read_line(&mut line).unwrap();
     assert!(line.contains("listening"), "{line}");
     let address = line.trim().rsplit(' ').next().unwrap().to_string();
-    let sent = kute(dir, &["peer", "send", "--connect", &address, "--insecure-plain", "--vocab", vocab, "--input", "log.jsonl"]);
+    let mut sending = vec!["peer", "send", "--connect", &address, "--insecure-plain", "--vocab", vocab, "--input", "log.jsonl"];
+    sending.extend_from_slice(send);
+    let sent = kute(dir, &sending);
     let _ = server.wait();
     drop(errors);
     let mut received: Vec<PathBuf> = std::fs::read_dir(dir.join(name)).map(|d| d.map(|e| e.unwrap().path()).collect()).unwrap_or_default();
@@ -97,13 +105,39 @@ fn a_peer_takes_only_a_vocabulary_signed_by_a_key_it_trusts() {
     // Without the requirement the unsigned one is taken, as before.
     assert!(exchange(&dir, "r-open", &[], "signed.kvf").0.status.success());
 
-    // The option cannot be combined with what it would make meaningless.
-    for args in [
-        vec!["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--require-signature-from", ours.as_str()],
-        vec!["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--accept-vocabularies", "--accept-proposals", "--require-signature-from", ours.as_str()],
-    ] {
-        assert!(!kute(&dir, &args).status.success(), "{args:?}");
+    // A proposal to such a peer: the proposer signs the vocabulary the
+    // proposal derives and sends the signature alone. The peer derives
+    // the vocabulary itself and keeps it only if the signature holds.
+    let serve = ["--accept-proposals", "--vocab", "signed.kvf"];
+    let propose = ["--propose", "SYNC OPEN", "--new-version", "0.2.0"];
+    let derived = |received: &[PathBuf]| received.iter().filter(|p| p.extension().is_some_and(|e| e == "kvf")).cloned().collect::<Vec<_>>();
+    let (sent, received) = exchange_with(&dir, "p-ours", &[&ours], "signed.kvf", &serve, &[&propose[..], &["--sign-with", "ours.pem"]].concat());
+    assert!(sent.status.success(), "{}", String::from_utf8_lossy(&sent.stderr));
+    let report: Value = serde_json::from_slice(&sent.stdout).unwrap();
+    assert_eq!((report["proposal_signed"].clone(), report["sent"][0]["receipt_matches"].clone()), (true.into(), true.into()));
+    let kept = derived(&received);
+    assert_eq!(kept.len(), 1, "{received:?}");
+    let verified = ok(&dir, &["verify", "--vocab", kept[0].to_str().unwrap(), "--trusted-key", &ours]);
+    assert_eq!((verified["verified"].clone(), verified["digest"].clone()), (true.into(), report["vocabulary_after_proposal"].clone()));
+    // The same derivation made here and signed with `kute sign` is the same file content.
+    ok(&dir, &["evolve", "--vocab", "signed.kvf", "--add", "SYNC OPEN", "--new-version", "0.2.0", "--output", "child.kvf"]);
+    assert_eq!(ok(&dir, &["inspect", "child.kvf"])["summary"]["digest"], report["vocabulary_after_proposal"]);
+    // Unsigned, or signed by a key the peer was not told of: refused, nothing derived is kept, no message delivered.
+    for (name, extra, why) in [("p-none", vec![], "carries no signature"), ("p-theirs", vec!["--sign-with", "theirs.pem"], "none of its signatures")] {
+        let (sent, received) = exchange_with(&dir, name, &[&ours], "signed.kvf", &serve, &[&propose[..], &extra[..]].concat());
+        let stderr = String::from_utf8_lossy(&sent.stderr).into_owned();
+        assert!(!sent.status.success() && stderr.contains(why), "{name}: {stderr}");
+        assert!(received.is_empty(), "{name}: {received:?}");
     }
+    // A key that cannot be read is told before connecting: nothing
+    // listens at this address, and the complaint is about the key.
+    let sent = kute(&dir, &["peer", "send", "--connect", "127.0.0.1:9", "--insecure-plain", "--vocab", "signed.kvf", "--propose", "SYNC OPEN", "--new-version", "0.2.0", "--sign-with", "absent.pem"]);
+    let stderr = String::from_utf8_lossy(&sent.stderr).into_owned();
+    assert!(!sent.status.success() && stderr.contains("absent.pem"), "{stderr}");
+
+    // The option cannot be used without what it guards.
+    let args = vec!["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--require-signature-from", ours.as_str()];
+    assert!(!kute(&dir, &args).status.success(), "{args:?}");
     let bad = kute(&dir, &["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--accept-vocabularies", "--require-signature-from", "not-a-key"]);
     assert!(!bad.status.success() && String::from_utf8_lossy(&bad.stderr).contains("trusted key"));
     let _ = std::fs::remove_dir_all(&dir);

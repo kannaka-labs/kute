@@ -38,7 +38,7 @@ base64. A vocabulary is always named by its content digest (KVF section 4).
 | `VOCAB_ACCEPT` | `digest` | "I hold a validated vocabulary with this digest" |
 | `SYMBOL_QUERY` | `digest`, `symbols` | "is this symbol sequence a token there?" |
 | `SYMBOL_INFO` | `digest`, `token_id` (or null), `content_hash` | the answer |
-| `SYMBOL_PROPOSE` | `digest`, `additions`, `version`, `rule` | "extend that vocabulary by this rule" (section 4) |
+| `SYMBOL_PROPOSE` | `digest`, `additions`, `version`, `rule`, optional `signatures` | "extend that vocabulary by this rule" (section 4) |
 | `TRANSLATE` | `id`, `container`, `to_digest` | "re-encode this sequence under another vocabulary you hold" |
 | `ENCODED_MESSAGE` | `id`, `container` | a `.kute` container |
 | `ACK` | `id`, `units`, `sha256` | receipt: decoded length and SHA-256 of the decoded bytes |
@@ -86,6 +86,17 @@ The initiator sends one request at a time and reads one reply.
 policy allows it derives the child vocabulary and answers `VOCAB_ACCEPT` with
 the digest of the child; the initiator derives the child the same way and
 compares digests. No vocabulary data crosses the connection.
+
+A proposal may carry `signatures`: a list of at most 16 entries with
+the fields a vocabulary file's `integrity.signatures` has (`key_id`,
+`algorithm`, `signature`), made over the digest of the child. The field
+is left out when empty, so a proposal without signatures is the message
+it was before the field existed, and a responder that does not know the
+field ignores it. A responder that requires a check of vocabularies it
+takes refuses a proposal without signatures before deriving anything;
+otherwise it derives the child, attaches the signatures to it, and
+holds it only if its check passes. The protocol defines no signature
+scheme and verifies none: the check belongs to the application.
 
 The derivation is deterministic and is defined for `sequence-bpe`
 vocabularies:

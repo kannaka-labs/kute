@@ -38,6 +38,29 @@ found = kute.discover([["START", "HEAT", "DONE"], ...], min_support=5)
 found["patterns"]   # recurring runs and gapped pairs, strongest first
 ```
 
+Added in 0.9:
+
+```python
+# Whole event records, by column. Every field comes back.
+container, report = kute.events_pack(open("events.jsonl", "rb").read(),
+                                     symbol_field="event", time_field="t", group_field="unit")
+records = kute.events_unpack(container)          # canonical JSON Lines, source order
+kute.events_inspect(container)                   # the header alone
+
+# Numbers, exactly or within a bound that is checked on every value.
+container, report = kute.signals_pack(values, max_error=0.01)
+values_back = kute.signals_unpack(container)
+report["header"]["max_error_observed"]
+
+# The next version of an event vocabulary; every existing id is kept.
+child = vocabulary.evolve([["PURGE"], ["FLOW", "ALARM", "PURGE"]], version="0.2.0")
+```
+
+`kute.ZSTD` says whether the package was built with Zstandard; `codec="zlib"`
+is always available. An evolved vocabulary is not better by being newer:
+on the data measured so far it was rejected about as often as accepted
+(`docs/shadow.md`).
+
 `embed_test_vectors=True` stores short excerpts of the training data in the
 vocabulary for `verify` to check. It is off unless asked.
 

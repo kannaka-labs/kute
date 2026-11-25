@@ -28,7 +28,7 @@ def vocab(engine):
 
 
 def test_module_surface(engine):
-    assert kute.__version__ == "0.8.1"
+    assert kute.__version__ == "0.9.0"
     assert kute.KVF_VERSION == "0.1"
     assert {"bpe", "bytes", "char", "dictionary", "sequence-bpe"} <= set(engine.algorithms())
     assert {"binary", "text", "json", "jsonl", "jsonl-events"} <= set(engine.adapters())
@@ -199,3 +199,84 @@ def test_a_changed_vocabulary_file_is_refused(vocab, tmp_path):
     path.write_text(json.dumps(doc), encoding="utf-8")
     with pytest.raises(ValueError, match="digest"):
         Vocabulary.load(path)
+
+
+def test_events_container_keeps_whole_records():
+    lines = []
+    for i in range(400):
+        lines.append(json.dumps({"t": 1000 + i * 3, "unit": i % 5, "event": ["START", "HEAT", "DONE"][i % 3], "note": f"n{i % 7}", "v": i / 8}))
+    source = "\n".join(lines) + "\n"
+    container, report = kute.events_pack(source, symbol_field="event", time_field="t", group_field="unit")
+    assert isinstance(container, bytes) and container.startswith(b"KUTE-EV1\n")
+    assert report["source_bytes"] == len(source.encode()) and report["container_bytes"] == len(container)
+    assert report["entities"] == 5 and report["event_names"] == 3
+    back = kute.events_unpack(container)
+    assert [json.loads(line) for line in back.decode().splitlines()] == [json.loads(line) for line in lines]
+    assert kute.events_inspect(container) == report["header"]
+    # zlib is always there and gives the same records; the header says which codec.
+    zlib_container, zlib_report = kute.events_pack(source.encode(), symbol_field="event", time_field="t", group_field="unit", codec="zlib")
+    assert kute.events_unpack(zlib_container) == back
+    assert all(c["codec"] == "zlib" for c in zlib_report["header"]["columns"])
+    assert all(c["codec"] == ("zstd" if kute.ZSTD else "zlib") for c in report["header"]["columns"])
+    # Refusals: a record without the event field, a limit too small, a damaged container, an unknown codec.
+    with pytest.raises(ValueError):
+        kute.events_pack('{"t": 1}\n', symbol_field="event")
+    with pytest.raises(ValueError):
+        kute.events_unpack(container, max_bytes=10)
+    with pytest.raises(ValueError):
+        kute.events_unpack(container[:-3])
+    with pytest.raises(ValueError):
+        kute.events_pack(source, symbol_field="event", codec="lzma")
+
+
+def test_signals_container_keeps_its_contract():
+    import math
+    import struct
+
+    values = [round(230 + 4 * math.sin(i / 40) + (i * 7919 % 13) / 50, 3) for i in range(5000)]
+    values[17] = float("nan")
+    values[400] = float("inf")
+    values[401] = -0.0
+    bits = lambda xs: [struct.pack("<d", x) for x in xs]
+    exact, report = kute.signals_pack(values)
+    assert exact.startswith(b"KUTE-SG1\n") and report["header"]["contract"] == "exact"
+    assert bits(kute.signals_unpack(exact)) == bits(values)
+    assert kute.signals_inspect(exact) == report["header"]
+    bounded, report = kute.signals_pack(values, max_error=0.01)
+    back = kute.signals_unpack(bounded)
+    assert report["header"]["contract"] == "bounded" and report["header"]["max_error_observed"] <= 0.01
+    assert len(bounded) < len(exact)
+    for given, got in zip(values, back):
+        if math.isfinite(given):
+            assert abs(given - got) <= 0.01
+        else:
+            assert struct.pack("<d", given) == struct.pack("<d", got)
+    assert bits(kute.signals_unpack(kute.signals_pack(values, codec="zlib")[0])) == bits(values)
+    with pytest.raises(ValueError):
+        kute.signals_pack(values, max_error=0)
+    with pytest.raises(ValueError):
+        kute.signals_unpack(exact, max_values=10)
+    with pytest.raises(ValueError):
+        kute.signals_unpack(exact[:-1])
+
+
+def test_evolve_appends_and_keeps_every_id(engine):
+    rows = [json.dumps({"tag": tag}) for _ in range(40) for tag in ["OPEN", "FLOW", "CLOSE", "OPEN", "FLOW", "ALARM"]]
+    parent = engine.train(texts=["\n".join(rows) + "\n"], vocabulary_id="pytest:events", algorithm="sequence-bpe",
+                          adapter="jsonl-events", adapter_options={"field": "tag"}, vocab_size=12)
+    child = parent.evolve([["PURGE"], ["FLOW", "ALARM", "PURGE"]], version="0.2.0")
+    assert child.version == "0.2.0" and len(child) > len(parent) and child.digest != parent.digest
+    for token_id in range(len(parent)):
+        assert child.token(token_id)["payload"] == parent.token(token_id)["payload"]
+    new = "\n".join(json.dumps({"tag": tag}) for tag in ["OPEN", "FLOW", "ALARM", "PURGE", "CLOSE"]) + "\n"
+    ids = engine.encode(new, vocabulary=child)
+    back = engine.decode_bytes(ids, vocabulary=child).decode()
+    assert [json.loads(line)["tag"] for line in back.splitlines()] == ["OPEN", "FLOW", "ALARM", "PURGE", "CLOSE"]
+    # The added sequence is one token under the child.
+    assert len(ids) < 5
+    # The version must go up, and only event vocabularies evolve.
+    with pytest.raises(ValueError):
+        parent.evolve([["PURGE"]], version="0.1.0")
+    text = engine.train(texts=[TEXT], vocabulary_id="pytest:text2", vocab_size=300)
+    with pytest.raises((ValueError, NotImplementedError)):
+        text.evolve([["x"]], version="0.2.0")

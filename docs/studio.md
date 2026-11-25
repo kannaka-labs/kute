@@ -22,8 +22,8 @@ the service gave it.
 | Vocabulary | summary, training statistics and corpus fingerprints, longest learned tokens, one token and the ids it was merged from | `POST /v1/inspect` |
 | Encode | tokens, ids, escaped symbols, container bytes against input bytes, and whether decoding gives the text back | `POST /v1/encode`, `/v1/decode` |
 | Compare | tokens shared and not shared by two held vocabularies | `POST /v1/compare` |
-| Patterns | a corpus you paste or pick, read as one event a line or as JSON Lines with an event field and an optional entity field; recurring sequences with support, cohesion and evidence | `POST /v1/discover` |
-| Reports | a report written by `kute shadow`, `kute predict`, `kute live` or a benchmark script, shown as it is | a file you choose; nothing is sent |
+| Patterns | a corpus you paste or pick, read as one event a line or as JSON Lines with an event field and optional entity and time fields; recurring sequences with support, cohesion and evidence | `POST /v1/discover` |
+| Reports | a report written by `kute shadow`, `kute predict`, `kute live`, `kute peer serve` or `kute peer send` (one, or several appended to one file), or a benchmark script, shown as it is | a file you choose; nothing is sent |
 | Not here | what the specification lists for Studio that has no backend | nothing |
 
 Each view states its limits where they apply: a container larger than
@@ -44,18 +44,18 @@ backend output. Item by item:
 |---|---|
 | corpus import | Encode, Compare and Patterns take text or a file, up to the service's input limit. Nothing is stored. |
 | pattern evidence | Patterns. |
-| pattern timing | Not here: the service's discover operation takes no times. |
+| pattern timing | Patterns, when a time field is named: for each sequence, the least, 10%, median, 90% and most time from its first event to its last, in the ticks of that field. Measured on the corpus the sequences were found in; the page has no held-out timing (`kute discover --holdout` does). A line whose time is not a whole number the page can hold exactly (beyond 2^53) is left out and counted. |
 | vocabulary/merge inspection | Vocabulary. |
 | evolution comparison | Compare (two vocabularies on one input); Reports for a `kute shadow` report. The page cannot evolve a vocabulary. |
 | benchmark replay | Reports shows a report made earlier. It runs nothing. |
-| peer status | Not here. |
+| peer status | Reports reads what `kute peer serve` and `kute peer send` print when an exchange ends: who, with or without a certificate, what was delivered, which vocabularies were taken, whether a proposal was signed. That is a finished exchange, as one side told it. The status of a running peer is not here: it is another process, and this service cannot see it. A refused or failed exchange prints an error and no report. |
 | representation experiments | Not here: the service has no operation for them. One measurement exists (`docs/representations.md`). |
 
 The Reports view refuses a file over 32 MB.
 
 ## What it does not show
 
-Peer status, timing between events, running a benchmark again,
+The status of a running peer, running a benchmark again,
 representation experiments, and training or evolving a vocabulary. The
 service has no operation for these, and the page shows nothing rather
 than a mock-up. The Reports view shows a measurement made earlier; it

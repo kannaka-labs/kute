@@ -243,6 +243,7 @@ views["Patterns"] = async (root) => {
   const text = el("textarea", { id: "corpus-text", placeholder: "One event per line, or JSON Lines" });
   const symbolField = el("input", { type: "text", id: "symbol-field", placeholder: "event" });
   const groupField = el("input", { type: "text", id: "group-field", placeholder: "none: the whole corpus is one record" });
+  const timeField = el("input", { type: "text", id: "time-field", placeholder: "none: no timing" });
   const minSupport = el("input", { type: "number", id: "min-support", value: 5, min: 2 });
   const maxLength = el("input", { type: "number", id: "max-length", value: 8, min: 2 });
   const output = el("div", {});
@@ -262,8 +263,9 @@ views["Patterns"] = async (root) => {
     if (!lines.length) throw new Error("the corpus is empty");
     const field = symbolField.value.trim();
     const group = groupField.value.trim();
+    const time = timeField.value.trim();
     if (!field) {
-      if (group) throw new Error("an entity field needs a symbol field: both are read from JSON Lines");
+      if (group || time) throw new Error("an entity field or a time field needs a symbol field: all are read from JSON Lines");
       return { records: [lines.map((line) => line.trim())], skipped: 0 };
     }
     const byEntity = new Map();
@@ -272,19 +274,26 @@ views["Patterns"] = async (root) => {
       let object;
       try { object = JSON.parse(line); } catch (error) { skipped += 1; continue; }
       if (object === null || typeof object !== "object" || typeof object[field] !== "string") { skipped += 1; continue; }
+      // A time this page cannot hold exactly is not rounded: the line is left out.
+      if (time && !Number.isSafeInteger(object[time])) { skipped += 1; continue; }
       const key = group ? String(object[group]) : "";
-      if (!byEntity.has(key)) byEntity.set(key, []);
-      byEntity.get(key).push(object[field]);
+      if (!byEntity.has(key)) byEntity.set(key, { symbols: [], times: [] });
+      byEntity.get(key).symbols.push(object[field]);
+      if (time) byEntity.get(key).times.push(object[time]);
     }
-    if (!byEntity.size) throw new Error(`no line is a JSON object with a text field ${JSON.stringify(field)}`);
-    return { records: [...byEntity.values()], skipped };
+    if (!byEntity.size) throw new Error(`no line is a JSON object with a text field ${JSON.stringify(field)}${time ? ` and a whole-number field ${JSON.stringify(time)}` : ""}`);
+    const entities = [...byEntity.values()];
+    return { records: entities.map((e) => e.symbols), times: time ? entities.map((e) => e.times) : null, skipped };
   };
 
   const button = el("button", { class: "go" }, "Look for recurring sequences");
   button.addEventListener("click", runner(button, output, async () => {
     const corpus = records();
-    const result = await call("discover", { records: corpus.records, min_support: Number(minSupport.value), max_length: Number(maxLength.value) });
+    const request = { records: corpus.records, min_support: Number(minSupport.value), max_length: Number(maxLength.value) };
+    if (corpus.times) request.times = corpus.times;
+    const result = await call("discover", request);
     const d = result.data;
+    const timed = (d.timing || []).filter((t) => t.duration);
     const most = Math.max(1, ...d.patterns.map((p) => p.support));
     return [
       corpus.skipped ? el("p", { class: "limit" }, `${fmt(corpus.skipped)} line(s) were not JSON objects with that field and were left out.`) : null,
@@ -298,6 +307,13 @@ views["Patterns"] = async (root) => {
           el("span", {}, el("span", { class: "bar", w: Math.round(60 * p.support / most) }), fmt(p.support)),
           fmt(p.records), p.cohesion_bits.toFixed(2), p.evidence_bits.toFixed(1)])) : el("p", {}, "Nothing recurred often enough, and together enough, to be listed.")),
       d.patterns.length >= d.params.max_patterns ? el("p", { class: "limit" }, `The list stops at ${d.params.max_patterns} sequences; there may be more.`) : null,
+      d.timing ? el("h3", {}, `How long each took (${timed.length})`) : null,
+      d.timing ? el("div", { class: "panel" }, timed.length ? table(
+        [{ name: "sequence" }, { name: "occurrences", n: true }, { name: "least", n: true }, { name: "10%", n: true }, { name: "median", n: true }, { name: "90%", n: true }, { name: "most", n: true }],
+        timed.map((t) => [
+          el("span", {}, d.patterns[t.pattern].symbols.map((s) => el("span", { class: "sym" }, s))),
+          fmt(t.duration.occurrences), fmt(t.duration.min), fmt(t.duration.p10), fmt(t.duration.median), fmt(t.duration.p90), fmt(t.duration.max)])) : el("p", {}, "No listed sequence was measured.")) : null,
+      d.timing ? el("p", { class: "note" }, `In the ticks of the field ${JSON.stringify(timeField.value.trim())}, whatever unit that is: from the first event of an occurrence to its last; for a pair with a gap, from the first event to the nearest second one. Measured on the same corpus the sequences were found in, so it describes this corpus and predicts nothing.${timed.some((t) => t.duration.sampled < t.duration.occurrences) ? " Where a sequence occurred more than 100,000 times, the middle figures are from a sample; least and most are over all." : ""}`) : null,
       el("p", { class: "note" }, "Support is how often a sequence occurred in this corpus. Cohesion is how much more often than its parts would meet by chance. Both describe this corpus only: nothing here was checked on held-out data, and a sequence that recurs is not shown to mean anything or to cause anything. Timing between events is not available through the service; kute discover on the command line reports it."),
       provenance(result, `corpus: ${source} · read as ${fmt(corpus.records.length)} record(s) · parameters ${JSON.stringify(d.params)}`),
     ].filter(Boolean);
@@ -309,7 +325,8 @@ views["Patterns"] = async (root) => {
     el("label", { for: "corpus-text" }, "Corpus"), text,
     el("div", { class: "row" },
       el("div", {}, el("label", { for: "symbol-field" }, "Field holding the event name (JSON Lines); empty for one event per line"), symbolField),
-      el("div", {}, el("label", { for: "group-field" }, "Field naming the entity (optional)"), groupField)),
+      el("div", {}, el("label", { for: "group-field" }, "Field naming the entity (optional)"), groupField),
+      el("div", {}, el("label", { for: "time-field" }, "Field holding the time, a whole number (optional)"), timeField)),
     el("div", { class: "row" },
       el("div", {}, el("label", { for: "min-support" }, "Least support"), minSupport),
       el("div", {}, el("label", { for: "max-length" }, "Longest sequence"), maxLength)),
@@ -329,7 +346,48 @@ function tree(value, depth) {
   return depth > 1 ? el("details", {}, el("summary", {}, `${fmt(entries.length)} ${Array.isArray(value) ? "items" : "fields"}`), body) : body;
 }
 
+// The JSON values in a text that holds several, one after another: one a
+// line, or each over many lines as the command line prints them (what
+// `kute peer serve >> log` leaves). Strings are skipped, so a brace
+// inside one does not count.
+function values(text) {
+  const found = [];
+  let depth = 0, start = -1, inString = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\") i += 1;
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      if (depth === 0) throw new Error("text outside an object or list");
+      inString = true;
+    } else if (c === "{" || c === "[") {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if (c === "}" || c === "]") {
+      depth -= 1;
+      if (depth < 0) throw new Error("a closing bracket with nothing open");
+      if (depth === 0) found.push(JSON.parse(text.slice(start, i + 1)));
+    } else if (depth === 0 && c.trim() !== "") {
+      throw new Error("text outside an object or list");
+    }
+  }
+  if (depth !== 0 || inString) throw new Error("the last value is cut short");
+  return found;
+}
+
+// What `kute peer serve` and `kute peer send` print when an exchange ends.
+const served = (r) => r && typeof r === "object" && typeof r.messages_handled === "number" && Array.isArray(r.received);
+const sent = (r) => r && typeof r === "object" && typeof r.peer === "string" && Array.isArray(r.sent) && "vocabulary_transferred" in r;
+const PEER_CAUTION = "This is what one side said when the exchange had ended. It is not the state of a running peer, and the other side's report is a separate file.";
+
 function recognise(report) {
+  if (served(report)) return ["kute peer serve, one exchange", `From ${report.from}${report.peer_identity ? `, certificate ${report.peer_identity}` : ", no certificate (plain connection)"}: ${fmt(report.messages_handled)} protocol message(s) handled, ${fmt(report.received.length)} delivered, ${fmt(report.vocabularies_received.length)} vocabulary(ies) taken.`, PEER_CAUTION];
+  if (sent(report)) return ["kute peer send, one exchange", `To ${report.peer} (${report.peer_software})${report.server_identity ? `, certificate ${report.server_identity}` : ", no certificate (plain connection)"}: ${fmt(report.sent.length)} input(s) sent, every receipt matching; vocabulary ${report.vocabulary_transferred ? "sent whole" : "already held there"}${report.vocabulary_after_proposal ? `, then extended by proposal${report.proposal_signed ? " with a signature" : ""}` : ""}.`, PEER_CAUTION];
+  if (report && Array.isArray(report.lines) && report.lines.length && report.lines.every((l) => served(l) || sent(l))) {
+    const from = report.lines.filter(served);
+    return ["kute peer, a log of exchanges", `${fmt(report.lines.length)} exchange(s): ${fmt(from.length)} served, ${fmt(report.lines.length - from.length)} sent; ${fmt(from.reduce((n, l) => n + l.received.length, 0))} message(s) delivered here, ${fmt(from.reduce((n, l) => n + l.vocabularies_received.length, 0))} vocabulary(ies) taken.`, PEER_CAUTION + " An exchange that was refused or failed printed an error and no report, so it is not in this file."];
+  }
   if (report && report.decision && report.comparison) return ["kute shadow", `Decision: ${report.decision}. ${(Array.isArray(report.reasons) ? report.reasons : []).join("; ") || "No constraint was broken."}`, report.assumes || report.not_measured];
   if (report && report.context_over_previous && typeof report.context_over_previous === "object") return ["kute predict", `Looking further back saved ${fmt(report.context_over_previous.bits_per_event)} bits an event over one event of past, on ${fmt(report.held_out_events)} held-out events.`, report.note];
   if (report && Array.isArray(report.lines)) return ["kute live", `${fmt(report.lines.length)} lines: window reports and a summary.`, "Counts under bounds are lower limits; each window says whether it was exact."];
@@ -352,7 +410,7 @@ views["Reports"] = async (root) => {
       try {
         report = JSON.parse(text);
       } catch (error) {
-        report = { lines: text.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l)) };
+        report = { lines: values(text) };
       }
       const [kind, headline, caution] = recognise(report);
       output.replaceChildren(...[
@@ -367,7 +425,7 @@ views["Reports"] = async (root) => {
   });
   root.append(
     el("h2", {}, "Benchmark and decision reports"),
-    el("p", {}, "Open a report written by the command line: kute shadow, kute predict, the output of kute live, or a file from benchmarks/results."),
+    el("p", {}, "Open a report written by the command line: kute shadow, kute predict, the output of kute live, what kute peer serve or kute peer send printed (one, or several appended to one file), or a file from benchmarks/results."),
     el("label", { for: "report-file" }, "Report file"), file, output,
     el("p", { class: "note" }, "This shows a measurement that was made earlier. It does not make it again, and it cannot tell whether the file was edited after it was written."));
 };
@@ -377,8 +435,7 @@ views["Not here"] = async (root) => {
     el("h2", {}, "What this page does not show"),
     el("p", {}, "The specification lists these for Studio. The service has no operation for them, so there is nothing real to show, and this page shows nothing rather than a mock-up."),
     el("div", { class: "panel" }, table([{ name: "view" }, { name: "why not" }, { name: "where it is today" }], [
-      ["Peer status", "kute peer is a separate process, one connection at a time, and reports when it ends.", "The JSON that kute peer serve and kute peer send print."],
-      ["Pattern timing", "The discover operation of the service takes symbols without times.", "kute discover with --time-field; kute live."],
+      ["Status of a running peer", "kute peer is a separate process, one connection at a time, and reports when it ends. This service cannot see it.", "What kute peer serve and kute peer send print when an exchange ends; it opens under Reports."],
       ["Running a benchmark again", "The service is read-only and runs nothing but its five operations.", "The scripts in benchmarks/; open their reports under Reports."],
       ["Representation experiments", "The service has no operation for them. One measurement exists, and its result is negative.", "docs/representations.md; its report opens under Reports as plain JSON."],
       ["Training and evolving", "The service cannot create or change a vocabulary.", "kute train, kute evolve, kute shadow."],

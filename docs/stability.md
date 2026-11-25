@@ -44,6 +44,7 @@ someone building on it knows what a new release may do to them.
 | `mcp` | experimental | See `docs/mcp.md`. |
 | `keygen`, `sign`, `verify`, the signature scheme, `peer serve --require-signature-from` | experimental | See `docs/signing.md`. |
 | `serve --studio` | experimental | See `docs/studio.md`. |
+| `serve --registry`, `serve --registry-only`, `fetch`, `GET /v1/vocabularies` | experimental | New in 0.9. See `docs/http.md`. |
 | `predict`, `kute_discover::predict` | experimental | See `docs/predict.md`. |
 | `shadow` | experimental | See `docs/shadow.md`. |
 | `live`, `kute_discover::watch`, its checkpoint | experimental | See `docs/live.md`. |
@@ -86,6 +87,29 @@ binary. On every commit:
 All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
+
+## Changes since v0.8.1 that need action
+
+- **`kute_protocol::Message::SymbolPropose` has a new field,
+  `signatures`.** Rust code that builds the variant must give it
+  (`signatures: vec![]` is the message as it was), and code that matches
+  it in full must name it or use `..`. On the wire nothing changes for a
+  proposal without signatures, and the protocol number is still 2.
+- **A peer with a vocabulary check no longer refuses every proposal.**
+  `Peer::require_vocabulary_check` used to make proposals fail outright;
+  now a proposal that carries signatures is derived and put to the
+  check. A check that looks only at content, and not at who signed,
+  will now pass a proposed vocabulary it would pass if sent whole.
+  `kute peer serve --require-signature-from` may be combined with
+  `--accept-proposals`; it takes proposals only when both are given.
+- **The crates are on Rust edition 2024.** The minimum compiler is
+  unchanged (1.85). Nothing changes for code that depends on them.
+- **`kute serve` prints two more keys** when it starts (`registry`,
+  `operations`), and `GET /v1/capabilities` has `registry`. Additions
+  only.
+- Nothing changes in a file format: vocabularies, token sequences, and
+  event and signal containers written by 0.8.1 are read as before, and
+  Zstandard stays the default codec.
 
 ## Changes since v0.7.0 that need action
 

@@ -5,6 +5,7 @@
 
 pub mod http;
 pub mod live;
+pub mod registry;
 pub mod shadow;
 pub mod sign;
 pub mod mcp;
@@ -360,6 +361,15 @@ enum Command {
         /// nothing from outside and calls only this service.
         #[arg(long)]
         studio: bool,
+        /// Also give the files of the vocabularies named with --vocab to
+        /// whoever asks, by digest, under /v1/vocabularies (`kute fetch`
+        /// takes them). Read-only: nothing can be sent to it.
+        #[arg(long)]
+        registry: bool,
+        /// Be a registry and nothing else: the five operations are not
+        /// answered, so no caller can make this process compute.
+        #[arg(long, conflicts_with = "studio")]
+        registry_only: bool,
         /// Most bytes of input in one encode or discover call.
         #[arg(long, default_value_t = 1_048_576)]
         max_input_bytes: u64,
@@ -371,6 +381,38 @@ enum Command {
         workers: usize,
         /// Seconds a request may take to arrive.
         #[arg(long, default_value_t = 10)]
+        timeout: u64,
+    },
+    /// Take a vocabulary from a registry (`kute serve --registry`) by its
+    /// digest. The digest is recomputed from what arrives and the file is
+    /// written only if it matches; with --trusted-key, only if one of
+    /// those keys signed it. Plain HTTP: the registry and the network are
+    /// not trusted with the content, and can see it.
+    Fetch {
+        /// The registry, as http://host:port.
+        #[arg(long)]
+        from: String,
+        /// The vocabulary wanted: sha256: and 64 hex digits.
+        #[arg(long, required_unless_present = "list", conflicts_with = "list")]
+        digest: Option<String>,
+        /// Where to write it.
+        #[arg(long, required_unless_present = "list")]
+        output: Option<PathBuf>,
+        /// Keep the vocabulary only if one of these keys signed it (the
+        /// base64 public key `kute keygen` prints). Repeatable.
+        #[arg(long = "trusted-key", value_name = "BASE64")]
+        trusted_keys: Vec<String>,
+        /// Replace the output if it exists.
+        #[arg(long)]
+        force: bool,
+        /// Print what the registry says it holds, and fetch nothing.
+        #[arg(long)]
+        list: bool,
+        /// Largest file taken.
+        #[arg(long, default_value_t = 268_435_456)]
+        max_bytes: u64,
+        /// Seconds the whole exchange may take.
+        #[arg(long, default_value_t = 60)]
         timeout: u64,
     },
     /// List registered algorithms and adapters and what each declares.
@@ -491,8 +533,10 @@ enum PeerAction {
         /// Take a vocabulary from the other side only if it carries a
         /// valid signature from one of these keys (the base64 public key
         /// `kute keygen` prints). Repeatable. Vocabularies given with
-        /// --vocab are yours and are not checked.
-        #[arg(long, value_name = "PUBLIC_KEY", requires = "accept_vocabularies", conflicts_with = "accept_proposals")]
+        /// --vocab are yours and are not checked. With --accept-proposals,
+        /// a proposal is taken only if it carries such a signature of the
+        /// vocabulary it derives (`kute peer send --sign-with`).
+        #[arg(long, value_name = "PUBLIC_KEY", requires = "accept_vocabularies")]
         require_signature_from: Vec<String>,
         /// Send a held vocabulary's file to the other side when it asks.
         #[arg(long)]
@@ -556,6 +600,11 @@ enum PeerAction {
         additions: Vec<String>,
         #[arg(long)]
         new_version: Option<String>,
+        /// Sign the vocabulary the proposal derives with this private key
+        /// (as `kute sign` would), and send the signature with the
+        /// proposal. For a peer that requires signatures.
+        #[arg(long, value_name = "KEY", requires = "new_version")]
+        sign_with: Option<PathBuf>,
         /// This side's certificate chain (PEM); with --tls-key and --tls-ca
         /// the connection is TLS 1.3 with a certificate on both sides.
         #[arg(long, requires_all = ["tls_key", "tls_ca"])]
@@ -708,7 +757,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 })).collect::<Vec<_>>(),
             }))
         }
-        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version, tls_cert, tls_key, tls_ca, server_name, server_fingerprint, insecure_plain } => {
+        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version, sign_with, tls_cert, tls_key, tls_ca, server_name, server_fingerprint, insecure_plain } => {
+            // Read the key before connecting: one that cannot be read
+            // is this side's mistake, to be told before anything is sent.
+            let signer = sign_with.as_deref().map(sign::signer).transpose()?;
             if tls_cert.is_none() && !insecure_plain {
                 return Err(KuteError::InvalidConfig(NO_TRANSPORT.into()));
             }
@@ -733,7 +785,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             let transferred = session.share(&digest)?;
             let mut proposed = None;
             if let Some(version) = &new_version {
-                digest = session.propose(&digest, &split_additions(&additions), version)?;
+                digest = match &signer {
+                    Some(signer) => session.propose_signed(&digest, &split_additions(&additions), version, signer)?,
+                    None => session.propose(&digest, &split_additions(&additions), version)?,
+                };
                 proposed = Some(digest.clone());
             }
             let mut sent = Vec::new();
@@ -748,6 +803,7 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 "server_identity": server_identity,
                 "vocabulary_transferred": transferred,
                 "vocabulary_after_proposal": proposed,
+                "proposal_signed": proposed.is_some() && sign_with.is_some(),
                 "sent": sent,
             }))
         }
@@ -1455,7 +1511,16 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
             SignalsAction::Inspect { input } => print(&kute_signals::header(&std::fs::read(&input)?)?),
         },
-        Command::Serve { vocab: paths, listen, insecure_remote, studio, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Fetch { from, digest, output, trusted_keys, force, list, max_bytes, timeout } => {
+            let timeout = std::time::Duration::from_secs(timeout.max(1));
+            match (list, digest, output) {
+                (true, _, _) => print(&registry::list(&from, timeout)?),
+                (false, Some(digest), Some(output)) => print(&registry::fetch(&engine, &from, &digest, &output, &trusted_keys, force, max_bytes, timeout)?),
+                _ => Err(KuteError::InvalidConfig("give --digest and --output, or --list".into())),
+            }
+        }
+        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, max_input_bytes, max_output_bytes, workers, timeout } => {
+            let registry = registry || registry_only;
             let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
             let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);
             let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_body_bytes, ..Default::default() };
@@ -1470,8 +1535,8 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             if studio && !http::is_loopback(&address) {
                 return Err(KuteError::InvalidConfig("Studio is served on a loopback address only: it is a page for the person at this machine".into()));
             }
-            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")) }))?;
-            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, ..Default::default() };
+            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "operations": !registry_only }))?;
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, ..Default::default() };
             http::serve(server, listener, options)
         }
         Command::Capabilities => {

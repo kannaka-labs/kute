@@ -33,7 +33,7 @@ The authoritative schemas are what `tools/list` returns
 | `encode` | `vocabulary`, `text` or `data_base64`, optional `unknown` (`strict`, `escape`) | `tokens`, `ids`, `escaped_symbols`, `container_base64` |
 | `decode` | `container_base64` | `text`, or `data_base64` when the bytes are not UTF-8 |
 | `compare` | `a`, `b` | shared and distinct token payloads |
-| `discover` | `records` (lists of symbols) or `lines`, optional `min_support`, `max_length`, `window`, `min_cohesion_bits`, `max_patterns` | recurring sequences and gapped pairs with support and cohesion |
+| `discover` | `records` (lists of symbols) or `lines`, optional `times` (with `records`: one whole number for each symbol; the answer then has `timing`), `min_support`, `max_length`, `window`, `min_cohesion_bits`, `max_patterns` | recurring sequences and gapped pairs with support and cohesion |
 
 A vocabulary is named by its digest, by its id when one version is held, or
 by `id version`. `decode` takes the vocabulary from the container; it must

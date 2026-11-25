@@ -57,7 +57,10 @@ take from the file. So:
   `kute serve` read and keep signatures and check none. `kute verify`
   checks a file; `kute peer serve --require-signature-from` checks what
   the other side sends (below).
-* **No registry, no chain of keys, no expiry, no revocation.** The list
+* **No chain of keys, no expiry, no revocation.** A registry exists
+  since 0.9 (`kute serve --registry`, `kute fetch`; `docs/http.md`)
+  and distributes files, not trust: `kute fetch --trusted-key` checks a
+  signature exactly as `kute verify` does, against keys you pass. The list
   of keys you trust is the `--trusted-key` options you pass. To stop
   trusting a key, stop passing it.
 * **No protection for the private key** beyond file permissions.
@@ -80,11 +83,25 @@ What it leaves alone:
 
 * Vocabularies you give the peer yourself with `--vocab` are not
   checked. You chose them.
-* It cannot be combined with `--accept-proposals`. A proposal makes the
-  peer derive a new vocabulary from one it holds, and nobody has signed
-  the result; a peer that requires signatures refuses proposals. To
-  extend a vocabulary between such peers, evolve it, sign it and send
-  it whole.
+* With `--accept-proposals`, a proposal is taken only if it carries a
+  signature, from a trusted key, of the vocabulary it derives. The
+  proposer makes it with `kute peer send --propose ... --sign-with
+  key.pem`: it derives the vocabulary first, signs its digest as
+  `kute sign` would, and sends the signature with the proposal (a few
+  hundred bytes; no vocabulary data crosses). The peer derives the
+  vocabulary itself, attaches the signature to what it derived, and
+  checks it. So the signature is never taken on trust about content:
+  one made for anything else does not hold for this digest. A proposal
+  with no signature is refused before anything is derived. One with a
+  signature that does not hold costs the peer the derivation, which is
+  bounded by the same limits as any proposal. What the peer keeps is
+  the file `kute evolve` and `kute sign` would have made. A peer with
+  no such requirement attaches whatever signatures a proposal carries
+  without looking at them, and a later proposal for the same vocabulary
+  replaces them: there, the signatures on a held copy are whoever
+  proposed last, and mean nothing until someone verifies them. (Before 0.9
+  the two options could not be combined, and a signed vocabulary had to
+  be sent whole.)
 * It is a second lock, not a replacement for the first. Who may connect
   at all is still the TLS certificate and `--allow`. The signature says
   who vouches for the vocabulary, which need not be who delivers it.
@@ -102,5 +119,5 @@ What it leaves alone:
 Reviewed by reading every place a received vocabulary is kept or used;
 no way past the check was found. That is one reader, not a proof.
 
-These are the first two steps of the specification's B8. A registry and
-federation are not built.
+These are the first two steps of the specification's B8. A read-only
+registry followed (`docs/http.md`). Federation is not built.

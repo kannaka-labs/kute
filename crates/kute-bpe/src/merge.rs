@@ -54,7 +54,7 @@ pub fn train_merges(
     }
 
     let mut heap: BinaryHeap<(i64, Reverse<Pair>)> =
-        pair_counts.iter().filter(|(_, &c)| c > 0).map(|(&p, &c)| (c, Reverse(p))).collect();
+        pair_counts.iter().filter(|&(_, &c)| c > 0).map(|(&p, &c)| (c, Reverse(p))).collect();
     let mut banned: FxHashSet<Pair> = FxHashSet::default();
     let mut merges = Vec::new();
     let min_frequency = min_frequency.max(1) as i64;
@@ -356,7 +356,7 @@ mod tests {
                 }
             }
             // most frequent, then the smallest pair
-            let Some((&pair, &count)) = pair_counts.iter().filter(|(_, &c)| c > 0).max_by_key(|(&p, &c)| (c, Reverse(p))) else { break };
+            let Some((&pair, &count)) = pair_counts.iter().filter(|&(_, &c)| c > 0).max_by_key(|&(&p, &c)| (c, Reverse(p))) else { break };
             if count < min_frequency {
                 break;
             }
@@ -450,7 +450,7 @@ mod tests {
                         *pair_counts.entry((p[0], p[1])).or_insert(0) += c as i64;
                     }
                 }
-                let mut order: Vec<(i64, Reverse<Pair>)> = pair_counts.iter().filter(|(_, &c)| c > 0).map(|(&p, &c)| (c, Reverse(p))).collect();
+                let mut order: Vec<(i64, Reverse<Pair>)> = pair_counts.iter().filter(|&(_, &c)| c > 0).map(|(&p, &c)| (c, Reverse(p))).collect();
                 order.sort_unstable_by(|a, b| b.cmp(a));
                 let mut chosen = None;
                 for (count, Reverse(pair)) in order {

@@ -971,6 +971,8 @@ Decided:
   vocabulary on the receiving side that no signer has seen; accepting it
   would let the other side put an unsigned vocabulary into a peer that
   requires signed ones. The CLI refuses the two options together.
+  (Changed by ADR-0053: a proposal that carries a signature of what it
+  derives is now put to the check.)
 * Vocabularies the operator loads are not checked.
 * The requirement is per peer process, not per allowed fingerprint. A
   per-fingerprint set of trusted keys would belong in `tls::Access`
@@ -1070,9 +1072,134 @@ that is allowed to break.
 
 Not done: a Rust-only Zstandard reader for builds without the feature.
 
+## ADR-0052: QueenSync distributes the candidate signed as well as by proposal
+
+Status: accepted.
+
+The specification's E2 says "negotiate a signed vocabulary". The
+example negotiated by proposal and said the vocabulary was not signed,
+because signing came later (ADR-0044, ADR-0047).
+
+Decided: a second path in the same script. The candidate is offered to
+a worker that requires the queen's signature three times: unsigned,
+signed by another key, signed by the queen. The first two must be
+refused with nothing delivered and the third taken; the report says
+what each cost. Still made of released commands only.
+
+The two paths stay two. A peer that requires signatures refuses
+proposals (ADR-0047), so "negotiated" and "signed" are not one act
+here: the signed vocabulary is sent whole. Measured, each figure the
+bytes on the socket in both directions for one exchange: 93,432 for the
+candidate sent whole and refused (unsigned; 93,781 signed by a key the
+worker was not told of), no task delivered in either; 161,063 for the
+candidate signed by the queen, taken, with 100 tasks delivered in the
+same exchange; 2,068 for the proposal of the same candidate to a worker
+without the requirement, no task in it. So the file costs about 93 kB
+where the proposal costs 2 kB, and a refusal comes only after the file
+has been sent.
+
+Signing what a proposal derives was not done here; it is ADR-0053.
+
+## ADR-0053: A proposal can carry the proposer's signature of what it derives
+
+Status: accepted.
+
+A peer that required signatures refused every proposal (ADR-0047), so
+a signed vocabulary had to be sent whole: about 93 kB in QueenSync
+where a proposal cost 2 kB, and a refusal came only after the file.
+
+Decided: `SYMBOL_PROPOSE` gains an optional `signatures` field, over
+the digest of the child. The proposer derives the child first and
+signs it (`kute peer send --sign-with`). A responder with a check
+refuses a proposal without signatures before deriving; otherwise it
+derives the child itself, attaches the signatures and puts that to its
+check. The signature is therefore checked against content the
+responder computed, never against content it was told about.
+`--require-signature-from` may now be combined with
+`--accept-proposals`.
+
+No protocol number change: the field is omitted when empty, older
+peers ignore it, and an older peer with a check goes on refusing every
+proposal. `Message::SymbolPropose` has a new field, which breaks Rust
+code that builds or matches the variant in full.
+
+Cost admitted: a proposal with a bad signature makes the responder
+derive before it refuses. The derivation is bounded by the limits every
+proposal has, and only peers allowed to connect can ask for it.
+
+Measured in QueenSync: taken at about 2.3 kB beside the tasks; refused
+at about 2.1 to 2.3 kB.
+
+Rejected: each side signing its own derivation (the worker's signature
+tells the queen nothing she can use, and the worker would need a key).
+
+## ADR-0051: Rust edition 2024
+
+Status: accepted.
+
+The workspace was on edition 2021 for no recorded reason: it was what
+the first commit wrote. The minimum supported Rust has been 1.85 since
+0.3.1, which is the first release with edition 2024, so the older
+edition kept no compiler able to build KUTE that the newer one loses.
+
+Decided: edition 2024 in the workspace, the rustbpe backend and the
+Python binding. `cargo fix --edition` changed eight lines (closure
+patterns, one `unsafe extern`, one `use<>` bound). The minimum
+supported Rust stays 1.85 and is still checked in CI. No format, digest
+or public signature changes.
+
+The migration lint (`tail-expr-drop-order`, run over the workspace on
+the old edition) names six places where a temporary at the end of a
+block is now dropped earlier. All six are in test files
+(`kute-protocol/tests`, `kute/tests/untrusted_input.rs`); none is in a
+library or the command line. They were not rewritten, and those tests
+pass on the new edition.
+
+The edition also drops the temporaries of an `if let` condition before
+the `else` branch. Its lint (`if-let-rescope`, run the same way on
+b057a05) names nothing. That lint was seen here to fire on a type with
+its own `Drop` and not on a `MutexGuard`, so locks were searched for by
+hand as well: the workspace has one `Mutex` (the job queue in
+`kute-cli/src/http.rs`), locked in a `let`, and no `RefCell` or
+`RwLock`; no guard is taken in an `if let` condition.
+
+## ADR-0054: A registry is the HTTP service giving held files by digest, and a client that checks them
+
+Status: accepted.
+
+The specification's B8 asks for a registry after signing. Chosen for
+0.9, the least that is one: `kute serve --registry` answers
+`GET /v1/vocabularies` (a listing) and `GET /v1/vocabularies/<digest>`
+(the file), and `kute fetch` takes a file by digest.
+
+* Content-addressed only. A file is asked for by the hash of its
+  content. The client recomputes the hash from what arrives, runs the
+  vocabulary's test vectors, and with `--trusted-key` checks a
+  signature with the code `kute verify` uses. So the registry and the
+  network need not be trusted for integrity, and no TLS client was
+  added to get it. Resolving a name to a digest was left out: that is
+  the step where a registry would have to be believed.
+* Read-only. Nothing can be sent to it. It holds what it was started
+  with.
+* Off by default, like every other way of giving a vocabulary away
+  (ADR-0033), and `--registry-only` turns the five operations off so
+  that a registry put on a network cannot be made to compute.
+* Plain HTTP, written on `std::net` with every bound in one file, as
+  the service is. Confidentiality is not provided and the documents say
+  so. `https://` is refused by name.
+
+Not built: uploads, accounts, search, federation, mirrors, expiry,
+revocation, TLS. Federation in particular needs a decision about whose
+listing is believed, which nothing here has needed yet.
+
+Checked by tests against sockets that send another vocabulary, the
+right one with its signature removed, altered content, a body cut
+short, no stated length, a length past the limit, something that is
+not HTTP, and a stall; in each nothing is written.
+
 ## Deferred
 
-Registry service and signing, import from other tokenizer formats,
+Import from other tokenizer formats,
 checkpoints written during a run, units and relationships between
 entities, timestamps in token containers, entropy-coded containers, and
 adapters for DNA, telemetry, mathematics and quantum circuits.
