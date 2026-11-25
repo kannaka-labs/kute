@@ -383,7 +383,7 @@ pub(crate) fn patterns_of(tables: &[Table], names: &[String], min_support: u64, 
         // exactly as often, is left to the longer one.
         let mut absorbed: FxHashSet<&[u32]> = FxHashSet::default();
         if let Some(longer) = tables.get(n + 1) {
-            for (seq, &count) in longer.counts.iter().filter(|(_, &c)| c >= min_support) {
+            for (seq, &count) in longer.counts.iter().filter(|&(_, &c)| c >= min_support) {
                 for part in [&seq[..n], &seq[1..]] {
                     if count_of(part) == count {
                         absorbed.insert(part);

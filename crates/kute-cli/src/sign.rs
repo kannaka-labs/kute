@@ -157,7 +157,7 @@ pub fn verify(vocab_path: &Path, trusted: &[String]) -> kute::Result<(Value, boo
 
 /// A test for `kute peer serve --require-signature-from`: passes a
 /// vocabulary that carries a valid signature from one of `trusted`.
-pub fn gate(trusted: &[String]) -> kute::Result<impl Fn(&kute::Vocabulary) -> Result<(), String> + Send + 'static> {
+pub fn gate(trusted: &[String]) -> kute::Result<impl Fn(&kute::Vocabulary) -> Result<(), String> + Send + 'static + use<>> {
     let keys = trusted.iter().map(|t| public_of(t)).collect::<kute::Result<Vec<_>>>()?;
     Ok(move |vocabulary: &kute::Vocabulary| match check(vocabulary, &keys) {
         Ok((_, _, held)) if held > 0 => Ok(()),

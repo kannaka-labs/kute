@@ -2,7 +2,7 @@
 name = "kute-rustbpe"
 description = "The rustbpe reference backend for KUTE, and a kute command with it built in"
 version = "0.8.1"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.85"
 authors = ["Kannaka Labs"]

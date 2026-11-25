@@ -294,7 +294,7 @@ impl EventStream {
             record.symbols.push(symbol);
         }
         // Stable sort of the records that arrived out of time order.
-        for (record, _) in self.records.iter_mut().zip(&touched).filter(|(_, &t)| t) {
+        for (record, _) in self.records.iter_mut().zip(&touched).filter(|&(_, &t)| t) {
             let mut order: Vec<usize> = (0..record.times.len()).collect();
             order.sort_by_key(|&i| record.times[i]);
             record.times = order.iter().map(|&i| record.times[i]).collect();

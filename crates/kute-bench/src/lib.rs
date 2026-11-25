@@ -325,7 +325,7 @@ pub fn peak_memory_bytes() -> Option<u64> {
         peak_pagefile_usage: usize,
     }
     #[link(name = "kernel32")]
-    extern "system" {
+    unsafe extern "system" {
         fn GetCurrentProcess() -> isize;
         fn K32GetProcessMemoryInfo(process: isize, counters: *mut Counters, cb: u32) -> i32;
     }

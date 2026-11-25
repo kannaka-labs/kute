@@ -1070,6 +1070,25 @@ that is allowed to break.
 
 Not done: a Rust-only Zstandard reader for builds without the feature.
 
+## ADR-0051: Rust edition 2024
+
+Status: accepted.
+
+The workspace was on edition 2021 for no recorded reason: it was what
+the first commit wrote. The minimum supported Rust has been 1.85 since
+0.3.1, which is the first release with edition 2024, so the older
+edition kept no compiler able to build KUTE that the newer one loses.
+
+Decided: edition 2024 in the workspace, the rustbpe backend and the
+Python binding. `cargo fix --edition` changed eight lines (closure
+patterns, one `unsafe extern`, one `use<>` bound). The minimum
+supported Rust stays 1.85 and is still checked in CI. No format, digest
+or public signature changes.
+
+The migration lint lists sixteen places where a temporary at the end of
+a block is now dropped earlier. None holds a lock or sends anything;
+they were not rewritten.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
