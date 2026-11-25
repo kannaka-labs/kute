@@ -660,9 +660,39 @@ minutes; they need the permission model first and are left out until it
 exists. Time spent inside one operation is not bounded, and there is no
 per-client rate limit.
 
+## ADR-0038: Complete events are stored by column, in a container of their own
+
+The v0.7 specification asks for an event profile that keeps identity,
+time, attributes and numeric values, where a token sequence keeps only
+the names (C1). `kute-events` packs JSON Lines records into a `KUTE-EV1`
+container and unpacks them exactly; `docs/events.md` describes it.
+
+It is a separate container, not an extension of the token container. A
+token container is one sequence of ids under one vocabulary; a record
+has several things of different kinds, and they compress when each is
+stored with its like. Forcing them into one token stream would mean
+inventing ids for timestamps and values.
+
+"Exactly" means canonical JSON, the same rule as the `jsonl` adapter and
+through the same code: the records and their values come back, key order
+and spacing do not, and the header says whether the source was already
+canonical, in which case the bytes are the same. Events stay in source
+order; the entity grouping that helps compression is undone on reading.
+
+Columns are compressed with zlib because it is already a dependency and
+is in every language's standard library. It is the weakest of the
+general compressors measured beside it; the layout does the work.
+
+Deliberately absent: the event names are not tokenized with a trained
+vocabulary. The container needs no vocabulary to read, which removes a
+failure mode, and whether sequence tokens would beat zlib on the grouped
+name column has not been measured. Also absent: streaming writing,
+reading part of a container, units of measurement, and relationships
+between entities other than the one group field.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
-checkpoints written during a run, event values, units and relationships,
-timestamps in token containers, entropy-coded containers, and
+checkpoints written during a run, units and relationships between
+entities, timestamps in token containers, entropy-coded containers, and
 adapters for DNA, telemetry, mathematics and quantum circuits.

@@ -71,6 +71,16 @@ fn canonical(value: &Value) -> Result<Vec<u8>> {
     Ok(serde_json::to_vec(&sort(value))?)
 }
 
+/// One JSON value as the JSON adapters read and write it: parsed, refused
+/// if canonicalizing would change what it says (a repeated key, a number
+/// that does not survive), and written with sorted keys and no spaces.
+/// For code outside the adapters that must agree with them byte for byte.
+pub fn canonical_json(bytes: &[u8], what: &str) -> Result<(Value, Vec<u8>)> {
+    let value = parse(bytes, what, &AdapterConfig::default())?;
+    let text = canonical(&value)?;
+    Ok((value, text))
+}
+
 fn parse(bytes: &[u8], what: &str, config: &AdapterConfig) -> Result<Value> {
     let value = serde_json::from_slice(bytes).map_err(|e| KuteError::InvalidInput(format!("{what}: {e}")))?;
     match config.get("strict") {

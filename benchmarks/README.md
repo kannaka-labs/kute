@@ -427,6 +427,59 @@ come from the same code base as the training files, written by the same
 people, so this is the easy case for a learned vocabulary. Not compared
 with `tiktoken` or `tokenizers` on this corpus yet, and nothing was timed.
 
+## Complete event records by column (after v0.7.0)
+
+`kute events pack` keeps whole records (entity, time, every other field),
+where the comparisons above store event names only. `events_container.py`
+packs, unpacks, checks the result against the digest in the header and
+against the source, and then runs the general compressors on exactly the
+bytes the container gives back. Sizes are whole files. One run each, on
+the 8-thread laptop.
+
+**HDFS_v1**, all 11,175,629 events as `{"block", "event", "t"}`, 643.8 MB
+of JSON Lines, 575,061 blocks (report `results/events-container-hdfs.json`):
+
+| | bytes | of the JSON | time to write |
+|---|---:|---:|---:|
+| `kute events pack` | 13,660,465 | 2.1% | 59 s |
+| xz -9 | 23,144,380 | 3.6% | 242 s |
+| zstd -19 | 26,457,244 | 4.1% | 257 s |
+| zlib -9 | 34,820,525 | 5.4% | 13 s |
+
+The container is 0.59 of xz and 0.39 of zlib. Unpacking took 5 s and gave
+the source back byte for byte.
+
+**OpenSSH** (Loghub-2.0), 638,947 log lines turned into records by
+`openssh_events.py`: time, host, process, pid, the template id as the
+event name, and the text that fills the template's slots as `params`;
+77.4 MB of JSON Lines (report `results/events-container-openssh.json`):
+
+| | bytes | of the JSON | time to write |
+|---|---:|---:|---:|
+| `kute events pack` | 1,790,243 | 2.3% | 11 s |
+| zstd -19 | 2,785,261 | 3.6% | 62 s |
+| zlib -9 | 3,730,572 | 4.8% | 1 s |
+| xz -9 | 3,887,204 | 5.0% | 25 s |
+
+The container is 0.64 of zstd, the best of the three here. The records
+came back equal; the bytes differ from the source only in key order,
+which the source did not have sorted.
+
+What this does and does not show:
+
+* The gain is from the layout: like stored with like, names grouped by
+  entity, times as differences. Each column is plain zlib. No vocabulary
+  is trained or used, so this is not a measurement of tokenization.
+* JSON Lines repeats every key on every line, which flatters any column
+  layout. Against the original OpenSSH log text (70.5 MB, xz -9
+  3,384,512 bytes) the container is 0.53, but the two do not hold quite
+  the same thing: the records keep everything in the log line except its
+  exact spacing and the year-less date, which became seconds.
+* Other column formats and log-specific compressors exist and were not
+  run. This compares with general compressors only.
+* Two datasets, both logs, one run. Packing reads the whole input into
+  memory and runs at about 10 MB of JSON a second on this machine.
+
 ## Frozen, evolved and retrained event vocabularies (v0.6.0)
 
 `benchmarks/evolution_matrix.py` cuts the HDFS_v1 training events in half by

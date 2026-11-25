@@ -86,6 +86,9 @@ Added in v0.3:
   discover as Model Context Protocol tools on standard input and output.
   Read-only: it works on the vocabularies it was started with and the data
   in each call, with bounded inputs and outputs. See `docs/mcp.md`.
+* `kute events pack|unpack|inspect`: complete event records (entity, time
+  and every other field) kept exactly and stored by column. See
+  `docs/events.md`.
 * `kute serve --vocab file.kvf`: the same five operations over HTTP under
   `/v1/`, loopback only unless asked, no TLS or authentication of its own.
   See `docs/http.md`.

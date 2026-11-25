@@ -466,6 +466,7 @@ dependencies = [
  "kute-bench",
  "kute-discover",
  "kute-engine",
+ "kute-events",
  "kute-protocol",
  "serde",
  "serde_json",
@@ -502,6 +503,18 @@ dependencies = [
  "kute-vocab",
  "rayon",
  "serde",
+]
+
+[[package]]
+name = "kute-events"
+version = "0.7.0"
+dependencies = [
+ "flate2",
+ "kute-adapters",
+ "kute-types",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

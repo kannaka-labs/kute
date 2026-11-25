@@ -154,6 +154,12 @@ enum Command {
         #[arg(long, default_value_t = 4_194_304)]
         max_output_bytes: u64,
     },
+    /// Complete event records (entity, time and every other field) packed
+    /// by column into one container, and back. Experimental.
+    Events {
+        #[command(subcommand)]
+        action: EventsAction,
+    },
     /// Serve encode, decode, inspect, compare and discover over HTTP, under
     /// /v1/. Read-only, like `kute mcp`, and through the same code. No TLS
     /// and no authentication: it listens on loopback unless told otherwise.
@@ -195,6 +201,39 @@ enum Command {
 #[derive(Clone, Copy, ValueEnum)]
 enum ExportFormat {
     Tiktoken,
+}
+
+#[derive(Subcommand)]
+enum EventsAction {
+    /// Pack JSON Lines, one object per event, keeping every field.
+    Pack {
+        /// JSON Lines to read.
+        input: PathBuf,
+        /// Container to write.
+        #[arg(long)]
+        output: PathBuf,
+        /// Field holding the event name.
+        #[arg(long)]
+        symbol: String,
+        /// Field holding the time, a whole number.
+        #[arg(long)]
+        time: Option<String>,
+        /// Field naming the entity an event belongs to.
+        #[arg(long)]
+        group: Option<String>,
+    },
+    /// Write the records back as canonical JSON Lines, in source order.
+    Unpack {
+        input: PathBuf,
+        /// File to write; standard output when absent.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Refuse a container that unpacks to more bytes than this.
+        #[arg(long, default_value_t = 1 << 32)]
+        max_bytes: u64,
+    },
+    /// Show a container's header: layout, counts, digest and columns.
+    Inspect { input: PathBuf },
 }
 
 #[derive(Subcommand)]
@@ -1017,6 +1056,30 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             server.serve(std::io::stdin().lock(), std::io::stdout().lock())?;
             Ok(())
         }
+        Command::Events { action } => match action {
+            EventsAction::Pack { input, output, symbol, time, group } => {
+                let layout = kute_events::Layout { symbol_field: symbol, time_field: time, group_field: group };
+                let (container, report) = kute_events::pack(&std::fs::read(&input)?, &layout)?;
+                std::fs::write(&output, &container)?;
+                print(&json!({ "output": output, "report": report }))
+            }
+            EventsAction::Unpack { input, output, max_bytes } => {
+                let bytes = kute_events::unpack(&std::fs::read(&input)?, max_bytes)?;
+                match output {
+                    Some(path) => {
+                        std::fs::write(&path, &bytes)?;
+                        print(&json!({ "output": path, "bytes": bytes.len() }))
+                    }
+                    None => {
+                        let mut out = std::io::stdout().lock();
+                        out.write_all(&bytes)?;
+                        out.flush()?;
+                        Ok(())
+                    }
+                }
+            }
+            EventsAction::Inspect { input } => print(&kute_events::header(&std::fs::read(&input)?)?.0),
+        },
         Command::Serve { vocab: paths, listen, insecure_remote, max_input_bytes, max_output_bytes, workers, timeout } => {
             let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
             let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);

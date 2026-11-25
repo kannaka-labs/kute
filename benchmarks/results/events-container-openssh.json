@@ -1,0 +1,112 @@
+{
+ "label": "Loghub-2.0 OpenSSH, 638,947 events with parameters",
+ "layout": {
+  "group_field": "pid",
+  "symbol_field": "event",
+  "time_field": "t"
+ },
+ "events": 638947,
+ "entities": 32420,
+ "event_names": 38,
+ "source_bytes": 77425684,
+ "canonical_bytes": 77425684,
+ "canonical_sha256": "sha256:445f967bb279a11978b5dfacbcf6ddbac21e910a25e638f00daba94f37b2f02d",
+ "checks": {
+  "digest_matches_header": true,
+  "same_records_as_source": true,
+  "byte_identical_to_source": false,
+  "header_says_byte_exact": false
+ },
+ "container": {
+  "bytes": 1790243,
+  "pack_seconds": 10.8,
+  "unpack_seconds": 0.82,
+  "time_order": "source",
+  "columns": [
+   {
+    "kind": "json",
+    "name": "@names",
+    "raw": 218,
+    "stored": 88
+   },
+   {
+    "kind": "json",
+    "name": "@shapes",
+    "raw": 49,
+    "stored": 53
+   },
+   {
+    "kind": "varint",
+    "name": "@shape",
+    "raw": 638947,
+    "stored": 642
+   },
+   {
+    "kind": "json",
+    "name": "@entities",
+    "raw": 184157,
+    "stored": 77088
+   },
+   {
+    "kind": "varint",
+    "name": "@entity",
+    "raw": 1565919,
+    "stored": 449986
+   },
+   {
+    "kind": "varint",
+    "name": "@symbols",
+    "raw": 638947,
+    "stored": 59030
+   },
+   {
+    "kind": "delta",
+    "name": "@time",
+    "raw": 641745,
+    "stored": 128375
+   },
+   {
+    "kind": "json",
+    "name": "f:fits",
+    "raw": 3194842,
+    "stored": 4979
+   },
+   {
+    "kind": "json",
+    "name": "f:host",
+    "raw": 5111575,
+    "stored": 7465
+   },
+   {
+    "kind": "json",
+    "name": "f:params",
+    "raw": 19894609,
+    "stored": 1055062
+   },
+   {
+    "kind": "json",
+    "name": "f:proc",
+    "raw": 4472628,
+    "stored": 6533
+   }
+  ]
+ },
+ "compressors_on_the_canonical_bytes": {
+  "zlib -9": {
+   "bytes": 3730572,
+   "seconds": 1.09,
+   "container_over_this": 0.48
+  },
+  "xz -9": {
+   "bytes": 3887204,
+   "seconds": 24.61,
+   "container_over_this": 0.461
+  },
+  "zstd -19": {
+   "bytes": 2785261,
+   "seconds": 61.98,
+   "container_over_this": 0.643
+  }
+ },
+ "note": "one run; the container's columns are zlib streams"
+}
