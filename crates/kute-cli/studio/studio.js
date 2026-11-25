@@ -346,7 +346,48 @@ function tree(value, depth) {
   return depth > 1 ? el("details", {}, el("summary", {}, `${fmt(entries.length)} ${Array.isArray(value) ? "items" : "fields"}`), body) : body;
 }
 
+// The JSON values in a text that holds several, one after another: one a
+// line, or each over many lines as the command line prints them (what
+// `kute peer serve >> log` leaves). Strings are skipped, so a brace
+// inside one does not count.
+function values(text) {
+  const found = [];
+  let depth = 0, start = -1, inString = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\") i += 1;
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      if (depth === 0) throw new Error("text outside an object or list");
+      inString = true;
+    } else if (c === "{" || c === "[") {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if (c === "}" || c === "]") {
+      depth -= 1;
+      if (depth < 0) throw new Error("a closing bracket with nothing open");
+      if (depth === 0) found.push(JSON.parse(text.slice(start, i + 1)));
+    } else if (depth === 0 && c.trim() !== "") {
+      throw new Error("text outside an object or list");
+    }
+  }
+  if (depth !== 0 || inString) throw new Error("the last value is cut short");
+  return found;
+}
+
+// What `kute peer serve` and `kute peer send` print when an exchange ends.
+const served = (r) => r && typeof r === "object" && typeof r.messages_handled === "number" && Array.isArray(r.received);
+const sent = (r) => r && typeof r === "object" && typeof r.peer === "string" && Array.isArray(r.sent) && "vocabulary_transferred" in r;
+const PEER_CAUTION = "This is what one side said when the exchange had ended. It is not the state of a running peer, and the other side's report is a separate file.";
+
 function recognise(report) {
+  if (served(report)) return ["kute peer serve, one exchange", `From ${report.from}${report.peer_identity ? `, certificate ${report.peer_identity}` : ", no certificate (plain connection)"}: ${fmt(report.messages_handled)} protocol message(s) handled, ${fmt(report.received.length)} delivered, ${fmt(report.vocabularies_received.length)} vocabulary(ies) taken.`, PEER_CAUTION];
+  if (sent(report)) return ["kute peer send, one exchange", `To ${report.peer} (${report.peer_software})${report.server_identity ? `, certificate ${report.server_identity}` : ", no certificate (plain connection)"}: ${fmt(report.sent.length)} input(s) sent, every receipt matching; vocabulary ${report.vocabulary_transferred ? "sent whole" : "already held there"}${report.vocabulary_after_proposal ? `, then extended by proposal${report.proposal_signed ? " with a signature" : ""}` : ""}.`, PEER_CAUTION];
+  if (report && Array.isArray(report.lines) && report.lines.length && report.lines.every((l) => served(l) || sent(l))) {
+    const from = report.lines.filter(served);
+    return ["kute peer, a log of exchanges", `${fmt(report.lines.length)} exchange(s): ${fmt(from.length)} served, ${fmt(report.lines.length - from.length)} sent; ${fmt(from.reduce((n, l) => n + l.received.length, 0))} message(s) delivered here, ${fmt(from.reduce((n, l) => n + l.vocabularies_received.length, 0))} vocabulary(ies) taken.`, PEER_CAUTION + " An exchange that was refused or failed printed an error and no report, so it is not in this file."];
+  }
   if (report && report.decision && report.comparison) return ["kute shadow", `Decision: ${report.decision}. ${(Array.isArray(report.reasons) ? report.reasons : []).join("; ") || "No constraint was broken."}`, report.assumes || report.not_measured];
   if (report && report.context_over_previous && typeof report.context_over_previous === "object") return ["kute predict", `Looking further back saved ${fmt(report.context_over_previous.bits_per_event)} bits an event over one event of past, on ${fmt(report.held_out_events)} held-out events.`, report.note];
   if (report && Array.isArray(report.lines)) return ["kute live", `${fmt(report.lines.length)} lines: window reports and a summary.`, "Counts under bounds are lower limits; each window says whether it was exact."];
@@ -369,7 +410,7 @@ views["Reports"] = async (root) => {
       try {
         report = JSON.parse(text);
       } catch (error) {
-        report = { lines: text.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l)) };
+        report = { lines: values(text) };
       }
       const [kind, headline, caution] = recognise(report);
       output.replaceChildren(...[
@@ -384,7 +425,7 @@ views["Reports"] = async (root) => {
   });
   root.append(
     el("h2", {}, "Benchmark and decision reports"),
-    el("p", {}, "Open a report written by the command line: kute shadow, kute predict, the output of kute live, or a file from benchmarks/results."),
+    el("p", {}, "Open a report written by the command line: kute shadow, kute predict, the output of kute live, what kute peer serve or kute peer send printed (one, or several appended to one file), or a file from benchmarks/results."),
     el("label", { for: "report-file" }, "Report file"), file, output,
     el("p", { class: "note" }, "This shows a measurement that was made earlier. It does not make it again, and it cannot tell whether the file was edited after it was written."));
 };
@@ -394,7 +435,7 @@ views["Not here"] = async (root) => {
     el("h2", {}, "What this page does not show"),
     el("p", {}, "The specification lists these for Studio. The service has no operation for them, so there is nothing real to show, and this page shows nothing rather than a mock-up."),
     el("div", { class: "panel" }, table([{ name: "view" }, { name: "why not" }, { name: "where it is today" }], [
-      ["Peer status", "kute peer is a separate process, one connection at a time, and reports when it ends.", "The JSON that kute peer serve and kute peer send print."],
+      ["Status of a running peer", "kute peer is a separate process, one connection at a time, and reports when it ends. This service cannot see it.", "What kute peer serve and kute peer send print when an exchange ends; it opens under Reports."],
       ["Running a benchmark again", "The service is read-only and runs nothing but its five operations.", "The scripts in benchmarks/; open their reports under Reports."],
       ["Representation experiments", "The service has no operation for them. One measurement exists, and its result is negative.", "docs/representations.md; its report opens under Reports as plain JSON."],
       ["Training and evolving", "The service cannot create or change a vocabulary.", "kute train, kute evolve, kute shadow."],
