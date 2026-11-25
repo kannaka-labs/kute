@@ -41,7 +41,7 @@ name (`localhost`, `127.0.0.1`, `[::1]`), it accepts a body only as
 | `POST /v1/encode` | `{"vocabulary": ..., "text": ...}` or `"data_base64"`; optional `"unknown"` | `tokens`, `ids`, `escaped_symbols`, `container_base64` |
 | `POST /v1/decode` | `{"container_base64": ...}` | `text`, or `data_base64` when the bytes are not UTF-8 |
 | `POST /v1/compare` | `{"a": ..., "b": ...}` | shared and distinct token payloads |
-| `POST /v1/discover` | `{"records": [[...], ...]}` or `{"lines": ...}` with the optional parameters | recurring sequences with their support |
+| `POST /v1/discover` | `{"records": [[...], ...]}` or `{"lines": ...}` with the optional parameters; with `records`, optionally `"times": [[...], ...]`, one whole number for each symbol (after 0.8.1) | recurring sequences with their support; with `times`, also `timing`: how long each took, in the ticks given, measured on the same records |
 
 The body of a POST is the arguments of the MCP tool of the same name, and
 the answer is that tool's result; [mcp.md](mcp.md) describes each one, and

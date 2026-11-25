@@ -204,7 +204,13 @@ impl Server {
             (None, Some(lines)) => lines.lines().map(|l| l.split_whitespace().map(str::to_string).collect()).filter(|r: &Vec<String>| !r.is_empty()).collect(),
             _ => return Err("give exactly one of records and lines".into()),
         };
-        let size: u64 = records.iter().flatten().map(|s| s.len() as u64 + 1).sum();
+        // Times, when given, are one whole number for each symbol.
+        let times: Option<Vec<Vec<i64>>> = match args.get("times").filter(|v| !v.is_null()) {
+            None => None,
+            Some(_) if args.get("records").is_none() => return Err("times go with records, one number for each symbol".into()),
+            Some(times) => Some(serde_json::from_value(times.clone()).map_err(|_| "times must be a list of lists of whole numbers".to_string())?),
+        };
+        let size: u64 = records.iter().flatten().map(|s| s.len() as u64 + 1).sum::<u64>() + times.iter().flatten().map(|t| 8 * t.len() as u64).sum::<u64>();
         if size > self.limits.max_input_bytes {
             return Err(format!("the records hold {size} bytes of symbols; the limit is {}", self.limits.max_input_bytes));
         }
@@ -223,7 +229,29 @@ impl Server {
         }
         params.max_patterns = (number_arg(args, "max_patterns")?.unwrap_or(50) as usize).min(self.limits.max_patterns);
         let discovery = kute_discover::discover(&records, &params).map_err(fail)?;
-        serde_json::to_value(discovery).map_err(|e| e.to_string())
+        let mut answer = serde_json::to_value(&discovery).map_err(|e| e.to_string())?;
+        if let Some(times) = times {
+            if times.len() != records.len() {
+                return Err(format!("{} lists of times for {} records", times.len(), records.len()));
+            }
+            // The unit is the caller's: durations come back in the ticks
+            // that were given. The schema needs one to be a timed schema.
+            let schema = kute::EventSchema {
+                id: "call".into(),
+                version: 1,
+                symbol_field: "symbol".into(),
+                time_field: Some("time".into()),
+                time_unit: Some(kute::TimeUnit::Milliseconds),
+                group_field: None,
+            };
+            let mut stream = kute::EventStream::new(schema).map_err(fail)?;
+            stream.records = records.into_iter().zip(times).map(|(symbols, times)| kute::EventRecord { key: None, symbols, times }).collect();
+            // Refuses times not aligned with their symbols, or going back.
+            stream.validate().map_err(fail)?;
+            answer["timing"] = serde_json::to_value(kute_discover::timing(&discovery, &stream).map_err(fail)?).map_err(|e| e.to_string())?;
+            answer["timing_what"] = "per pattern (index into patterns), in the ticks the times were given in: time from the first event of an occurrence to its last; for a gapped pair, from the first symbol to the nearest second symbol within the window. Measured on the records given, the same ones the patterns were found in.".into();
+        }
+        Ok(answer)
     }
 
     fn limits_json(&self) -> Value {
@@ -282,6 +310,7 @@ impl Server {
                 "inputSchema": { "type": "object", "additionalProperties": false, "properties": {
                     "records": { "type": "array", "items": { "type": "array", "items": { "type": "string" } }, "description": "One list of symbols per record. Give this or lines." },
                     "lines": { "type": "string", "description": "One record per line, symbols separated by whitespace." },
+                    "times": { "type": "array", "items": { "type": "array", "items": { "type": "integer" } }, "description": "With records: one whole-number timestamp for each symbol, never going back within a record. The answer then has timing: how long each pattern took, in the same ticks." },
                     "min_support": { "type": "integer", "minimum": 2 },
                     "max_length": { "type": "integer", "minimum": 2 },
                     "window": { "type": "integer", "minimum": 0 },
