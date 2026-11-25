@@ -344,6 +344,9 @@ views["Reports"] = async (root) => {
     const chosen = file.files[0];
     if (!chosen) return;
     try {
+      // The whole file becomes a tree on the page; a very large one would
+      // only hang the tab.
+      if (chosen.size > 32 * 1024 * 1024) throw new Error("the file is larger than 32 MB, which is more than this view will draw");
       const text = await chosen.text();
       let report;
       try {

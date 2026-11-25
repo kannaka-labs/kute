@@ -58,7 +58,10 @@ fn structure_two_events_deep_is_found_by_the_context_and_not_by_the_baselines() 
     // It says "about 0.9" and is right about 0.9 of the time.
     assert!(report.context.calibration_error < 0.03, "{:?}", report.context_calibration);
     let d = &report.context_over_previous;
-    assert!(d.bits_per_event > 0.9 && d.interval_95.0 > 0.8 && d.interval_95.0 <= d.bits_per_event && d.bits_per_event <= d.interval_95.1, "{d:?}");
+    let i = d.interval_95_over_entities_at_this_cut;
+    assert!(d.bits_per_event > 0.9 && i.0 > 0.8 && i.0 <= d.bits_per_event && d.bits_per_event <= i.1, "{d:?}");
+    // The overall figure lies among the windows' figures.
+    assert!(d.range_over_windows.0 <= d.bits_per_event && d.bits_per_event <= d.range_over_windows.1, "{d:?}");
     // Machines first seen after the cut are predicted as well as the rest:
     // the structure belongs to the process, not to the machine.
     assert!(report.unseen_entities > 0 && report.unseen_entities < report.held_out_entities);
@@ -80,7 +83,7 @@ fn where_there_is_nothing_to_find_the_context_gains_nothing() {
     // Looking further back cannot help and costs a little.
     let d = &report.context_over_previous;
     assert!(d.bits_per_event < 0.001 && d.bits_per_event > -0.02, "{d:?}");
-    assert!(d.interval_95.1 < 0.005, "{d:?}");
+    assert!(d.interval_95_over_entities_at_this_cut.1 < 0.005, "{d:?}");
     assert!(report.context.top1_accuracy < 0.3);
     assert!(report.context.bits_per_event >= 1.99);
 }

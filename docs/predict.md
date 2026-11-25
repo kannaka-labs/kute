@@ -68,9 +68,19 @@ over resampled held-out entities.
   about the next event, through these particular predictors and with
   their errors. It is not an estimate with a guarantee in either
   direction.
-* The intervals resample entities and so reflect variation between
-  entities. They do not account for drift, and with one cut in time
-  there is one held-out period, not many.
+* **How much the figure moves over time.** The interval
+  (`interval_95_over_entities_at_this_cut`) resamples entities and so
+  reflects variation between entities, at one cut. It does not account
+  for drift, and on real logs it has been narrower than the spread
+  between quarters of the held-out period: on one day of HDFS it was
+  0.315 to 0.318 while the quarters ran from 0.23 to 0.47. Each
+  difference therefore also carries `range_over_windows`, the least and
+  greatest value over the windows. Read the two together, and trust the
+  range more.
+
+The past used to predict a held-out event may reach back across the
+cut: the counts are frozen at the cut, the context is the entity's real
+recent events, and nothing later than the predicted event is used.
 
 The whole stream is held in memory, and at most 5,000,000 distinct runs
 of past events are counted.

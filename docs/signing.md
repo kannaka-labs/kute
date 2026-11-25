@@ -26,7 +26,9 @@ The digest does not change: signatures are kept beside the digest and
 outside what it covers, so a signed vocabulary is the same vocabulary to
 everything that names it by digest, and encodes identically. A
 vocabulary can carry up to 16 signatures. Signing twice with one key
-adds nothing.
+adds nothing. An entry already in the file under the signer's key is not
+trusted: the signature is made again and replaces it, so a file that
+arrives with a false entry under your key leaves with a true one.
 
 `kute verify` checks the signatures against the public keys you name
 with `--trusted-key` (repeatable). It exits 0 only if at least one of

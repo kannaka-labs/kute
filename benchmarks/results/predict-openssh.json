@@ -15,24 +15,24 @@
   "held_out_events": 159737,
   "held_out_entities": 26933,
   "unseen_entities": 302,
-  "unseen_symbol_events": 68,
+  "unseen_symbol_events": 61,
   "frequency": {
     "events": 159737,
-    "bits_per_event": 3.541136747815869,
+    "bits_per_event": 3.5406670719363538,
     "top1_accuracy": 0.2325510057156451,
     "calibration_error": 0.016310086731697412
   },
   "previous": {
     "events": 159737,
-    "bits_per_event": 0.9089214845760138,
-    "top1_accuracy": 0.7979240877191884,
-    "calibration_error": 0.05185055466003393
+    "bits_per_event": 0.9076391603714321,
+    "top1_accuracy": 0.797936608299893,
+    "calibration_error": 0.05185471450349108
   },
   "context": {
     "events": 159737,
-    "bits_per_event": 0.863508720287754,
-    "top1_accuracy": 0.7441544538835712,
-    "calibration_error": 0.06742368132314908
+    "bits_per_event": 0.8610382048834594,
+    "top1_accuracy": 0.7441669744642756,
+    "calibration_error": 0.06741667655908999
   },
   "unseen_entities_only": [
     {
@@ -55,23 +55,31 @@
     }
   ],
   "context_over_previous": {
-    "bits_per_event": 0.0454127642882598,
-    "interval_95": [
-      0.04040532011749768,
-      0.04997072769986103
+    "bits_per_event": 0.04660095548797272,
+    "interval_95_over_entities_at_this_cut": [
+      0.041822404478478487,
+      0.05111816479371403
+    ],
+    "range_over_windows": [
+      -0.021722801786077828,
+      0.1110562088959016
     ]
   },
   "previous_over_frequency": {
-    "bits_per_event": 2.632215263239855,
-    "interval_95": [
-      2.621527859171921,
-      2.643478607626756
+    "bits_per_event": 2.6330279115649216,
+    "interval_95_over_entities_at_this_cut": [
+      2.6225218642214347,
+      2.6442434212666135
+    ],
+    "range_over_windows": [
+      2.284647265385445,
+      3.1589233591737615
     ]
   },
   "context_calibration": [
     {
       "from": 0.2,
-      "events": 95,
+      "events": 94,
       "mean_confidence": 0.2162409189835518,
       "accuracy": 0.0
     },
@@ -83,9 +91,9 @@
     },
     {
       "from": 0.4,
-      "events": 22770,
-      "mean_confidence": 0.4277534633136642,
-      "accuracy": 0.10948616600790514
+      "events": 22769,
+      "mean_confidence": 0.4277531268698848,
+      "accuracy": 0.10949097457068821
     },
     {
       "from": 0.5,
@@ -95,9 +103,9 @@
     },
     {
       "from": 0.6,
-      "events": 21602,
-      "mean_confidence": 0.6462697828684555,
-      "accuracy": 0.6043421905379132
+      "events": 21603,
+      "mean_confidence": 0.6462693628223984,
+      "accuracy": 0.6043605054853493
     },
     {
       "from": 0.7,
@@ -107,14 +115,14 @@
     },
     {
       "from": 0.8,
-      "events": 20439,
-      "mean_confidence": 0.871055478180116,
-      "accuracy": 0.8247957336464602
+      "events": 20440,
+      "mean_confidence": 0.8710566756508278,
+      "accuracy": 0.8248043052837574
     },
     {
       "from": 0.9,
       "events": 65676,
-      "mean_confidence": 0.9976613858307585,
+      "mean_confidence": 0.9976613859459722,
       "accuracy": 0.9940008526706864
     }
   ],
@@ -131,25 +139,25 @@
       "from_time": 587003,
       "to_time": 737448,
       "events": 39932,
-      "frequency_bits": 3.124167889257033,
-      "previous_bits": 0.7078547800373741,
-      "context_bits": 0.7302470872301834
+      "frequency_bits": 3.124036467652469,
+      "previous_bits": 0.7072517609560193,
+      "context_bits": 0.728974562742097
     },
     {
       "from_time": 737449,
       "to_time": 1728293,
       "events": 39936,
-      "frequency_bits": 4.4301925424577036,
-      "previous_bits": 1.273532134533989,
-      "context_bits": 1.2122025005835604
+      "frequency_bits": 4.428945312516468,
+      "previous_bits": 1.2700219533427066,
+      "context_bits": 1.2050362324662156
     },
     {
       "from_time": 1728295,
       "to_time": 1875644,
       "events": 39935,
-      "frequency_bits": 3.655926135666508,
-      "previous_bits": 0.9847239200703892,
-      "context_bits": 0.8740947531249035
+      "frequency_bits": 3.655426140336107,
+      "previous_bits": 0.9837079624528685,
+      "context_bits": 0.8726517535569669
     }
   ],
   "predictors_compared": 3,

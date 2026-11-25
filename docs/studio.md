@@ -32,6 +32,27 @@ an adapter that does not give back the original bytes, and that support
 and cohesion describe the corpus given and were not checked on held-out
 data.
 
+## Against the specification
+
+The specification (F2) asks for "a functional workbench over the
+existing runtime: corpus import, pattern evidence and timing,
+vocabulary/merge inspection, evolution comparison, benchmark replay,
+peer status and representation experiments", each view consuming actual
+backend output. Item by item:
+
+| asked for | here |
+|---|---|
+| corpus import | Encode, Compare and Patterns take text or a file, up to the service's input limit. Nothing is stored. |
+| pattern evidence | Patterns. |
+| pattern timing | Not here: the service's discover operation takes no times. |
+| vocabulary/merge inspection | Vocabulary. |
+| evolution comparison | Compare (two vocabularies on one input); Reports for a `kute shadow` report. The page cannot evolve a vocabulary. |
+| benchmark replay | Reports shows a report made earlier. It runs nothing. |
+| peer status | Not here. |
+| representation experiments | Not here: none are built. |
+
+The Reports view refuses a file over 32 MB.
+
 ## What it does not show
 
 Peer status, timing between events, running a benchmark again,

@@ -95,8 +95,13 @@ pub struct Bin {
 pub struct Difference {
     /// Bits an event the first saves over the second; positive means the first predicts better.
     pub bits_per_event: f64,
-    /// The middle 95% of the same difference over resampled entities.
-    pub interval_95: (f64, f64),
+    /// The middle 95% of the same difference over resampled entities,
+    /// at this one cut in time. It reflects variation between entities
+    /// and nothing else: it is narrower than the variation over time.
+    pub interval_95_over_entities_at_this_cut: (f64, f64),
+    /// The least and greatest of the same difference over the windows of
+    /// the held-out period. Read the interval beside this.
+    pub range_over_windows: (f64, f64),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -389,6 +394,11 @@ pub fn evaluate(stream: &EventStream, params: &PredictParams) -> Result<PredictR
         per_entity.push(entity);
     }
     let scores = [all[0].score(), all[1].score(), all[2].score()];
+    let range = |first: usize, second: usize| {
+        let each = windows.iter().filter(|w| w.0 > 0).map(|w| (w.1[first] - w.1[second]) / w.0 as f64);
+        each.fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), d| (low.min(d), high.max(d)))
+    };
+    let (context_range, previous_range) = (range(1, 2), range(0, 1));
     Ok(PredictReport {
         params: params.clone(),
         cut_time,
@@ -400,8 +410,8 @@ pub fn evaluate(stream: &EventStream, params: &PredictParams) -> Result<PredictR
         held_out_entities,
         unseen_entities,
         unseen_symbol_events,
-        context_over_previous: Difference { bits_per_event: scores[1].bits_per_event - scores[2].bits_per_event, interval_95: interval(&per_entity, params.resamples, params.seed, |e| e.0) },
-        previous_over_frequency: Difference { bits_per_event: scores[0].bits_per_event - scores[1].bits_per_event, interval_95: interval(&per_entity, params.resamples, params.seed ^ 0x9e37_79b9, |e| e.1) },
+        context_over_previous: Difference { bits_per_event: scores[1].bits_per_event - scores[2].bits_per_event, interval_95_over_entities_at_this_cut: interval(&per_entity, params.resamples, params.seed, |e| e.0), range_over_windows: context_range },
+        previous_over_frequency: Difference { bits_per_event: scores[0].bits_per_event - scores[1].bits_per_event, interval_95_over_entities_at_this_cut: interval(&per_entity, params.resamples, params.seed ^ 0x9e37_79b9, |e| e.1), range_over_windows: previous_range },
         unseen_entities_only: (unseen[0].events > 0).then(|| [unseen[0].score(), unseen[1].score(), unseen[2].score()]),
         context_calibration: all[2].calibration(),
         windows: windows

@@ -689,8 +689,11 @@ held out, of 103,274 blocks, 59,918 of them not seen before the cut):
 | previous event | 1.64 | 59% | 0.11 |
 | up to three events | 1.32 | 64% | 0.13 |
 
-Three events of the past save 0.32 bits an event over one (interval
-0.315 to 0.318), and one saves 1.57 over none. On blocks never seen
+Three events of the past save 0.32 bits an event over one, and one
+saves 1.57 over none. The 0.32 is not steady: over the four parts of the
+held-out time it is 0.27, 0.47, 0.29 and 0.23. (Resampling blocks at
+this one cut gives 0.315 to 0.318, which is the variation between
+blocks and far narrower than the variation over time.) On blocks never seen
 before the cut the three score 3.02, 1.42 and 1.17: the structure is not
 particular to known blocks.
 
@@ -708,9 +711,11 @@ four parts of the held-out time the context predictor scores 1.00,
 | previous event | 0.91 | 80% | 0.05 |
 | up to three events | 0.86 | 74% | 0.07 |
 
-Here nearly everything is in the previous event. Three events save 0.045
-bits over one (interval 0.040 to 0.050), a real but small gain, and the
-most likely event is right less often than with one event of past. Over
+Here nearly everything is in the previous event. Three events save 0.047
+bits over one overall, and over the four parts of the held-out time
+0.03, -0.02, 0.07 and 0.11: in one quarter the longer past did worse.
+That is too small and too unsteady to call a gain. The most likely event
+is right less often than with one event of past. Over
 the four parts of held-out time the context predictor scores 0.64, 0.73,
 1.21 and 0.87.
 
@@ -720,7 +725,11 @@ a simple one on purpose (`docs/predict.md`), so the bits saved are what
 it found and not a limit. A start-of-entity marker was added to it after
 the first held-out runs on these two datasets showed its absence, so
 they are not clean evidence for that choice; before it, the HDFS context
-predictor scored 1.45 bits and after, 1.32. One cut in time on each
+predictor scored 1.45 bits and after, 1.32. These reports were regenerated after a
+defect was fixed (a name first used before the cut by an entity listed
+later was treated as unknown): HDFS did not change; on OpenSSH the
+events with an unknown name went from 68 to 61 and the figures moved in
+the third decimal. One cut in time on each
 dataset, so one held-out period. Nothing here shows that an event causes
 the next.
 

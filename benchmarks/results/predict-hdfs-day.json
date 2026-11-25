@@ -56,16 +56,24 @@
   ],
   "context_over_previous": {
     "bits_per_event": 0.3166433673482998,
-    "interval_95": [
+    "interval_95_over_entities_at_this_cut": [
       0.3149829090240888,
       0.31828619492528887
+    ],
+    "range_over_windows": [
+      0.23231340878844592,
+      0.4713668694808058
     ]
   },
   "previous_over_frequency": {
     "bits_per_event": 1.5715709927693968,
-    "interval_95": [
+    "interval_95_over_entities_at_this_cut": [
       1.569827167419944,
       1.573338811721812
+    ],
+    "range_over_windows": [
+      1.379927925353745,
+      1.690656445549046
     ]
   },
   "context_calibration": [
