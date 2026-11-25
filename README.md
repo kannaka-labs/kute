@@ -4,7 +4,8 @@ KUTE trains, stores, exchanges and applies vocabularies for more than text:
 bytes, structured records and event sequences go through the same engine, and
 every vocabulary is a versioned, checkable file.
 
-Status: v0.6, experimental. Formats and APIs may change before 1.0.
+Status: v0.6, experimental. Formats and APIs may change before 1.0;
+[docs/stability.md](docs/stability.md) says which, and how.
 
 ## Measured against Hugging Face `tokenizers`
 
