@@ -426,6 +426,13 @@ the way through it. Not covered: numbers are still held as doubles or
 64-bit integers, so there is no exact decimal type, and `-0` is kept as a
 negative zero as before.
 
+Found later by the property tests over damaged input (gate AC-712): the
+JSON library's default number parser is fast and not always exact, so a
+number such as `1e61` could be written in canonical form, read back as the
+neighbouring double, and written differently. Canonical form was not a
+fixed point for those inputs. The library's exact parser (`float_roundtrip`)
+is now on for the whole workspace.
+
 ## ADR-0030: The runtime's vocabulary is sealed where it is loaded
 
 A `Vocabulary` value is plain data with public fields, and its `digest()`

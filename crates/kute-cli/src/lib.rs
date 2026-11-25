@@ -289,7 +289,8 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             let handled = session.serve()?;
             let inbox = session.peer.take_inbox();
             let new: Vec<String> = session.peer.digests().into_iter().filter(|d| !before.contains(d)).collect();
-            if let Some(dir) = &output_dir {
+            // Nothing received, nothing created.
+            if let Some(dir) = output_dir.as_ref().filter(|_| !inbox.is_empty() || !new.is_empty()) {
                 std::fs::create_dir_all(dir)?;
                 for message in &inbox {
                     std::fs::write(dir.join(format!("message-{}.bin", message.id)), &message.bytes)?;
