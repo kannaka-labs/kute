@@ -21,6 +21,7 @@ kute.workspace = true
 kute-bench.workspace = true
 kute-discover.workspace = true
 kute-protocol.workspace = true
+base64.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

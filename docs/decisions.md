@@ -582,6 +582,25 @@ Not done: nothing checks that the named parent exists or that the child
 really follows from it. Checking needs the parent and the additions, and
 both are available to whoever holds the parent: derive and compare.
 
+## ADR-0035: The MCP server is read-only, and lives in the CLI
+
+`kute mcp` offers encode, decode, inspect, compare and discover as Model
+Context Protocol tools on standard input and output (`docs/mcp.md`). The
+specification asks that training and publishing need explicit permission
+and quotas; here they are not offered at all, which is the strictest form
+of that and can be relaxed later with a design of its own. A tool call
+touches only the vocabularies the server was started with and the data in
+the call: no path is ever taken from a caller, so there is no file access
+to police.
+
+The protocol is small enough (four methods, line-delimited JSON) that it is
+written directly on `serde_json` and adds no dependency. It is a module of
+`kute-cli` and not a crate: one more crate to publish for 300 lines did not
+seem worth it, and the tools are the CLI's operations under other names,
+on the same engine.
+
+Not done: the HTTP transport, resources and prompts, and a REST surface.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

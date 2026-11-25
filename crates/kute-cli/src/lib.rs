@@ -3,6 +3,8 @@
 //! Results go to stdout as JSON (or raw bytes for `decode`), messages to
 //! stderr. Exit status is 0 on success and 1 on any error.
 
+pub mod mcp;
+
 use clap::{Parser, Subcommand, ValueEnum};
 use kute::{vocab, AdapterConfig, Engine, KuteError, Pretokenizer, TokenSequence, TrainingConfig, Version, VocabularyId};
 use serde_json::json;
@@ -130,11 +132,26 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
-    /// Exchange vocabularies and encoded messages with another kute process.
-    /// No encryption or authentication: use a trusted network.
+    /// Exchange vocabularies and encoded messages with another kute process,
+    /// over TLS with a certificate on both sides.
     Peer {
         #[command(subcommand)]
         action: PeerAction,
+    },
+    /// Serve encode, decode, inspect, compare and discover as Model Context
+    /// Protocol tools on standard input and output. Works only on the
+    /// vocabularies named here and on data passed in each call: no file is
+    /// read or written by a tool, nothing is trained, stored or published.
+    Mcp {
+        /// Vocabularies the tools may use. Repeatable.
+        #[arg(long)]
+        vocab: Vec<PathBuf>,
+        /// Most bytes of input in one encode or discover call.
+        #[arg(long, default_value_t = 1_048_576)]
+        max_input_bytes: u64,
+        /// Most bytes one decode call gives back.
+        #[arg(long, default_value_t = 4_194_304)]
+        max_output_bytes: u64,
     },
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
@@ -946,6 +963,13 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }))
         }
         Command::Peer { action } => peer(engine, action),
+        Command::Mcp { vocab: paths, max_input_bytes, max_output_bytes } => {
+            let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
+            let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_input_bytes.saturating_mul(2).saturating_add(1 << 20), ..Default::default() };
+            let server = mcp::Server::new(engine, vocabularies, limits)?;
+            server.serve(std::io::stdin().lock(), std::io::stdout().lock())?;
+            Ok(())
+        }
         Command::Capabilities => {
             let registry = engine.registry();
             let algorithms: Vec<kute::TokenizerCapabilities> =

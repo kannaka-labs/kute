@@ -81,6 +81,10 @@ Added in v0.3:
   asked for with `--insecure-plain`. A peer gives out vocabulary files,
   answers and translations only when told to. See
   `specifications/protocol`.
+* `kute mcp --vocab file.kvf`: encode, decode, inspect, compare and
+  discover as Model Context Protocol tools on standard input and output.
+  Read-only: it works on the vocabularies it was started with and the data
+  in each call, with bounded inputs and outputs. See `docs/mcp.md`.
 * `kute train --stream-bytes`: training memory that does not grow with
   file size (227 MiB against 959 MiB on a 500 MB input), and a peak-memory
   figure in every training report.

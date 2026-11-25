@@ -352,6 +352,7 @@ dependencies = [
 name = "kute-cli"
 version = "0.6.0"
 dependencies = [
+ "base64",
  "clap",
  "kute-bench",
  "kute-discover",
