@@ -109,6 +109,10 @@ beginning.
   checkpoint on. A window written after the last checkpoint and before
   the stop is written again: delivery of reports is at least once, and
   `start` identifies a repeat.
+* Resuming passes over lines by count. It does not check that the input
+  is the one the checkpoint was made from: a file that was rotated or
+  rewritten is skipped into all the same. On standard input it works
+  only if the source replays the stream from its beginning.
 * Stopping is killing the process; whatever checkpoint was last renamed
   into place stands. There is no separate cancel.
 * Reading is synchronous. A source on a pipe is slowed to the speed of
