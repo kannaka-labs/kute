@@ -13,6 +13,7 @@
 
 pub mod live;
 pub mod watch;
+pub mod predict;
 
 use kute_core::CorpusFingerprint;
 use kute_types::{CanonicalInput, KuteError, Modality, Payload, Result, TokenPayload};

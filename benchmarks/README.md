@@ -672,6 +672,58 @@ real processes change in other ways and by other amounts. One vocabulary
 size per table, one evolution step, one run per seed. Nothing here
 measures what an evolved vocabulary is worth to anything downstream.
 
+## Predicting the next event (after v0.7.0)
+
+`kute predict` with its defaults: the last quarter of the events by time
+is held out, and each held-out event is predicted from the earlier
+events of the same entity. Bits are the average surprise an event; lower
+is better. One run each. Reports `results/predict-hdfs-day.json` and
+`results/predict-openssh.json`.
+
+**HDFS**, the first day on the log's clock (4,202,850 events; 1,050,760
+held out, of 103,274 blocks, 59,918 of them not seen before the cut):
+
+| predictor | bits an event | most likely event was right | calibration error |
+|---|---:|---:|---:|
+| frequency | 3.21 | 17% | 0.03 |
+| previous event | 1.64 | 59% | 0.11 |
+| up to three events | 1.32 | 64% | 0.13 |
+
+Three events of the past save 0.32 bits an event over one (interval
+0.315 to 0.318), and one saves 1.57 over none. On blocks never seen
+before the cut the three score 3.02, 1.42 and 1.17: the structure is not
+particular to known blocks.
+
+Two things qualify that. The probabilities are not well calibrated:
+where the predictor says about 0.84 it is right 41% of the time, and
+where it says about 0.47, 38%. And it does not hold steady: over the
+four parts of the held-out time the context predictor scores 1.00,
+1.46, 0.99 and 1.84 bits, the baselines moving with it.
+
+**OpenSSH** (638,947 events; 159,737 held out; entity = process id):
+
+| predictor | bits an event | most likely event was right | calibration error |
+|---|---:|---:|---:|
+| frequency | 3.54 | 23% | 0.02 |
+| previous event | 0.91 | 80% | 0.05 |
+| up to three events | 0.86 | 74% | 0.07 |
+
+Here nearly everything is in the previous event. Three events save 0.045
+bits over one (interval 0.040 to 0.050), a real but small gain, and the
+most likely event is right less often than with one event of past. Over
+the four parts of held-out time the context predictor scores 0.64, 0.73,
+1.21 and 0.87.
+
+What this is and is not. These are log templates: much of the
+predictability is a program writing its lines in order. The predictor is
+a simple one on purpose (`docs/predict.md`), so the bits saved are what
+it found and not a limit. A start-of-entity marker was added to it after
+the first held-out runs on these two datasets showed its absence, so
+they are not clean evidence for that choice; before it, the HDFS context
+predictor scored 1.45 bits and after, 1.32. One cut in time on each
+dataset, so one held-out period. Nothing here shows that an event causes
+the next.
+
 ## Shadow comparison on the drifting data (synthetic, after v0.7.0)
 
 `shadow_drift.py` takes the frozen and evolved vocabularies of the ten

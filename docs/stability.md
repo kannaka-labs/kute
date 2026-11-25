@@ -42,6 +42,7 @@ someone building on it knows what a new release may do to them.
 | `discover` | provisional | The report's fields are still settling. |
 | `peer serve`, `peer send`, `peer fingerprint` | provisional | Follows the protocol's class. |
 | `mcp` | experimental | See `docs/mcp.md`. |
+| `predict`, `kute_discover::predict` | experimental | See `docs/predict.md`. |
 | `shadow` | experimental | See `docs/shadow.md`. |
 | `live`, `kute_discover::watch`, its checkpoint | experimental | See `docs/live.md`. |
 | `events`, the `KUTE-EV1` container, the `kute-events` crate | experimental | See `docs/events.md`. |

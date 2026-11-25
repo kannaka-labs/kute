@@ -156,6 +156,46 @@ enum Command {
         #[arg(long, default_value_t = 4_194_304)]
         max_output_bytes: u64,
     },
+    /// Measure how well an entity's recent events predict its next one,
+    /// on time that was held out, against two baselines. A measurement,
+    /// not a predictor to deploy; association, not cause.
+    Predict {
+        /// JSON Lines files or directories, one event per line.
+        #[arg(long, required = true, num_args = 1..)]
+        input: Vec<PathBuf>,
+        /// Field holding the event name.
+        #[arg(long, value_name = "FIELD")]
+        symbol_field: String,
+        /// Field holding the event time, a whole number.
+        #[arg(long, value_name = "FIELD")]
+        time_field: String,
+        /// Unit of the time field: s, ms, us or ns.
+        #[arg(long, default_value = "s")]
+        time_unit: String,
+        /// Field naming the entity an event belongs to.
+        #[arg(long, value_name = "FIELD")]
+        group_field: Option<String>,
+        /// Share of the events, latest in time, held out and predicted.
+        #[arg(long, default_value_t = 0.25)]
+        holdout_fraction: f64,
+        /// Most past events the context predictor looks at (1 to 8).
+        #[arg(long, default_value_t = 3)]
+        max_context: usize,
+        /// A run of past events is used only if seen this often before the cut.
+        #[arg(long, default_value_t = 5)]
+        min_count: u64,
+        /// Parts the held-out time is cut into, to show drift.
+        #[arg(long, default_value_t = 4)]
+        windows: usize,
+        /// Resamples of the held-out entities for the intervals.
+        #[arg(long, default_value_t = 1000)]
+        resamples: usize,
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+        /// Also write the JSON report to this file.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Try a candidate vocabulary beside the one in use, on data neither
     /// was made from, and decide whether it has earned its place. Encodes
     /// every input with both; publishes and replaces nothing.
@@ -1180,6 +1220,29 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             let bounds = kute_discover::live::LiveParams { max_length, max_symbols, max_candidates, max_entities, ..Default::default() };
             let params = kute_discover::watch::WatchParams { live: bounds, pane_ticks: pane, panes, lateness, max_buffered, min_support, min_cohesion_bits, max_patterns };
             live::run(live::Options { input, symbol_field, time_field, group_field, params, checkpoint, checkpoint_every, resume, skip_bad_lines })
+        }
+        Command::Predict { input, symbol_field, time_field, time_unit, group_field, holdout_fraction, max_context, min_count, windows, resamples, seed, output } => {
+            let schema = kute::EventSchema {
+                id: "kute:events:unnamed".into(),
+                version: 1,
+                symbol_field,
+                time_unit: Some(kute::TimeUnit::parse(&time_unit)?),
+                time_field: Some(time_field),
+                group_field,
+            };
+            let mut stream = kute::EventStream::new(schema)?;
+            for path in &input {
+                for file in kute::collect_files(path)? {
+                    let reader = std::io::BufReader::with_capacity(1 << 20, std::fs::File::open(&file)?);
+                    stream.read_jsonl(reader, &file.display().to_string())?;
+                }
+            }
+            let params = kute_discover::predict::PredictParams { holdout_fraction, max_context, min_count, windows, resamples, seed };
+            let report = kute_discover::predict::evaluate(&stream, &params)?;
+            if let Some(path) = output {
+                std::fs::write(&path, serde_json::to_vec_pretty(&report)?)?;
+            }
+            print(&report)
         }
         Command::Shadow { parent, candidate, input, unknown, min_improvement, horizon, distributions, max_slowdown, passes, fail_on_reject } => {
             let (report, approved) = shadow::run(&engine, &shadow::Options { parent, candidate, inputs: input, unknown, min_improvement, horizon, distributions, max_slowdown, passes })?;

@@ -758,6 +758,36 @@ yet.
 
 Memory, task quality and predictive utility are not measured.
 
+## ADR-0041: Predictive value is measured against baselines on held-out time, by a predictor kept simple on purpose
+
+Discovery reports sequences that recur. Whether they help anticipate
+anything is a separate question (specification D2). `kute predict`
+answers it with a measurement; `docs/predict.md` describes it.
+
+The cut is in time, not at random: a random split puts the future of an
+entity in training and its past in test. The comparison is between
+three predictors of one family that differ only in how far back they
+look, so that the difference is the value of the longer past and not of
+a cleverer method. Scores are log loss in bits, top-1 accuracy and
+calibration; entities unseen before the cut are scored apart; the
+held-out time is scored in parts to show drift; differences carry
+intervals from resampling entities.
+
+The predictor is a smoothed n-gram with backoff. It is not offered as a
+model. A stronger one would give larger numbers and tell less about the
+data, since its skill and the data's structure could not be told apart.
+
+One change was made after seeing held-out results: the first runs on
+HDFS and OpenSSH showed the first event of an entity given a confidence
+near 0.15 and being right 93% of the time, because "nothing came
+before" was not a context. A start marker was added. It is a fix to the
+model's definition and it was prompted by test data, so those two
+datasets are not clean evidence for it.
+
+Repeated testing across runs is not controlled and cannot be from
+inside one command. Association is not cause, and the report says so in
+its output.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

@@ -1,0 +1,157 @@
+{
+  "params": {
+    "holdout_fraction": 0.25,
+    "max_context": 3,
+    "min_count": 5,
+    "windows": 4,
+    "resamples": 1000,
+    "seed": 1
+  },
+  "cut_time": 462299,
+  "counted_events": 479210,
+  "counted_entities": 32118,
+  "alphabet": 36,
+  "contexts_counted": 496,
+  "held_out_events": 159737,
+  "held_out_entities": 26933,
+  "unseen_entities": 302,
+  "unseen_symbol_events": 68,
+  "frequency": {
+    "events": 159737,
+    "bits_per_event": 3.541136747815869,
+    "top1_accuracy": 0.2325510057156451,
+    "calibration_error": 0.016310086731697412
+  },
+  "previous": {
+    "events": 159737,
+    "bits_per_event": 0.9089214845760138,
+    "top1_accuracy": 0.7979240877191884,
+    "calibration_error": 0.05185055466003393
+  },
+  "context": {
+    "events": 159737,
+    "bits_per_event": 0.863508720287754,
+    "top1_accuracy": 0.7441544538835712,
+    "calibration_error": 0.06742368132314908
+  },
+  "unseen_entities_only": [
+    {
+      "events": 1891,
+      "bits_per_event": 3.589076923612112,
+      "top1_accuracy": 0.22263352723426758,
+      "calibration_error": 0.006392608250719856
+    },
+    {
+      "events": 1891,
+      "bits_per_event": 0.9519228539106154,
+      "top1_accuracy": 0.8038075092543627,
+      "calibration_error": 0.07953089192196894
+    },
+    {
+      "events": 1891,
+      "bits_per_event": 1.003830552146383,
+      "top1_accuracy": 0.6816499206768906,
+      "calibration_error": 0.1275675493799306
+    }
+  ],
+  "context_over_previous": {
+    "bits_per_event": 0.0454127642882598,
+    "interval_95": [
+      0.04040532011749768,
+      0.04997072769986103
+    ]
+  },
+  "previous_over_frequency": {
+    "bits_per_event": 2.632215263239855,
+    "interval_95": [
+      2.621527859171921,
+      2.643478607626756
+    ]
+  },
+  "context_calibration": [
+    {
+      "from": 0.2,
+      "events": 95,
+      "mean_confidence": 0.2162409189835518,
+      "accuracy": 0.0
+    },
+    {
+      "from": 0.3,
+      "events": 126,
+      "mean_confidence": 0.39019761476573445,
+      "accuracy": 0.31746031746031744
+    },
+    {
+      "from": 0.4,
+      "events": 22770,
+      "mean_confidence": 0.4277534633136642,
+      "accuracy": 0.10948616600790514
+    },
+    {
+      "from": 0.5,
+      "events": 526,
+      "mean_confidence": 0.5463645215424383,
+      "accuracy": 0.2870722433460076
+    },
+    {
+      "from": 0.6,
+      "events": 21602,
+      "mean_confidence": 0.6462697828684555,
+      "accuracy": 0.6043421905379132
+    },
+    {
+      "from": 0.7,
+      "events": 28503,
+      "mean_confidence": 0.780808432617613,
+      "accuracy": 0.7364137108374557
+    },
+    {
+      "from": 0.8,
+      "events": 20439,
+      "mean_confidence": 0.871055478180116,
+      "accuracy": 0.8247957336464602
+    },
+    {
+      "from": 0.9,
+      "events": 65676,
+      "mean_confidence": 0.9976613858307585,
+      "accuracy": 0.9940008526706864
+    }
+  ],
+  "windows": [
+    {
+      "from_time": 462299,
+      "to_time": 587001,
+      "events": 39934,
+      "frequency_bits": 2.954192140245498,
+      "previous_bits": 0.6695448748600529,
+      "context_bits": 0.6374661375266482
+    },
+    {
+      "from_time": 587003,
+      "to_time": 737448,
+      "events": 39932,
+      "frequency_bits": 3.124167889257033,
+      "previous_bits": 0.7078547800373741,
+      "context_bits": 0.7302470872301834
+    },
+    {
+      "from_time": 737449,
+      "to_time": 1728293,
+      "events": 39936,
+      "frequency_bits": 4.4301925424577036,
+      "previous_bits": 1.273532134533989,
+      "context_bits": 1.2122025005835604
+    },
+    {
+      "from_time": 1728295,
+      "to_time": 1875644,
+      "events": 39935,
+      "frequency_bits": 3.655926135666508,
+      "previous_bits": 0.9847239200703892,
+      "context_bits": 0.8740947531249035
+    }
+  ],
+  "predictors_compared": 3,
+  "note": "an event that is well predicted by what came before is associated with it in this data; nothing here shows that one causes the other"
+}
