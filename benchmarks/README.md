@@ -575,11 +575,23 @@ later ones, and 15 s when sharing a process with KUTE. KUTE's own time
 moves much less (4.0 s here either way; 1.95 s first and 3.2 s later on
 the desktop).
 
-What can be said: on these two machines KUTE trained this vocabulary
-between about 3.5 and 16 times faster than `tokenizers`, and where in
-that range a run lands depends on the machine and on the state of the
-`tokenizers` process more than on anything KUTE does. A single ratio
-would be a choice of method. Encoding does not show the effect.
+The reviewer then ran the new method on the desktop (24 threads; report
+`results/tokenizers-enwik8-10runs-matched-isolated-desktop.json`), ten
+runs, one training per process:
+
+| | KUTE | tokenizers 0.23.2, KUTE's split |
+|---|---:|---:|
+| train | 1.89 s (1.84 to 1.97) | 7.80 s (7.56 to 7.94) |
+| encode, one document | 0.134 s | 0.82 s |
+| tokens for the held-out text | 2,551,171 | 2,571,668 |
+
+What can be said: with one training per process the desktop gives about
+4 times faster training with narrow ranges, and that is the figure to
+quote. The laptop gives 16 times by the same method, and that figure is
+not trusted yet: `tokenizers` is 8 times slower on the laptop than on the
+desktop where KUTE is 2 times slower, and its laptop time halves with
+process history. Paging, power mode and thermal throttling on the laptop
+have not been ruled out. Encoding does not show the effect.
 
 How to read it:
 

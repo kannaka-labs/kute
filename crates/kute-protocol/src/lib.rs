@@ -432,18 +432,21 @@ impl Peer {
     fn respond(&mut self, message: Message) -> Result<Vec<Message>> {
         match message {
             Message::VocabAnnounce { vocabulary } => {
-                let not_for_you = || Ok(refuse(ErrorCode::Refused, "this peer does not take that vocabulary from the other side"));
-                if self.held.contains_key(&vocabulary.digest) {
-                    if !self.sees(&vocabulary.digest) {
-                        return not_for_you();
-                    }
+                // A vocabulary that is held but not this peer's to use is
+                // treated from here on exactly as one that is not held: the
+                // same checks, the same request for its content. If the
+                // peer then sends it, it had the content already, and it
+                // becomes one it may use.
+                if self.held.contains_key(&vocabulary.digest) && self.sees(&vocabulary.digest) {
                     return Ok(vec![Message::VocabAccept { digest: vocabulary.digest }]);
                 }
-                if let Some(other) = self.held.values().find(|h| h.vocabulary.id().as_str() == vocabulary.id && h.vocabulary.version().to_string() == vocabulary.version) {
-                    // Only a peer that may use the other one is told it exists.
-                    if !self.sees(&other.vocabulary.digest()?) {
-                        return not_for_you();
-                    }
+                if self.held.values().any(|h| {
+                    h.vocabulary.id().as_str() == vocabulary.id && h.vocabulary.version().to_string() == vocabulary.version && h.vocabulary.integrity.as_ref().is_none_or(|i| i.digest != vocabulary.digest)
+                }) {
+                    // This does tell a peer that the id and version are
+                    // taken, whether or not it may use the holder. Two
+                    // vocabularies cannot share them, so the refusal cannot
+                    // be avoided, only worded the same in both cases.
                     return Ok(refuse(
                         ErrorCode::VocabularyConflict,
                         format!("{} {} is held here with different content", vocabulary.id, vocabulary.version),

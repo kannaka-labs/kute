@@ -185,9 +185,12 @@ A peer answers `VOCAB_REQUEST`, `SYMBOL_QUERY` and `TRANSLATE` only when
 its policy says so; otherwise the answer is `REFUSED`. A policy may also
 list the vocabularies the other side may use. A vocabulary that is held
 but not listed is answered, in every message, exactly as one that is not
-held (`UNKNOWN_VOCABULARY`); announcing it, or another vocabulary under
-its id and version, is answered `REFUSED`. A vocabulary the other side
-adds itself joins its list.
+held (`UNKNOWN_VOCABULARY`), and announcing it is answered as announcing
+one that is not held: refused, or asked for. A vocabulary the other side
+adds itself joins its list, including one that was held and hidden: the
+peer sent the whole content, so it had it. One thing remains visible:
+announcing another vocabulary under an id and version already taken is
+answered `VOCABULARY_CONFLICT` whoever asks.
 
 A container is refused (`TOO_LARGE`) on the token count in its header,
 before its ids are decompressed.

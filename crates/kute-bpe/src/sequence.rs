@@ -489,7 +489,9 @@ pub fn evolve(parent: &Vocabulary, additions: &[Vec<String>], version: kute_type
     }
     child.statistics.insert("evolved_tokens".to_string(), added as u64);
     child.provenance.training = Some(serde_json::json!({
-        "evolved_from": { "version": parent.manifest.version.to_string(), "digest": parent.digest()? },
+        // Computed from the parent's content, not read from its file, so
+        // the link is true whatever the parent claims about itself.
+        "evolved_from": { "version": parent.manifest.version.to_string(), "digest": parent.compute_digest()? },
         "additions": additions,
     }));
     // Expected ids of the parent's test vectors may change under the new

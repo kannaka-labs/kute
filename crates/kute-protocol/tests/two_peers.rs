@@ -542,9 +542,20 @@ fn a_peer_gives_only_what_its_policy_says() {
     assert_eq!(code(&peer.handle(Message::EncodedMessage { id: 3, container: container(3, &d_private, &["A", "B"]) })), ErrorCode::UnknownVocabulary);
     assert_eq!(code(&peer.handle(Message::Translate { id: 4, container: container(4, &d_ours, &CYCLE), to_digest: d_private.clone() })), ErrorCode::UnknownVocabulary);
     assert_eq!(code(&peer.handle(Message::Translate { id: 5, container: container(5, &d_private, &["A"]), to_digest: d_ours.clone() })), ErrorCode::UnknownVocabulary);
-    // Announcing the hidden one, or another under its name, says no more
-    // than "refused".
-    assert_eq!(code(&peer.handle(Message::VocabAnnounce { vocabulary: kute_protocol::VocabRef::of(&private).unwrap() })), ErrorCode::Refused);
+    // Announcing the hidden one is answered exactly as announcing one
+    // that is not held, whether or not the peer may add vocabularies.
+    let announce = || Message::VocabAnnounce { vocabulary: kute_protocol::VocabRef::of(&private).unwrap() };
+    for accept_vocabularies in [false, true] {
+        let policy = Policy { accept_vocabularies, vocabularies: Some([d_ours.clone()].into()), ..Policy::default() };
+        let mut hides = ready_peer(policy.clone());
+        hides.add_vocabulary(ours.clone()).unwrap();
+        hides.add_vocabulary(private.clone()).unwrap();
+        let mut lacks = ready_peer(policy);
+        lacks.add_vocabulary(ours.clone()).unwrap();
+        let reply = hides.handle(announce());
+        assert_eq!(reply, lacks.handle(announce()), "accepting {accept_vocabularies}");
+        assert_eq!(matches!(reply[0], Message::VocabRequest { .. }), accept_vocabularies);
+    }
     assert!(peer.take_inbox().is_empty());
 
     // A vocabulary the other side adds itself is one it may then use.
