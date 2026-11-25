@@ -224,7 +224,7 @@ enum Command {
         /// Most the candidate may slow encoding, as a ratio.
         #[arg(long, default_value_t = 2.0)]
         max_slowdown: f64,
-        /// Timed passes over the inputs; the median is used.
+        /// Timed passes with each vocabulary, in alternating order; the least time is used.
         #[arg(long, default_value_t = 3)]
         passes: usize,
         /// Exit with status 1 when the candidate is rejected.

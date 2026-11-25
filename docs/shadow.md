@@ -28,10 +28,17 @@ The candidate is approved when all of these hold:
   Bytes are compressed containers, whole. `--horizon` (default 1) is how
   much traffic the candidate will carry, as a multiple of the inputs
   given. `--distributions` (default 1) is how many times the vocabulary
-  file has to be sent. The file is counted at its full size as stored.
+  file has to be sent. The file is counted at its size on disk at the
+  path given, whole. The text form of a vocabulary is many times larger
+  than the compact form (`kute convert`), so give the form that will
+  actually be sent; a peer that already holds the parent can be sent
+  less than either, which this does not credit.
 * **It is not much slower.** Encoding the inputs takes at most
-  `--max-slowdown` (default 2) times as long as with the parent; the
-  median of `--passes` timed passes (default 3).
+  `--max-slowdown` (default 2) times as long as with the parent. Each
+  is timed `--passes` times (default 3) in alternating order and the
+  least time kept. It is a guard against a gross slowdown, not a
+  measurement: with the same vocabulary on both sides the ratio has
+  been seen as high as 1.39.
 * **It escapes no more symbols** than the parent, with `--unknown escape`
   (the default). With `--unknown strict`, a candidate that cannot carry
   an input is rejected, and a parent that cannot is an error.
@@ -41,6 +48,14 @@ The report also says whether the candidate records the parent as its
 parent (`lineage`). That is reported, not required: a retrained
 vocabulary is a legitimate candidate and has no parent.
 
+The decision is on the total. `inputs_smaller`, `inputs_larger` and
+`largest_increase_on_one_input_bytes` say how the saving is spread: a
+candidate can be approved on the total while making some inputs larger.
+
+The horizon multiplies what was saved on the inputs given, which
+assumes they stand for the traffic to come. That is the assumption
+drift breaks, and the reason to run the comparison again later.
+
 `break_even_horizon` is the horizon at which the saving equals the cost
 of distribution; absent when the candidate saves nothing.
 
@@ -49,7 +64,8 @@ given, which makes a rejection exit 1.
 
 ## The rest of the loop
 
-The specification describes a loop: observe, discover, propose, encode
+`kute shadow` is the decision step of the specification's D1 and no
+more. The specification describes a loop: observe, discover, propose, encode
 in shadow, compare, approve or reject, publish an immutable child,
 monitor, roll back. The pieces are separate commands:
 

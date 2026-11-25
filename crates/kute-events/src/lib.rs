@@ -202,6 +202,12 @@ fn deflate(raw: &[u8]) -> Result<Vec<u8>> {
     Ok(encoder.finish()?)
 }
 
+/// The zstd window for a column of `raw` bytes: enough to cover it,
+/// within what a reader accepts.
+fn window_log(raw: u64) -> u32 {
+    (u64::BITS - raw.saturating_sub(1).leading_zeros()).clamp(10, ZSTD_WINDOW_LOG)
+}
+
 fn compress(raw: &[u8], codec: Codec) -> Result<Vec<u8>> {
     match codec {
         Codec::Zlib => deflate(raw),
@@ -209,7 +215,7 @@ fn compress(raw: &[u8], codec: Codec) -> Result<Vec<u8>> {
             // A window that covers the column, up to the largest a reader
             // accepts, with long-distance matching once the window is
             // larger than the level would use by itself.
-            let window = (usize::BITS - raw.len().saturating_sub(1).leading_zeros()).clamp(10, ZSTD_WINDOW_LOG);
+            let window = window_log(raw.len() as u64);
             let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 19)?;
             encoder.window_log(window)?;
             encoder.long_distance_matching(window > 23)?;
@@ -244,7 +250,10 @@ fn expand(stored: &[u8], column: &Column) -> Result<Vec<u8>> {
         }
         Codec::Zstd => {
             let mut decoder = zstd::stream::read::Decoder::with_buffer(stored).map_err(|e| bad(e.to_string()))?.single_frame();
-            decoder.window_log_max(ZSTD_WINDOW_LOG).map_err(|e| bad(e.to_string()))?;
+            // No more window than the writer would have asked for a
+            // column of this size: a frame that declares a large window
+            // around a few bytes is refused before the memory is taken.
+            decoder.window_log_max(window_log(column.raw)).map_err(|e| bad(e.to_string()))?;
             decoder.by_ref().take(limit).read_to_end(&mut bytes).map_err(|e| bad(e.to_string()))?;
             decoder.finish().len() as u64
         }
@@ -811,4 +820,39 @@ pub fn unpack(container: &[u8], max_bytes: u64) -> Result<Vec<u8>> {
         return Err(damaged("the records do not match the length and digest in the header"));
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn column(raw: u64, stored: usize) -> Column {
+        Column { name: "f:x".into(), kind: Kind::Json, codec: Codec::Zstd, raw, stored: stored as u64 }
+    }
+
+    #[test]
+    fn a_frame_asking_for_more_window_than_its_column_needs_is_refused() {
+        // Three bytes, in a frame whose header asks for a 128 MiB window.
+        let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 3).unwrap();
+        encoder.window_log(ZSTD_WINDOW_LOG).unwrap();
+        encoder.write_all(b"abc").unwrap();
+        let greedy = encoder.finish().unwrap();
+        assert!(expand(&greedy, &column(3, greedy.len())).is_err());
+        // What the writer makes for the same bytes is read back.
+        let honest = compress(b"abc", Codec::Zstd).unwrap();
+        assert_eq!(expand(&honest, &column(3, honest.len())).unwrap(), b"abc");
+        // And a large column still gets the window it needs.
+        let big: Vec<u8> = (0..3_000_000u32).flat_map(|i| (i.wrapping_mul(2_654_435_761) >> 7).to_le_bytes()).collect();
+        let stored = compress(&big, Codec::Zstd).unwrap();
+        assert_eq!(expand(&stored, &column(big.len() as u64, stored.len())).unwrap(), big);
+    }
+
+    #[test]
+    fn the_window_covers_the_column_within_what_a_reader_accepts() {
+        assert_eq!(window_log(0), 10);
+        assert_eq!(window_log(1024), 10);
+        assert_eq!(window_log(1025), 11);
+        assert_eq!(window_log(1 << 27), 27);
+        assert_eq!(window_log(u64::MAX), 27);
+    }
 }

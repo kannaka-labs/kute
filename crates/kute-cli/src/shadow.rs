@@ -27,7 +27,8 @@ pub struct Options {
     pub distributions: u64,
     /// Most the candidate may slow encoding, as a ratio.
     pub max_slowdown: f64,
-    /// Timed passes over the inputs; the median is used.
+    /// Timed passes over the inputs with each vocabulary, taken in
+    /// alternating order; the least time of each is used.
     pub passes: usize,
 }
 
@@ -38,17 +39,13 @@ struct Side {
     seconds: f64,
 }
 
-fn median(mut values: Vec<f64>) -> f64 {
-    values.sort_by(f64::total_cmp);
-    values[values.len() / 2]
-}
-
-/// Encode every input, check each decodes to its source, and time it.
-fn measure(engine: &kute::Engine, vocabulary: kute::Vocabulary, raws: &[Vec<u8>], policy: UnknownPolicy, passes: usize) -> kute::Result<Result<Side, String>> {
-    let tokenizer = engine.tokenizer(vocabulary)?;
+/// Encode every input and check each decodes to its source. Returns the
+/// totals and the container size of each input.
+fn measure(engine: &kute::Engine, tokenizer: &dyn kute::Tokenizer, raws: &[Vec<u8>], policy: UnknownPolicy) -> kute::Result<Result<(Side, Vec<u64>), String>> {
     let mut side = Side { tokens: 0, escaped: 0, container_bytes: 0, seconds: 0.0 };
+    let mut each = Vec::with_capacity(raws.len());
     for (i, raw) in raws.iter().enumerate() {
-        let sequence = match engine.encode_raw_open(tokenizer.as_ref(), raw, policy) {
+        let sequence = match engine.encode_raw_open(tokenizer, raw, policy) {
             Ok(sequence) => sequence,
             // With `strict`, a symbol the vocabulary lacks ends here: a
             // finding about the vocabulary, not a failure of the command.
@@ -56,21 +53,23 @@ fn measure(engine: &kute::Engine, vocabulary: kute::Vocabulary, raws: &[Vec<u8>]
         };
         side.tokens += sequence.ids.len() as u64;
         side.escaped += sequence.escapes.len() as u64;
-        side.container_bytes += sequence.to_bytes_compressed()?.len() as u64;
-        if engine.decode_raw_bounded(tokenizer.as_ref(), &sequence, u64::MAX)? != *raw {
+        let bytes = sequence.to_bytes_compressed()?.len() as u64;
+        side.container_bytes += bytes;
+        each.push(bytes);
+        if engine.decode_raw_bounded(tokenizer, &sequence, u64::MAX)? != *raw {
             return Ok(Err(format!("input {} does not decode to itself", i + 1)));
         }
     }
-    let mut timings = Vec::with_capacity(passes);
-    for _ in 0..passes {
-        let started = Instant::now();
-        for raw in raws {
-            std::hint::black_box(engine.encode_raw_open(tokenizer.as_ref(), raw, policy)?);
-        }
-        timings.push(started.elapsed().as_secs_f64());
+    Ok(Ok((side, each)))
+}
+
+/// One timed pass of encoding every input.
+fn timed(engine: &kute::Engine, tokenizer: &dyn kute::Tokenizer, raws: &[Vec<u8>], policy: UnknownPolicy) -> kute::Result<f64> {
+    let started = Instant::now();
+    for raw in raws {
+        std::hint::black_box(engine.encode_raw_open(tokenizer, raw, policy)?);
     }
-    side.seconds = median(timings);
-    Ok(Ok(side))
+    Ok(started.elapsed().as_secs_f64())
 }
 
 fn describe(side: &Side) -> Value {
@@ -112,11 +111,28 @@ pub fn run(engine: &kute::Engine, options: &Options) -> kute::Result<(Value, boo
         Some(_) => "child of another vocabulary",
         None => "no parent recorded",
     };
-    let before = match measure(engine, parent, &raws, policy, options.passes)? {
-        Ok(side) => side,
+    let parent = engine.tokenizer(parent)?;
+    let candidate = engine.tokenizer(candidate)?;
+    let (mut before, before_each) = match measure(engine, parent.as_ref(), &raws, policy)? {
+        Ok(measured) => measured,
         Err(why) => return Err(KuteError::InvalidInput(format!("the parent vocabulary cannot carry the inputs: {why}"))),
     };
-    let after = measure(engine, candidate, &raws, policy, options.passes)?;
+    let mut after = measure(engine, candidate.as_ref(), &raws, policy)?;
+    if let Ok((after, _)) = &mut after {
+        // Whichever is timed second runs on warmer caches, so the order
+        // alternates, and the least time of each is kept: the least is
+        // the one least disturbed by whatever else the machine was doing.
+        (before.seconds, after.seconds) = (f64::INFINITY, f64::INFINITY);
+        for pass in 0..options.passes {
+            if pass % 2 == 0 {
+                before.seconds = before.seconds.min(timed(engine, parent.as_ref(), &raws, policy)?);
+                after.seconds = after.seconds.min(timed(engine, candidate.as_ref(), &raws, policy)?);
+            } else {
+                after.seconds = after.seconds.min(timed(engine, candidate.as_ref(), &raws, policy)?);
+                before.seconds = before.seconds.min(timed(engine, parent.as_ref(), &raws, policy)?);
+            }
+        }
+    }
 
     let mut report = json!({
         "parent": { "path": options.parent, "digest": parent_digest, "tokens_in_vocabulary": parent_tokens, "measured": describe(&before) },
@@ -133,7 +149,10 @@ pub fn run(engine: &kute::Engine, options: &Options) -> kute::Result<(Value, boo
     });
     match after {
         Err(why) => reasons.push(format!("the candidate cannot carry the inputs: {why}")),
-        Ok(after) => {
+        Ok((after, after_each)) => {
+            let smaller = before_each.iter().zip(&after_each).filter(|(b, a)| a < b).count();
+            let larger = before_each.iter().zip(&after_each).filter(|(b, a)| a > b).count();
+            let worst = before_each.iter().zip(&after_each).map(|(b, a)| *a as i64 - *b as i64).max().unwrap_or(0).max(0);
             // What the inputs stand for, scaled to the traffic expected,
             // less what it costs to hand the candidate out.
             let saved_on_inputs = before.container_bytes as f64 - after.container_bytes as f64;
@@ -154,6 +173,11 @@ pub fn run(engine: &kute::Engine, options: &Options) -> kute::Result<(Value, boo
             report["candidate"]["measured"] = describe(&after);
             report["comparison"] = json!({
                 "container_bytes_saved_on_inputs": saved_on_inputs,
+                // The decision is on the total; these say how it is spread.
+                "inputs_smaller": smaller,
+                "inputs_larger": larger,
+                "inputs_unchanged": before_each.len() - smaller - larger,
+                "largest_increase_on_one_input_bytes": worst,
                 "container_ratio": if before.container_bytes > 0 { after.container_bytes as f64 / before.container_bytes as f64 } else { 1.0 },
                 "token_ratio": if before.tokens > 0 { after.tokens as f64 / before.tokens as f64 } else { 1.0 },
                 "distribution_cost_bytes": distribution_cost,
@@ -170,5 +194,6 @@ pub fn run(engine: &kute::Engine, options: &Options) -> kute::Result<(Value, boo
     report["decision"] = json!(if approved { "approve" } else { "reject" });
     report["reasons"] = json!(reasons);
     report["not_measured"] = json!("memory, task quality and predictive utility; timing is wall-clock on this machine");
+    report["assumes"] = json!("that the inputs stand for the traffic to come: the horizon multiplies what was saved on them, which is what drift breaks. The candidate's file is counted at its size as stored at the path given.");
     Ok((report, approved))
 }

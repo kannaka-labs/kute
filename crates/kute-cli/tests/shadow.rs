@@ -83,6 +83,10 @@ fn a_candidate_is_approved_only_when_it_pays_for_itself() {
     assert_eq!(cost, report["candidate"]["file_bytes"].as_f64().unwrap());
     assert!((comparison["net_bytes_saved_over_horizon"].as_f64().unwrap() - (1000.0 * saved - cost)).abs() < 1e-6);
     assert_eq!(report["inputs"]["files"], 2);
+    assert_eq!(comparison["inputs_smaller"], 2);
+    assert_eq!(comparison["inputs_larger"], 0);
+    assert_eq!(comparison["largest_increase_on_one_input_bytes"], 0);
+    assert!(report["assumes"].as_str().unwrap().contains("drift"));
 
     // The same candidate sent to ten thousand peers for that traffic does not.
     let (success, report, _) = shadow("cycle.kvf", &["--horizon", "1000", "--distributions", "10000"]);
