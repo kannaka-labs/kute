@@ -236,13 +236,25 @@ class Bench:
         return result
 
     def payload(self, vocab, tasks):
-        """Compressed container bytes for each task, by `kute encode`."""
-        total = 0
+        """Container bytes for each task, by `kute encode`: with and
+        without `--compress`, and how the plain container divides between
+        its header (which names the vocabulary) and its tokens."""
+        sizes = {"compressed": 0, "plain": 0, "plain_header": 0, "plain_tokens": 0}
+        tmp = self.work / "tmp.kute"
         for task_name, _ in tasks:
-            (self.work / "tmp.kute").unlink(missing_ok=True)
+            tmp.unlink(missing_ok=True)
             self.run("encode", "--vocab", vocab, "--input", f"tasks/{task_name}.jsonl", "--output", "tmp.kute", "--compress", "--unknown", "escape")
-            total += (self.work / "tmp.kute").stat().st_size
-        return total
+            sizes["compressed"] += tmp.stat().st_size
+            tmp.unlink()
+            self.run("encode", "--vocab", vocab, "--input", f"tasks/{task_name}.jsonl", "--output", "tmp.kute", "--unknown", "escape")
+            plain = tmp.read_bytes()
+            # The header is one JSON object after the magic; the tokens follow it.
+            start = plain.index(b"{")
+            _, length = json.JSONDecoder().raw_decode(plain[start:].decode("latin-1"))
+            sizes["plain"] += len(plain)
+            sizes["plain_header"] += start + length
+            sizes["plain_tokens"] += len(plain) - start - length
+        return sizes
 
 
 def chunks(items, size):
@@ -292,9 +304,12 @@ def main() -> int:
     shadow = json.loads(bench.run("shadow", "--parent", "base.kvf", "--candidate", "candidate.kvf", "--horizon", f"{horizon:.4f}", "--input", *[f"tasks/{n}.jsonl" for n, _ in sets["shadow"]]).stdout)
     approved = shadow["decision"] == "approve"
 
-    # 5. Negotiate if approved, on a connection that carries nothing else.
+    # 5. Negotiate, on a connection that carries nothing else. A real
+    # deployment would do this only if the candidate was approved. It is
+    # done here whatever the decision, and labelled, so that the path is
+    # exercised on every run and not only when the data happens to approve.
     negotiation = None
-    if approved:
+    if True:
         negotiation = bench.exchange("negotiate", "base.kvf", ["base.kvf"], [], propose={"additions": additions, "version": "0.2.0"})
         received = negotiation["received_vocabularies"]
         assert received, "the worker did not keep the proposed vocabulary"
@@ -303,11 +318,22 @@ def main() -> int:
         theirs = json.loads(bench.run("inspect", received[0]).stdout)
         negotiation["same_digest_on_both_sides"] = ours["summary"]["digest"] == theirs["summary"]["digest"]
         negotiation["digest"] = ours["summary"]["digest"]
+        negotiation["ran_because"] = "the candidate was approved" if approved else "forced, to exercise the path: the decision was reject and a deployment would not have negotiated"
     # The first connection of all carries the base vocabulary to the worker.
     first_contact = bench.exchange("first", "base.kvf", [], [])
 
-    def carry(label, vocab, held):
-        batches = [bench.exchange(f"{label}-{i}", vocab, held, batch) for i, batch in enumerate(chunks(sets["live"], BATCH))]
+    # 6. The live tasks, under both vocabularies: the one the decision
+    # chose is what would run; the other shows whether it chose well.
+    # Batch by batch, and which goes first alternates, so that neither
+    # is always the one that pays for a cold start.
+    sides = {"base": ("base.kvf", ["base.kvf"]), "candidate": ("candidate.kvf", ["base.kvf", "candidate.kvf"])}
+    ran = {"base": [], "candidate": []}
+    for i, batch in enumerate(chunks(sets["live"], BATCH)):
+        for label in (("base", "candidate") if i % 2 == 0 else ("candidate", "base")):
+            ran[label].append(bench.exchange(f"live-{label}-{i}", sides[label][0], sides[label][1], batch))
+
+    def carry(label):
+        batches, vocab = ran[label], sides[label][0]
         completed = sum(b["completed"] for b in batches)
         socket_bytes = sum(b["socket_bytes_to_worker"] + b["socket_bytes_to_queen"] for b in batches)
         return {
@@ -321,9 +347,7 @@ def main() -> int:
             "container_bytes_one_task_each": bench.payload(vocab, sets["live"]),
         }
 
-    # 6. The live tasks, under both vocabularies: the one the decision
-    # chose is what would run; the other shows whether it chose well.
-    live = {"base": carry("live-base", "base.kvf", ["base.kvf"]), "candidate": carry("live-candidate", "candidate.kvf", ["base.kvf", "candidate.kvf"])}
+    live = {"base": carry("base"), "candidate": carry("candidate")}
 
     # Recovery: the connection is dropped part way through a batch, and
     # the batch is sent again.
@@ -345,7 +369,13 @@ def main() -> int:
 
     # Rivals, a task at a time, on the same live tasks. Payload only: they
     # have no handshake, receipt or framing, so compare them with
-    # `container_bytes_one_task_each`, not with socket bytes.
+    # `container_bytes_one_task_each`, not with socket bytes. A zlib
+    # stream with a preset dictionary does not say which dictionary: both
+    # sides are assumed to know. Its like is the container's tokens
+    # without the header, not the whole container. zlib takes at most the
+    # last 32 kB of a dictionary, so it sees under a tenth of the traces
+    # the vocabulary was trained on. A trained zstd dictionary would
+    # likely do better; it is not in the standard library.
     seen = b"".join(canonical(m) for part in ("train", "observe") for _, m in sets[part])
     early = b"".join(canonical(m) for _, m in sets["train"])
 
@@ -380,6 +410,7 @@ def main() -> int:
             "first_contact_socket_bytes": first_contact["socket_bytes_to_worker"] + first_contact["socket_bytes_to_queen"],
             "proposal_socket_bytes": None if negotiation is None else negotiation["socket_bytes_to_worker"] + negotiation["socket_bytes_to_queen"],
             "same_digest_on_both_sides": None if negotiation is None else negotiation["same_digest_on_both_sides"],
+            "negotiation_ran_because": None if negotiation is None else negotiation["ran_because"],
             "signed": False,
         },
         "live": live,

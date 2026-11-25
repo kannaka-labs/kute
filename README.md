@@ -57,6 +57,9 @@ pip install kute-engine
 * Two token containers: plain varint ids, and a compressed form
   (`kute encode --compress`) that is smaller than gzip of the original on
   the suite's large text case. See `benchmarks/README.md` for where it is not.
+  On a short message (a few dozen tokens) `--compress` makes the container
+  larger, and the header naming the vocabulary is most of either form:
+  see `examples/queensync`.
 * Text encoding that matches tiktoken id for id on an exported vocabulary and
   runs faster than it on the same machine; long texts use every core.
 * An experimental adapter contract for Holographic Resonance Medium (HRM)

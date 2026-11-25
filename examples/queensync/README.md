@@ -7,7 +7,7 @@ with no change to the engine:
 
     python examples/queensync/queensync.py path/to/kute WORK_DIR > report.json
 
-Python 3.9 or later, standard library only. About two minutes.
+Python 3.9 or later, standard library only. About four minutes.
 
 **The workload is synthetic and both agents are scripted.** No language
 model is called. What this example shows is that the pieces work
@@ -26,8 +26,10 @@ traffic.
 4. `kute shadow` judges the candidate on 300 further tasks.
 5. If approved, `kute peer send --propose` negotiates it and the last
    1,000 tasks run under it. If rejected, they run under the old one.
-   The script runs them under both, to show whether the decision was
-   right.
+   The script negotiates whatever the decision, and says in the report
+   that it was forced when it was, so that the path runs every time and
+   not only when the data approves. It runs the tasks under both
+   vocabularies, to show whether the decision was right.
 6. Two in a hundred of those tasks contain message kinds and keys that
    no vocabulary has seen. They are carried by escape.
 
@@ -49,39 +51,69 @@ are reproducible; times are not.
 | shadow decision | **reject**: the candidate saved 0.1% of bytes and its file costs 69,089 |
 | bytes on the socket, each completed task | 701 (both directions, with handshake and receipts) |
 | sending the vocabulary on first contact | 86,766 bytes on the socket for a 64,122-byte file |
+| negotiating the candidate (forced: the decision was reject) | 2,068 bytes on the socket; the same digest on both sides |
 | a dropped connection | sender reports failure; nothing delivered; sending the batch again delivers all 100. No resuming part way |
-| time for a batch of 100 tasks | 0.3 to 1.2 s, a new process and connection each batch |
+| time for a batch of 100 tasks | about 1.2 s under either vocabulary, a new process and connection each batch |
 | language model tokens | not measured, and unchanged by construction: see below |
 
 The same 1,000 tasks, payload only, one task at a time:
 
-| carried as | bytes | of JSON |
-|---|---:|---:|
-| JSON | 927,198 | 100% |
-| KUTE compressed container | 391,941 | 42% |
-| xz -9 | 382,064 | 41% |
-| zlib -9 | 305,036 | 33% |
-| zlib -9 with a dictionary of the first 400 tasks | 125,466 | 14% |
-| zlib -9 with a dictionary of all 700 tasks seen | 117,706 | 13% |
+| carried as | bytes | of JSON | says which shared context it needs |
+|---|---:|---:|---|
+| JSON | 927,198 | 100% | needs none |
+| KUTE container with `--compress` | 391,941 | 42% | yes |
+| KUTE container | 383,043 | 41% | yes |
+| zlib -9 | 305,036 | 33% | needs none |
+| KUTE container, tokens only | 156,256 | 17% | no |
+| zlib -9 with a dictionary of the first 400 tasks | 125,466 | 14% | no |
+| zlib -9 with a dictionary of all 700 tasks seen | 117,706 | 13% | no |
+
+Rows are only comparable where the last column agrees. A KUTE container
+names its vocabulary by id, version and digest in every message, and
+that header is 226,787 of its 383,043 bytes (59%). A zlib stream made
+with a dictionary does not say which dictionary; both sides are assumed
+to know. The like-for-like row for it is "tokens only".
+
+Three things to know about these rows:
+
+* `--compress` makes a message this short larger (336 bytes against 300
+  on the first task): about sixty bytes of tokens do not compress and
+  the wrapper costs.
+* zlib takes at most the last 32 kB of a dictionary, so the rival sees
+  under a tenth of the traces the vocabulary was trained on, chosen by
+  position. A trained zstd dictionary would probably do better still.
+  It is not in Python's standard library, which is the only reason it
+  is not here.
+* xz was also run (382,064) and is left out of the table: on inputs of
+  900 bytes that figure is nearly all its fixed cost per stream.
 
 ## What it says
 
 **The loop works.** Training, exchange, discovery, proposal, shadow
 judgement and fallback by escape all ran through the released commands,
-and every task arrived exactly.
+and every task arrived exactly. The candidate was judged and rejected,
+so a deployment would not have negotiated it; the negotiation in the
+table was forced to exercise the path. It worked, and it is cheap:
+2,068 bytes against 86,766 for sending a whole vocabulary.
 
 **The decision rule did its job.** The candidate had 1.1% fewer tokens
 and 0.1% fewer bytes. Shadow rejected it, and the live run confirms it:
-391,463 bytes against 391,941.
+391,463 bytes against 391,941 compressed, and exactly the same without
+compression (383,043 either way). Fewer tokens did not mean fewer
+bytes: each new token has a two-byte id and mostly took the place of
+two one-byte ids.
 
 **For these messages, a general compressor is smaller.** Plain zlib on
-each task beats the KUTE container, and zlib given a dictionary made
-from the same traces the vocabulary was trained on is about a third of
-its size. The settings here (vocabulary of 512, values spelled by
-character) were fixed before any result was seen and were not tuned
-afterwards; other settings may do better and have not been tried. As
-measured, this example is not a reason to use a learned vocabulary to
-shrink agent messages.
+each task beats the KUTE container. With the shared context agreed
+outside the message on both sides, zlib with a dictionary is still
+smaller than the tokens alone, by a fifth (125,466 against 156,256).
+The settings here (vocabulary of 512, values spelled by character) were
+not tuned. Whole values as symbols was tried first and could not
+finish, because every task id became a symbol and the alphabet
+outgrew the vocabulary; the lexing was changed for that reason, before
+any size had been seen (`docs/decisions.md`, ADR-0042). Other settings
+may do better and have not been tried. As measured, this example is
+not a reason to use a learned vocabulary to shrink agent messages.
 
 **Fewer bytes between agents is not fewer model tokens.** Each agent
 reads the decoded message, which is the message that was sent. A model
