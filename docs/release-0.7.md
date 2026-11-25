@@ -14,7 +14,7 @@ them in `benchmarks/README.md`.
 | gate | what it asks | evidence | open remarks |
 |---|---|---|---|
 | AC-701 | Authenticated exchange between independent processes | `crates/kute-cli/tests/peer_tls.rs` starts two `kute` processes with certificates; an unlisted certificate is refused. `crates/kute-protocol/tests/mutual_tls.rs`. ADR-0032. | |
-| AC-702 | Aggregate peer memory and vocabulary budgets under sustained load | `two_peers.rs`: `the_other_side_cannot_pass_the_aggregate_budgets`, `delivery_is_bounded_and_repeats_are_not_delivered_twice`, `a_container_is_refused_on_its_declared_size_before_it_is_inflated`, `long_symbols_are_bounded_by_their_bytes_not_only_their_count`. ADR-0031. | Each budget is driven past its limit within one session. There is no long-running soak test. |
+| AC-702 | Aggregate peer memory and vocabulary budgets under sustained load | `two_peers.rs`: `the_other_side_cannot_pass_the_aggregate_budgets`, `delivery_is_bounded_and_repeats_are_not_delivered_twice`, `a_container_is_refused_on_its_declared_size_before_it_is_inflated`, `long_symbols_are_bounded_by_their_bytes_not_only_their_count`. `tests/soak.rs`: 300,000 mixed messages against one peer, budgets checked at every step, peak memory of the process flat after warm-up. ADR-0031. | The soak is one process and seconds long, not days; it does not cover the TLS transport. |
 | AC-703 | Evolution-rule negotiation rejects incompatible proposals | `two_peers.rs`: `a_proposal_under_another_evolution_rule_is_refused_before_derivation`, `an_initiator_does_not_propose_to_a_peer_with_another_rule`. | |
 | AC-704 | Three materially different external datasets | enwik8 (prose), HDFS_v1 (event traces), CPython 3.12.7 `Lib` (source code); `benchmarks/README.md`, "External datasets". A fourth, an OpenSSH server log, is used by `examples/log-archive`. | The code corpus has sizes only: no timing, no other tokenizer. |
 | AC-705 | Comparison under equivalent tokenizer configurations | `benchmarks/hf_repeat.py --matched`, one training per process; reports `tokenizers-enwik8-10runs-matched-isolated.json` and `...-desktop.json`. | The two machines disagree (about 4 times and 16 times); the laptop figure is unexplained and not to be quoted. |
@@ -54,7 +54,7 @@ has to be read for it:
   command-line surface.
 - **The exchange protocol is not a production service.** One connection at
   a time, no registry, no revocation beyond editing the allow list, no
-  resumption. Budgets are tested by exceeding them, not by soak.
+  resumption.
 - **The HRM adapter is an interface and a reference mapping.** Nothing has
   been measured about whether it helps anything.
 - **Synthetic data is labelled where it is used**: the seeded sample data,

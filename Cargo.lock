@@ -411,6 +411,7 @@ dependencies = [
 name = "kute-protocol"
 version = "0.6.0"
 dependencies = [
+ "kute-bench",
  "kute-engine",
  "rcgen",
  "rustls",
