@@ -75,8 +75,11 @@ struct Request {
 
 fn loopback_name(host: &str) -> bool {
     let name = if let Some(rest) = host.strip_prefix('[') {
-        // [::1] or [::1]:port
-        rest.split(']').next().unwrap_or("")
+        // [::1] or [::1]:port, and nothing else after the bracket
+        match rest.split_once(']') {
+            Some((name, after)) if after.is_empty() || after.strip_prefix(':').is_some_and(|port| port.chars().all(|c| c.is_ascii_digit())) => name,
+            _ => return false,
+        }
     } else {
         host.rsplit_once(':').map_or(host, |(name, port)| if port.chars().all(|c| c.is_ascii_digit()) { name } else { host })
     };
@@ -112,18 +115,33 @@ fn read_request(stream: &mut TcpStream, options: &Options) -> Result<Request, Re
     let mut lines = head.split("\r\n");
     let mut first = lines.next().unwrap_or("").split(' ');
     let (method, target, version) = (first.next().unwrap_or(""), first.next().unwrap_or(""), first.next().unwrap_or(""));
-    if method.is_empty() || !target.starts_with('/') || !version.starts_with("HTTP/1.") || first.next().is_some() {
+    if method.is_empty() || !target.starts_with('/') || !matches!(version, "HTTP/1.0" | "HTTP/1.1") || first.next().is_some() {
         return Err(bad("the request line is not HTTP/1.x"));
     }
     let (mut host, mut content_type, mut length, mut chunked) = (None, None, None, false);
     for line in lines {
         let (name, value) = line.split_once(':').ok_or_else(|| bad("a header line has no colon"))?;
-        let value = value.trim();
+        // A name is a token: no space before the colon, no continuation
+        // line. Something in front of this service that read such a line
+        // another way would disagree with it about where the request ends.
+        if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b)) {
+            return Err(bad("a header name is not a token"));
+        }
+        let value = value.trim_matches([' ', '\t']);
+        if value.bytes().any(|b| (b < 0x20 && b != b'\t') || b == 0x7f) {
+            return Err(bad("a header value holds a control character"));
+        }
         match name.to_ascii_lowercase().as_str() {
-            "host" => host = Some(value.to_string()),
+            "host" => {
+                if host.is_some() {
+                    return Err(bad("two Host headers"));
+                }
+                host = Some(value.to_string());
+            }
             "content-type" => content_type = Some(value.to_ascii_lowercase()),
             "content-length" => {
-                let n: u64 = value.parse().map_err(|_| bad("Content-Length is not a number"))?;
+                // Digits only: `parse` alone would take "+5".
+                let n: u64 = Some(value).filter(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit())).and_then(|v| v.parse().ok()).ok_or_else(|| bad("Content-Length is not a number"))?;
                 if length.is_some_and(|earlier| earlier != n) {
                     return Err(bad("two different Content-Length headers"));
                 }

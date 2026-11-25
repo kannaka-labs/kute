@@ -232,6 +232,33 @@ fn what_is_not_a_proper_request_is_refused_within_bounds() {
     assert_eq!(service.get("/v1/capabilities").0, 200);
 }
 
+/// A request that two readers could take two ways is refused, not guessed
+/// at: the shapes that let a request be hidden inside another when
+/// something stands in front of the service.
+#[test]
+fn an_ambiguous_request_is_refused() {
+    let dir = scratch("http-ambiguous");
+    vocabularies(&dir);
+    let service = Service::start(&dir, &["--vocab", "text.kvf", "--timeout", "2"]);
+    let post = |headers: &str| service.raw(format!("POST /v1/inspect HTTP/1.1\r\n{headers}\r\n{{}}").as_bytes()).0;
+    let json = "Content-Type: application/json\r\n";
+    assert_eq!(post(&format!("Host: localhost\r\n{json}Content-Length: 2\r\n")), 200, "the plain request works");
+
+    for (what, headers) in [
+        ("a sign on the length", format!("Host: localhost\r\n{json}Content-Length: +2\r\n")),
+        ("a space before the colon", format!("Host: localhost\r\n{json}Transfer-Encoding : chunked\r\nContent-Length: 2\r\n")),
+        ("a continuation line", format!("Host: localhost\r\n{json}X-A: a\r\n b: c\r\nContent-Length: 2\r\n")),
+        ("a control character in a value", format!("Host: localhost\r\n{json}X-A: a\u{0}b\r\nContent-Length: 2\r\n")),
+        ("two Host headers", format!("Host: evil.example\r\nHost: localhost\r\n{json}Content-Length: 2\r\n")),
+    ] {
+        assert_eq!(post(&headers), 400, "{what}");
+    }
+    assert_eq!(post(&format!("Host: [::1]evil.example\r\n{json}Content-Length: 2\r\n")), 403, "text after the bracket");
+    assert_eq!(post(&format!("Host: [::1]:8787\r\n{json}Content-Length: 2\r\n")), 200);
+    assert_eq!(service.raw(b"GET /v1/capabilities HTTP/1.9\r\nHost: localhost\r\n\r\n").0, 400, "a version that does not exist");
+    assert_eq!(service.raw(b"GET /v1/capabilities HTTP/1.0\r\nHost: localhost\r\n\r\n").0, 200);
+}
+
 #[test]
 fn an_address_that_is_not_loopback_has_to_be_asked_for() {
     let dir = scratch("http-remote");
