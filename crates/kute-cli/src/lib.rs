@@ -640,9 +640,12 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 _ => None,
             };
             let listener = std::net::TcpListener::bind(&listen)?;
-            eprintln!("listening on {}", listener.local_addr()?);
+            // Lines to standard error are written without `eprintln!`, which
+            // panics when the stream is closed: a parent that stopped reading
+            // would otherwise let the next refused connection end the server.
+            let _ = writeln!(std::io::stderr(), "listening on {}", listener.local_addr()?);
             if secured.is_none() {
-                eprintln!("warning: no TLS. The connection is not encrypted and whoever connects is served.");
+                let _ = writeln!(std::io::stderr(), "warning: no TLS. The connection is not encrypted and whoever connects is served.");
             }
             // With TLS, a connection that fails the handshake, stalls in
             // it, or is not allowed does not end the listener: whoever can
@@ -655,7 +658,9 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 let Some((config, access)) = &secured else { break (Box::new(tcp), None, policy, from) };
                 match tls::accept(config, tcp).and_then(|(stream, who)| Ok((stream, access.policy_for(&who)?, who))) {
                     Ok((stream, policy, who)) => break (Box::new(stream), Some(who.fingerprint), policy, from),
-                    Err(e) => eprintln!("refused {from}: {e}"),
+                    Err(e) => {
+                        let _ = writeln!(std::io::stderr(), "refused {from}: {e}");
+                    }
                 }
             };
             let mut peer = Peer::new("kute", engine, policy);

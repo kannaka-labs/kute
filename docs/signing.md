@@ -89,6 +89,18 @@ What it leaves alone:
   at all is still the TLS certificate and `--allow`. The signature says
   who vouches for the vocabulary, which need not be who delivers it.
 * A malformed key is refused when the command starts, before it listens.
+* The refusal says whether the vocabulary was unsigned or signed by a
+  key the peer does not trust. Signed vocabularies are public files, so
+  anyone allowed to connect can learn which signers a peer trusts by
+  offering them. The texts are kept because the sender needs them; do
+  not treat the list of trusted keys as secret.
+* A signature does not expire. Trusting a key trusts everything it has
+  ever signed, including what it signed before you would have trusted it.
+* That includes an earlier run's output: a vocabulary this peer received
+  and you later pass back with `--vocab` is yours by then, unchecked.
+
+Reviewed by reading every place a received vocabulary is kept or used;
+no way past the check was found. That is one reader, not a proof.
 
 These are the first two steps of the specification's B8. A registry and
 federation are not built.

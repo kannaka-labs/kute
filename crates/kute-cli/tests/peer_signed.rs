@@ -27,20 +27,25 @@ fn ok(dir: &Path, args: &[&str]) -> Value {
 /// and a sender offering `vocab`. Returns the sender's output and what
 /// the server received.
 fn exchange(dir: &Path, name: &str, trusted: &[&str], vocab: &str) -> (Output, Vec<PathBuf>) {
-    // The server picks the port and says which: choosing one here and
-    // letting it go would leave a moment for another test to take it.
+    // The server picks the port and says which.
     let mut args = vec!["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--accept-vocabularies", "--output-dir", name, "--timeout", "20"];
     for key in trusted {
         args.extend_from_slice(&["--require-signature-from", key]);
     }
     let mut server = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(dir).args(&args).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     // It says when it is listening; send only then.
+    // The reader is kept until the server has ended. Dropping it closes
+    // the pipe, and the server's next line to it (the warning about no
+    // TLS follows at once) then ends the server before it accepts: about
+    // one run in fifteen, seen as "connection refused" by the sender.
     let mut line = String::new();
-    BufReader::new(server.stderr.take().unwrap()).read_line(&mut line).unwrap();
+    let mut errors = BufReader::new(server.stderr.take().unwrap());
+    errors.read_line(&mut line).unwrap();
     assert!(line.contains("listening"), "{line}");
     let address = line.trim().rsplit(' ').next().unwrap().to_string();
     let sent = kute(dir, &["peer", "send", "--connect", &address, "--insecure-plain", "--vocab", vocab, "--input", "log.jsonl"]);
     let _ = server.wait();
+    drop(errors);
     let mut received: Vec<PathBuf> = std::fs::read_dir(dir.join(name)).map(|d| d.map(|e| e.unwrap().path()).collect()).unwrap_or_default();
     received.sort();
     (sent, received)
@@ -102,4 +107,33 @@ fn a_peer_takes_only_a_vocabulary_signed_by_a_key_it_trusts() {
     let bad = kute(&dir, &["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--accept-vocabularies", "--require-signature-from", "not-a-key"]);
     assert!(!bad.status.success() && String::from_utf8_lossy(&bad.stderr).contains("trusted key"));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A parent that stops reading the server's standard error must not be
+/// able to stop the server: its later lines there are best effort.
+#[test]
+fn a_server_whose_standard_error_was_closed_still_serves() {
+    let dir = scratch("peer-closed-stderr");
+    let events: String = (0..400).map(|i| format!("{{\"event\":\"{}\"}}
+", ["OPEN", "READ", "CLOSE", "SYNC"][i % 4])).collect();
+    std::fs::write(dir.join("log.jsonl"), events).unwrap();
+    ok(&dir, &["train", "--input", "log.jsonl", "--id", "test:peer:closed", "--algorithm", "sequence-bpe", "--adapter", "jsonl-events", "--vocab-size", "8", "--output", "v.kvf"]);
+    for round in 0..8 {
+        let out = format!("r{round}");
+        let mut server = Command::new(env!("CARGO_BIN_EXE_kute"))
+            .current_dir(&dir)
+            .args(["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--accept-vocabularies", "--output-dir", &out, "--timeout", "20"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut line = String::new();
+        // Read one line and let the pipe go: the warning that follows has nowhere to be written.
+        BufReader::new(server.stderr.take().unwrap()).read_line(&mut line).unwrap();
+        let address = line.trim().rsplit(' ').next().unwrap().to_string();
+        let sent = kute(&dir, &["peer", "send", "--connect", &address, "--insecure-plain", "--vocab", "v.kvf", "--input", "log.jsonl"]);
+        let status = server.wait().unwrap();
+        assert!(sent.status.success(), "round {round}: {}", String::from_utf8_lossy(&sent.stderr));
+        assert!(status.success(), "round {round}: the server ended with {status}");
+    }
 }
