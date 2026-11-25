@@ -19,6 +19,9 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 
+#[cfg(feature = "tls")]
+pub mod tls;
+
 /// Version 2 added the evolution rule to `CAPABILITIES` and to
 /// `SYMBOL_PROPOSE`, the `UNSUPPORTED_RULE` and `BUSY` errors, and the
 /// delivery contract for repeated message ids. A version 1 peer is refused

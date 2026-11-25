@@ -486,6 +486,31 @@ peer), limits on connections, rate and CPU time, and lineage by parent
 digest in place of the copied training record. Those are the next steps of
 the same work package.
 
+## ADR-0032: Peers are authenticated by mutual TLS, and policy follows the certificate
+
+The exchange needed to know who it is talking to before any of ADR-0031's
+policy could differ between peers. The choices were to add signatures to
+the protocol's own messages or to run it over an established authenticated
+transport. The second was taken: TLS 1.3 with a certificate on both sides,
+through `rustls` with its `ring` provider. It gives encryption, replay
+protection within a connection and authentication of both ends, and it is
+not something this project should write itself.
+
+`kute_protocol::tls` is behind the crate feature `tls`, on by default. It
+builds the two configurations, completes the handshake, and returns the
+stream together with the identity of the other side: the SHA-256 of its
+certificate. `Access` maps identities to policies and refuses anyone not
+listed, so being issued a certificate by the trusted authority is necessary
+but not sufficient. The name in `HELLO` stays a label.
+
+Cost: `rustls` and `ring` are new dependencies of the protocol crate and of
+the CLI (`ring` builds C and assembly). The engine crates do not depend on
+them. `rcgen` is a test dependency only; no certificate is shipped.
+
+Not done: the CLI does not use the transport yet, there is no revocation
+beyond removing an identity from the list, and limits on connections and
+rate are still the caller's.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

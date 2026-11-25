@@ -12,8 +12,9 @@ vocabulary. This protocol lets them establish that, transfer a vocabulary
 when one side lacks it, extend a shared vocabulary together, and confirm that
 an encoded message decoded to the intended content.
 
-It provides no encryption and no authentication. Everything received is
-untrusted input.
+The messages carry no credentials, and everything received is untrusted
+input. Encryption and authentication come from the transport the messages
+run over (section 8); over a plain socket there is neither.
 
 ## 1. Framing
 
@@ -120,10 +121,10 @@ lacks carried as escapes (token envelope 2.2).
 
 ## 5. Not covered
 
-Authentication, encryption, more than two peers, concurrent requests, and
-negotiation of anything other than a whole vocabulary. Until a peer can
-tell who it is talking to, its policy is one policy for everybody, and the
-protocol should not be exposed to a network it does not trust.
+More than two peers, concurrent requests, and negotiation of anything
+other than a whole vocabulary. Over a plain socket a peer cannot tell who
+it is talking to and its policy is one policy for everybody; use the
+transport of section 8 on any network that is not trusted.
 
 ## 6. Budgets
 
@@ -172,3 +173,24 @@ contract:
 Nothing is retransmitted by the protocol; retrying is the sender's choice.
 `TRANSLATE` has no effect on the receiver's state and may be repeated
 freely.
+
+## 8. Authenticated transport
+
+The reference implementation runs the frames of section 1 over TLS 1.3
+with a certificate on both sides (`kute_protocol::tls`, through `rustls`).
+
+* The listening side requires a client certificate issued by an authority
+  it was configured with, and the connecting side verifies the server's
+  certificate and name the same way. Either failure ends the handshake;
+  no protocol message is read.
+* A peer's identity is the SHA-256 of the certificate it proved possession
+  of, written `sha256:<hex>`. The `peer` field of `HELLO` is a label chosen
+  by the sender and identifies nobody.
+* The listening side keeps a list of identities, each with its own policy
+  (what it may add, and the budgets of section 6). A peer whose certificate
+  verifies but whose identity is not listed is disconnected before `HELLO`.
+  The list is empty until identities are added to it.
+
+Not provided: revocation (remove the identity from the list), certificate
+issuing or rotation, and any binding between an identity and particular
+vocabularies. A listed peer may do whatever its policy allows.
