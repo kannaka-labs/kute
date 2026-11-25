@@ -147,3 +147,48 @@ fn a_signature_holds_for_its_content_and_its_key_and_nothing_else() {
     assert_eq!(std::fs::read(dir.join("a.kute")).unwrap(), std::fs::read(dir.join("b.kute")).unwrap());
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// An entry in the signature list is a claim until it is checked, and
+/// anyone can write one. A false entry under a signer's name must not
+/// stand in for that signer's signature, and one signature written many
+/// times is still one key.
+#[test]
+fn entries_someone_else_wrote_do_not_stand_for_a_signature() {
+    let dir = scratch("sign-entries");
+    let events: String = (0..400).map(|i| format!("{{\"event\":\"{}\"}}\n", ["OPEN", "READ", "CLOSE", "SYNC"][i % 4])).collect();
+    std::fs::write(dir.join("log.jsonl"), events).unwrap();
+    ok(&dir, &["train", "--input", "log.jsonl", "--id", "test:sign:entries", "--algorithm", "sequence-bpe", "--adapter", "jsonl-events", "--vocab-size", "8", "--output", "plain.kvf"]);
+    let ours = ok(&dir, &["keygen", "--output", "ours.pem"]);
+    let (public, id) = (ours["public_key"].as_str().unwrap().to_string(), ours["key_id"].as_str().unwrap().to_string());
+    ok(&dir, &["sign", "--vocab", "plain.kvf", "--key", "ours.pem", "--output", "signed.kvf"]);
+
+    // Someone hands the signer a file that already has an entry under
+    // the signer's key, with a signature that is not one.
+    std::fs::copy(dir.join("signed.kvf"), dir.join("planted.kvf")).unwrap();
+    edit(&dir.join("planted.kvf"), |doc| doc["integrity"]["signatures"][0]["signature"] = "A".repeat(86).as_str().into());
+    let (verified, report, _) = run(&dir, &["verify", "--vocab", "planted.kvf", "--trusted-key", &public]);
+    assert!(!verified && statuses(&report) == ["INVALID"]);
+    // The signer signs it. What comes out carries the signer's signature.
+    let resigned = ok(&dir, &["sign", "--vocab", "planted.kvf", "--key", "ours.pem", "--output", "resigned.kvf"]);
+    assert_eq!(resigned["already_signed_by_this_key"], false);
+    assert_eq!(resigned["entries_under_this_key_replaced"], 1);
+    assert_eq!(resigned["signatures"], 1);
+    let report = ok(&dir, &["verify", "--vocab", "resigned.kvf", "--trusted-key", &public]);
+    assert_eq!(statuses(&report), ["valid"]);
+    assert_eq!(std::fs::read(dir.join("resigned.kvf")).unwrap(), std::fs::read(dir.join("signed.kvf")).unwrap(), "the same file as signing the plain one");
+    // Signing what is already signed says so and changes nothing.
+    let again = ok(&dir, &["sign", "--vocab", "signed.kvf", "--key", "ours.pem", "--output", "again.kvf"]);
+    assert_eq!((again["already_signed_by_this_key"].clone(), again["entries_under_this_key_replaced"].clone()), (true.into(), 0.into()));
+    assert_eq!(std::fs::read(dir.join("again.kvf")).unwrap(), std::fs::read(dir.join("signed.kvf")).unwrap());
+
+    // The one valid signature written sixteen times is one key vouching.
+    std::fs::copy(dir.join("signed.kvf"), dir.join("many.kvf")).unwrap();
+    edit(&dir.join("many.kvf"), |doc| {
+        let one = doc["integrity"]["signatures"][0].clone();
+        doc["integrity"]["signatures"] = Value::Array(vec![one; 16]);
+    });
+    let report = ok(&dir, &["verify", "--vocab", "many.kvf", "--trusted-key", &public]);
+    assert_eq!(report["trusted_keys_with_a_valid_signature"], 1);
+    assert_eq!(statuses(&report).iter().filter(|s| **s == "valid").count(), 1);
+    assert_eq!(report["trusted_keys_given"][0], id.as_str());
+}

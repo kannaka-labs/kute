@@ -134,3 +134,23 @@ fn what_cannot_be_measured_is_refused() {
     assert!(evaluate(&stream(&same), &PredictParams::default()).is_err());
     assert!(evaluate(&stream("{\"id\":\"m\",\"e\":\"A\",\"t\":5}\n"), &PredictParams::default()).is_err());
 }
+
+/// A name is unknown only if it never occurred before the cut, in any
+/// entity. Whether an entity comes early or late in the input does not
+/// change what was known at the cut.
+#[test]
+fn a_name_seen_before_the_cut_by_a_later_entity_is_known() {
+    // Entity `a` is listed first and uses B only after the cut; entity
+    // `b`, listed second, used B before it.
+    let mut lines = String::from("{\"id\":\"a\",\"e\":\"A\",\"t\":0}\n");
+    for t in 1..=30 {
+        lines.push_str(&format!("{{\"id\":\"b\",\"e\":\"{}\",\"t\":{t}}}\n", if t % 2 == 0 { "A" } else { "B" }));
+    }
+    for t in 31..=40 {
+        lines.push_str(&format!("{{\"id\":\"a\",\"e\":\"B\",\"t\":{t}}}\n"));
+    }
+    let report = evaluate(&stream(&lines), &PredictParams { holdout_fraction: 0.25, resamples: 10, ..PredictParams::default() }).unwrap();
+    assert_eq!(report.alphabet, 2);
+    assert!(report.held_out_events >= 10);
+    assert_eq!(report.unseen_symbol_events, 0, "B occurred fifteen times before the cut");
+}

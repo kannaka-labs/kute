@@ -104,13 +104,20 @@ pub fn sign(vocab_path: &Path, key_path: &Path, output: &Path, force: bool) -> k
     vocabulary.seal()?;
     let id = key_id(pair.public_key().as_ref());
     let integrity = vocabulary.integrity.as_mut().expect("sealed");
-    let already = integrity.signatures.iter().any(|s| s.key_id == id);
-    if !already {
-        if integrity.signatures.len() >= MAX_SIGNATURES {
-            return Err(KuteError::LimitExceeded(format!("the vocabulary already carries {MAX_SIGNATURES} signatures")));
-        }
-        integrity.signatures.push(kute::Signature { key_id: id.clone(), algorithm: ALGORITHM.into(), signature: b64().encode(pair.sign(&message(&digest)).as_ref()) });
+    // An entry under this key's name is only a claim until it is checked:
+    // anyone can write one. The signature is made again and takes the place
+    // of whatever was there, so a file that arrives with a false entry
+    // under the signer's name leaves with a true one. Ed25519 gives the
+    // same bytes for the same key and message, so a true entry is unchanged.
+    let signature = b64().encode(pair.sign(&message(&digest)).as_ref());
+    let before = integrity.signatures.len();
+    let already = integrity.signatures.iter().any(|s| s.key_id == id && s.algorithm == ALGORITHM && s.signature == signature);
+    integrity.signatures.retain(|s| s.key_id != id);
+    let replaced = before - integrity.signatures.len() - usize::from(already);
+    if integrity.signatures.len() >= MAX_SIGNATURES {
+        return Err(KuteError::LimitExceeded(format!("the vocabulary already carries {MAX_SIGNATURES} signatures")));
     }
+    integrity.signatures.push(kute::Signature { key_id: id.clone(), algorithm: ALGORITHM.into(), signature });
     vocab::save(&vocabulary, output, force)?;
     let written = vocab::load(output)?;
     Ok(json!({
@@ -119,6 +126,7 @@ pub fn sign(vocab_path: &Path, key_path: &Path, output: &Path, force: bool) -> k
         "digest_unchanged": written.digest()? == digest,
         "key_id": id,
         "already_signed_by_this_key": already,
+        "entries_under_this_key_replaced": replaced,
         "signatures": written.integrity.map_or(0, |i| i.signatures.len()),
     }))
 }
@@ -137,7 +145,9 @@ pub fn verify(vocab_path: &Path, trusted: &[String]) -> kute::Result<(Value, boo
         return Err(KuteError::LimitExceeded(format!("the vocabulary carries {} signatures; at most {MAX_SIGNATURES} are read", signatures.len())));
     }
     let mut rows = Vec::new();
-    let mut held = 0;
+    // Keys, not entries: the same signature written sixteen times is one
+    // key vouching once.
+    let mut holding: Vec<&Vec<u8>> = Vec::new();
     for signature in &signatures {
         let status = if signature.algorithm != ALGORITHM {
             "unsupported algorithm"
@@ -146,8 +156,12 @@ pub fn verify(vocab_path: &Path, trusted: &[String]) -> kute::Result<(Value, boo
                 None => "not from a trusted key",
                 Some(key) => match b64().decode(&signature.signature) {
                     Ok(bytes) if UnparsedPublicKey::new(&ED25519, key).verify(&message(&digest), &bytes).is_ok() => {
-                        held += 1;
-                        "valid"
+                        if holding.contains(&key) {
+                            "valid, repeats an earlier entry"
+                        } else {
+                            holding.push(key);
+                            "valid"
+                        }
                     }
                     _ => "INVALID",
                 },
@@ -155,6 +169,7 @@ pub fn verify(vocab_path: &Path, trusted: &[String]) -> kute::Result<(Value, boo
         };
         rows.push(json!({ "key_id": signature.key_id, "algorithm": signature.algorithm, "status": status }));
     }
+    let held = holding.len();
     let verified = held > 0;
     Ok((
         json!({
@@ -162,7 +177,7 @@ pub fn verify(vocab_path: &Path, trusted: &[String]) -> kute::Result<(Value, boo
             "digest": digest,
             "signatures": rows,
             "trusted_keys_given": keys.iter().map(|k| key_id(k)).collect::<Vec<_>>(),
-            "valid_signatures_from_trusted_keys": held,
+            "trusted_keys_with_a_valid_signature": held,
             "verified": verified,
             "means": "a valid signature says the holder of that key signed this exact content. It says nothing about whether the content is good, and nothing about who holds the key.",
         }),
