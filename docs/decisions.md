@@ -788,6 +788,36 @@ Repeated testing across runs is not controlled and cannot be from
 inside one command. Association is not cause, and the report says so in
 its output.
 
+## ADR-0042: QueenSync is an example made of released commands, and its result is published as measured
+
+The specification's E2 asks for two agents that observe their traffic,
+discover procedures, judge candidate tokens in shadow, negotiate a
+vocabulary and exchange encoded messages. `examples/queensync` does
+that with a script driving `kute train`, `peer`, `discover`, `evolve`
+and `shadow`. Nothing was added to the engine for it: if the flagship
+needed private hooks, an outside developer could not build the same.
+
+Agents are scripted and the workload synthetic. Calling a language
+model would cost money and would not change the bytes measured. The
+report says that model tokens are not measured and why they would not
+change.
+
+Messages are carried as symbols: one for each brace, comma and key, one
+for each character of a value. Whole values as symbols was tried first
+and failed before producing a result: every task id became a vocabulary
+entry.
+
+The measured result is that the loop works (1,000 of 1,000 tasks, novel
+message kinds carried by escape, the candidate rejected by shadow and
+the rejection borne out), and that zlib with a preset dictionary carries
+the same tasks in about a third of the bytes of the KUTE container. The
+settings were fixed before the result and were not tuned after it. The
+example's README states this. A flagship that hid it would be an
+advertisement.
+
+Not built: a signature on the vocabulary (B8), resuming after a dropped
+connection, per-message latency.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,

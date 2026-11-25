@@ -1,0 +1,94 @@
+{
+ "synthetic": true,
+ "language_model_calls": 0,
+ "seed": 20261125,
+ "kute_version": "kute 0.7.0",
+ "settings": {
+  "train_tasks": 400,
+  "observe_tasks": 300,
+  "shadow_tasks": 300,
+  "live_tasks": 1000,
+  "batch": 100,
+  "vocab_size": 512,
+  "top_patterns": 32,
+  "novel_share": 0.02,
+  "shadow_horizon": 3.3333333333333335
+ },
+ "messages_per_live_task": 7.32,
+ "observe": {
+  "completed": 300,
+  "tasks": 300,
+  "escaped_symbols": 0
+ },
+ "patterns_proposed": 32,
+ "vocabulary_files": {
+  "base_bytes": 64122,
+  "candidate_bytes": 69089
+ },
+ "shadow": {
+  "decision": "reject",
+  "reasons": [
+   "net improvement -0.1803 is below the 0.0100 required"
+  ],
+  "comparison": {
+   "break_even_horizon": 575.7416666666667,
+   "container_bytes_saved_on_inputs": 120.0,
+   "container_ratio": 0.9989500393735234,
+   "distribution_cost_bytes": 69089.0,
+   "encode_slowdown": 1.021,
+   "net_bytes_saved_over_horizon": -68689.004,
+   "net_improvement": -0.18030367721649043,
+   "token_ratio": 0.9885259695555726
+  }
+ },
+ "distribution": {
+  "first_contact_socket_bytes": 86766,
+  "proposal_socket_bytes": null,
+  "same_digest_on_both_sides": null,
+  "signed": false
+ },
+ "live": {
+  "base": {
+   "tasks": 1000,
+   "completed": 1000,
+   "completion_rate": 1.0,
+   "socket_bytes": 701060,
+   "socket_bytes_per_completed_task": 701.06,
+   "escaped_symbols": 72,
+   "seconds_per_batch_of_100": 1.173,
+   "container_bytes_one_task_each": 391941
+  },
+  "candidate": {
+   "tasks": 1000,
+   "completed": 1000,
+   "completion_rate": 1.0,
+   "socket_bytes": 700468,
+   "socket_bytes_per_completed_task": 700.47,
+   "escaped_symbols": 72,
+   "seconds_per_batch_of_100": 0.322,
+   "container_bytes_one_task_each": 391463
+  }
+ },
+ "ran_under": "base",
+ "rivals_payload_bytes_one_task_each": {
+  "json": 927198,
+  "zlib_9": 305036,
+  "xz_9": 382064,
+  "zlib_9_dictionary_from_first_traces": 125466,
+  "zlib_9_dictionary_from_all_seen_traces": 117706
+ },
+ "novel_tasks": {
+  "tasks": 24,
+  "completed": 24,
+  "escaped_symbols": 72
+ },
+ "recovery": {
+  "dropped_after_bytes": 28151,
+  "sender_reported_failure": true,
+  "tasks_delivered_by_the_dropped_connection": 0,
+  "tasks_delivered_on_sending_again": 100,
+  "bytes_spent_on_the_dropped_connection": 28310,
+  "resumes_part_way": false
+ },
+ "llm_tokens": "not measured: no language model is called. Each agent reads the decoded message, which is byte for byte the message that was sent, so a model reading it would be given the same text whichever vocabulary carried it. Fewer bytes between agents is not fewer model tokens."
+}

@@ -86,6 +86,10 @@ Added in v0.3:
   discover as Model Context Protocol tools on standard input and output.
   Read-only: it works on the vocabularies it was started with and the data
   in each call, with bounded inputs and outputs. See `docs/mcp.md`.
+* `examples/queensync`: two scripted agents that train, observe,
+  challenge and negotiate a vocabulary for their messages, with every
+  byte counted, and what that showed (a general compressor with a
+  dictionary was smaller).
 * `kute predict`: how well an entity's recent events predict its next
   one, on held-out time, against two baselines, with calibration and
   drift. A measurement, not a model. See `docs/predict.md`.
