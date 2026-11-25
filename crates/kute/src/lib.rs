@@ -246,7 +246,12 @@ impl Engine {
     /// decoding when the decoded content comes to more than `max_bytes`:
     /// the bytes of a byte vocabulary, or the names of the symbols of a
     /// symbol vocabulary. What an adapter writes around each name (a few
-    /// bytes of JSON) is not counted.
+    /// bytes of JSON, and escapes inside it) cannot be known before it is
+    /// written, so the result is checked again afterwards: nothing longer
+    /// than `max_bytes` is returned. While decoding, memory is bounded by
+    /// the two limits together (at most six bytes written per byte of a
+    /// name, plus the framing of `max_units` symbols), not by `max_bytes`
+    /// alone.
     pub fn decode_raw_within(&self, tokenizer: &dyn Tokenizer, tokens: &TokenSequence, max_units: u64, max_bytes: u64) -> Result<Vec<u8>> {
         let vocabulary = tokenizer.vocabulary().ok_or_else(|| KuteError::NotTrained("tokenizer has no vocabulary".into()))?;
         let units = kute_core::decoded_units(vocabulary, tokens)?;
@@ -257,7 +262,11 @@ impl Engine {
         if bytes > max_bytes {
             return Err(KuteError::LimitExceeded(format!("the sequence decodes to at least {bytes} bytes; the budget is {max_bytes}")));
         }
-        self.decode_raw(tokenizer, tokens)
+        let decoded = self.decode_raw(tokenizer, tokens)?;
+        if decoded.len() as u64 > max_bytes {
+            return Err(KuteError::LimitExceeded(format!("the sequence decodes to {} bytes; the budget is {max_bytes}", decoded.len())));
+        }
+        Ok(decoded)
     }
 
     /// Tokens back to raw bytes, through the vocabulary's adapter.

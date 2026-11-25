@@ -618,7 +618,7 @@ fn long_symbols_are_bounded_by_their_bytes_not_only_their_count() {
     assert!(small.len() < 4096, "{} bytes", small.len());
 
     let engine = Engine::new();
-    let tokenizer = engine.tokenizer(vocabulary).unwrap();
+    let tokenizer = engine.tokenizer(vocabulary.clone()).unwrap();
     let refused = engine.decode_raw_within(tokenizer.as_ref(), &sequence, limit, 1 << 20).unwrap_err();
     assert!(matches!(refused, KuteError::LimitExceeded(_)), "{refused}");
     for request in [Message::EncodedMessage { id: 5, container: small.clone() }, Message::Translate { id: 5, container: small.clone(), to_digest: digest.clone() }] {
@@ -628,6 +628,14 @@ fn long_symbols_are_bounded_by_their_bytes_not_only_their_count() {
         }
     }
     assert!(receiver.take_inbox().is_empty());
+    // Names that fit the budget while what the adapter writes around them
+    // does not: 1,000 symbols of 1,024 bytes are 1,024,000 bytes of names,
+    // under the mebibyte, and more than a mebibyte once written as events.
+    sequence.ids.truncate(1_000);
+    assert!(kute::decoded_bytes_at_least(&vocabulary, &sequence).unwrap() < 1 << 20);
+    let refused = engine.decode_raw_within(tokenizer.as_ref(), &sequence, limit, 1 << 20).unwrap_err();
+    assert!(matches!(refused, KuteError::LimitExceeded(_)), "{refused}");
+    assert!(engine.decode_raw_within(tokenizer.as_ref(), &sequence, limit, 2 << 20).unwrap().len() > 1 << 20);
     // The same symbol sent once is delivered.
     assert!(matches!(receiver.handle(Message::EncodedMessage { id: 6, container })[0], Message::Ack { .. }));
 }
