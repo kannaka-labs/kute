@@ -480,6 +480,7 @@ dependencies = [
  "kute-engine",
  "kute-events",
  "kute-protocol",
+ "kute-signals",
  "ring",
  "serde",
  "serde_json",
@@ -553,6 +554,17 @@ dependencies = [
  "kute-types",
  "pyo3",
  "rustbpe",
+]
+
+[[package]]
+name = "kute-signals"
+version = "0.7.0"
+dependencies = [
+ "kute-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zstd",
 ]
 
 [[package]]

@@ -21,6 +21,7 @@ kute.workspace = true
 kute-bench.workspace = true
 kute-discover.workspace = true
 kute-events.workspace = true
+kute-signals.workspace = true
 kute-protocol.workspace = true
 base64.workspace = true
 ring = "0.17"

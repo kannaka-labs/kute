@@ -1,0 +1,268 @@
+{
+ "data": {
+  "name": "UCI Individual household electric power consumption (id 235)",
+  "license": "CC BY 4.0",
+  "file": "household_power_consumption.txt",
+  "bytes": 132960755,
+  "sha256": "4259c9d7ece5dbee9ab8d53682baac68d791c864f0f64a52b4043cb3b90894b7",
+  "readings": 2075259
+ },
+ "kute_version": "kute 0.7.0",
+ "columns": [
+  {
+   "column": "Global_active_power",
+   "missing": 25979,
+   "decimals_used": 3,
+   "distinct_values": 4186,
+   "exact": {
+    "container_bytes": 1640954,
+    "bits_per_value": 6.326,
+    "scheme": "decimal",
+    "decimals_found": 3,
+    "delta_order": 1,
+    "kept_exactly": 25979,
+    "every_value_read_back_equal": true,
+    "pack_seconds": 1.3,
+    "unpack_seconds": 0.4
+   },
+   "rivals_exact": {
+    "text_xz": 2093080,
+    "binary_xz": 2088988,
+    "scaled_delta_xz": 1675632
+   },
+   "bounded": {
+    "max_error": 0.005,
+    "container_bytes": 1021399,
+    "bits_per_value": 3.937,
+    "max_error_stated_by_header": 0.004000000000001336,
+    "max_error_measured_here": 0.004000000000001336,
+    "within_bound": true,
+    "scheme": "steps",
+    "kept_exactly": 25979
+   },
+   "rivals_bounded": {
+    "rounded_text_xz": 1291704
+   }
+  },
+  {
+   "column": "Global_reactive_power",
+   "missing": 25979,
+   "decimals_used": 3,
+   "distinct_values": 532,
+   "exact": {
+    "container_bytes": 1137370,
+    "bits_per_value": 4.384,
+    "scheme": "decimal",
+    "decimals_found": 3,
+    "delta_order": 1,
+    "kept_exactly": 25979,
+    "every_value_read_back_equal": true,
+    "pack_seconds": 1.61,
+    "unpack_seconds": 0.39
+   },
+   "rivals_exact": {
+    "text_xz": 1356116,
+    "binary_xz": 1294580,
+    "scaled_delta_xz": 1164136
+   },
+   "bounded": {
+    "max_error": 0.005,
+    "container_bytes": 649419,
+    "bits_per_value": 2.503,
+    "max_error_stated_by_header": 0.004000000000000115,
+    "max_error_measured_here": 0.004000000000000115,
+    "within_bound": true,
+    "scheme": "steps",
+    "kept_exactly": 25979
+   },
+   "rivals_bounded": {
+    "rounded_text_xz": 787548
+   }
+  },
+  {
+   "column": "Voltage",
+   "missing": 25979,
+   "decimals_used": 2,
+   "distinct_values": 2837,
+   "exact": {
+    "container_bytes": 2200767,
+    "bits_per_value": 8.484,
+    "scheme": "decimal",
+    "decimals_found": 2,
+    "delta_order": 1,
+    "kept_exactly": 25979,
+    "every_value_read_back_equal": true,
+    "pack_seconds": 0.93,
+    "unpack_seconds": 0.42
+   },
+   "rivals_exact": {
+    "text_xz": 2699660,
+    "binary_xz": 2612392,
+    "scaled_delta_xz": 2262244
+   },
+   "bounded": {
+    "max_error": 0.05,
+    "container_bytes": 1441039,
+    "bits_per_value": 5.555,
+    "max_error_stated_by_header": 0.04999999999998295,
+    "max_error_measured_here": 0.04999999999998295,
+    "within_bound": true,
+    "scheme": "steps",
+    "kept_exactly": 192471
+   },
+   "rivals_bounded": {
+    "rounded_text_xz": 1489476
+   }
+  },
+  {
+   "column": "Global_intensity",
+   "missing": 25979,
+   "decimals_used": 1,
+   "distinct_values": 221,
+   "exact": {
+    "container_bytes": 625841,
+    "bits_per_value": 2.413,
+    "scheme": "decimal",
+    "decimals_found": 1,
+    "delta_order": 1,
+    "kept_exactly": 25979,
+    "every_value_read_back_equal": true,
+    "pack_seconds": 1.44,
+    "unpack_seconds": 0.37
+   },
+   "rivals_exact": {
+    "text_xz": 902840,
+    "binary_xz": 819020,
+    "scaled_delta_xz": 708596
+   },
+   "bounded": {
+    "max_error": 0.5,
+    "container_bytes": 301686,
+    "bits_per_value": 1.163,
+    "max_error_stated_by_header": 0.40000000000000036,
+    "max_error_measured_here": 0.40000000000000036,
+    "within_bound": true,
+    "scheme": "steps",
+    "kept_exactly": 25979
+   },
+   "rivals_bounded": {
+    "rounded_text_xz": 357796
+   }
+  },
+  {
+   "column": "Sub_metering_1",
+   "missing": 25979,
+   "decimals_used": 0,
+   "distinct_values": 88,
+   "exact": {
+    "container_bytes": 61088,
+    "bits_per_value": 0.235,
+    "scheme": "decimal",
+    "decimals_found": 0,
+    "delta_order": 0,
+    "kept_exactly": 25979,
+    "every_value_read_back_equal": true,
+    "pack_seconds": 0.4,
+    "unpack_seconds": 0.29
+   },
+   "rivals_exact": {
+    "text_xz": 85880,
+    "binary_xz": 81072,
+    "scaled_delta_xz": 78764
+   },
+   "bounded": {
+    "max_error": 5.0,
+    "container_bytes": 22382,
+    "bits_per_value": 0.086,
+    "max_error_stated_by_header": 5.0,
+    "max_error_measured_here": 5.0,
+    "within_bound": true,
+    "scheme": "steps",
+    "kept_exactly": 25979
+   },
+   "rivals_bounded": {
+    "rounded_text_xz": 27084
+   }
+  },
+  {
+   "column": "Sub_metering_2",
+   "missing": 25979,
+   "decimals_used": 0,
+   "distinct_values": 81,
+   "exact": {
+    "container_bytes": 130368,
+    "bits_per_value": 0.503,
+    "scheme": "decimal",
+    "decimals_found": 0,
+    "delta_order": 1,
+    "kept_exactly": 25979,
+    "every_value_read_back_equal": true,
+    "pack_seconds": 1.31,
+    "unpack_seconds": 0.26
+   },
+   "rivals_exact": {
+    "text_xz": 197108,
+    "binary_xz": 196828,
+    "scaled_delta_xz": 170460
+   },
+   "bounded": {
+    "max_error": 5.0,
+    "container_bytes": 23889,
+    "bits_per_value": 0.092,
+    "max_error_stated_by_header": 5.0,
+    "max_error_measured_here": 5.0,
+    "within_bound": true,
+    "scheme": "steps",
+    "kept_exactly": 25979
+   },
+   "rivals_bounded": {
+    "rounded_text_xz": 26332
+   }
+  },
+  {
+   "column": "Sub_metering_3",
+   "missing": 25979,
+   "decimals_used": 0,
+   "distinct_values": 32,
+   "exact": {
+    "container_bytes": 180511,
+    "bits_per_value": 0.696,
+    "scheme": "decimal",
+    "decimals_found": 0,
+    "delta_order": 0,
+    "kept_exactly": 25979,
+    "every_value_read_back_equal": true,
+    "pack_seconds": 1.06,
+    "unpack_seconds": 0.29
+   },
+   "rivals_exact": {
+    "text_xz": 280744,
+    "binary_xz": 247356,
+    "scaled_delta_xz": 234804
+   },
+   "bounded": {
+    "max_error": 5.0,
+    "container_bytes": 39180,
+    "bits_per_value": 0.151,
+    "max_error_stated_by_header": 5.0,
+    "max_error_measured_here": 5.0,
+    "within_bound": true,
+    "scheme": "steps",
+    "kept_exactly": 25979
+   },
+   "rivals_bounded": {
+    "rounded_text_xz": 53888
+   }
+  }
+ ],
+ "totals_bytes": {
+  "exact": 5976899,
+  "bounded": 3498994,
+  "text_xz": 7615428,
+  "binary_xz": 7340236,
+  "scaled_delta_xz": 6294636,
+  "rounded_text_xz": 4033828
+ },
+ "all_exact_columns_equal": true,
+ "all_bounded_columns_within_bound": true
+}

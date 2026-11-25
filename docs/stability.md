@@ -48,6 +48,7 @@ someone building on it knows what a new release may do to them.
 | `shadow` | experimental | See `docs/shadow.md`. |
 | `live`, `kute_discover::watch`, its checkpoint | experimental | See `docs/live.md`. |
 | `events`, the `KUTE-EV1` container, the `kute-events` crate | experimental | See `docs/events.md`. |
+| `signals`, the `KUTE-SG1` container, the `kute-signals` crate | experimental | See `docs/signals.md`. |
 | `serve` (HTTP, `/v1/`) | experimental | See `docs/http.md`. A breaking change to the interface arrives as a new path version. |
 
 ## Libraries

@@ -329,6 +329,12 @@ enum Command {
         #[command(subcommand)]
         action: EventsAction,
     },
+    /// A sequence of numbers kept exactly, or within an error bound that
+    /// is checked on every value, in one container, and back. Experimental.
+    Signals {
+        #[command(subcommand)]
+        action: SignalsAction,
+    },
     /// Serve encode, decode, inspect, compare and discover over HTTP, under
     /// /v1/. Read-only, like `kute mcp`, and through the same code. No TLS
     /// and no authentication: it listens on loopback unless told otherwise.
@@ -411,6 +417,44 @@ enum EventsAction {
         max_bytes: u64,
     },
     /// Show a container's header: layout, counts, digest and columns.
+    Inspect { input: PathBuf },
+}
+
+#[derive(Subcommand)]
+enum SignalsAction {
+    /// Pack one number per line (or one column of a delimited file).
+    Pack {
+        /// Text, one value per line. An empty value, `?`, `NA` or `NaN`
+        /// is a missing value and comes back as NaN.
+        input: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        /// Keep every finite value within this absolute error instead of
+        /// exactly. Values that are not finite are still kept exactly.
+        #[arg(long, value_name = "ERROR")]
+        max_error: Option<f64>,
+        /// Take this column of each line, counting from 1.
+        #[arg(long, requires = "delimiter")]
+        column: Option<usize>,
+        /// The character between columns.
+        #[arg(long, requires = "column")]
+        delimiter: Option<char>,
+        /// Lines to pass over at the top, such as a header.
+        #[arg(long, default_value_t = 0)]
+        skip_lines: usize,
+    },
+    /// Write the values, one per line, in the shortest form that reads
+    /// back as the same number.
+    Unpack {
+        input: PathBuf,
+        /// Where to write; standard output when absent.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Refuse a container holding more values than this.
+        #[arg(long, default_value_t = 1 << 28)]
+        max_values: u64,
+    },
+    /// Print the container's header: the contract and what it measured.
     Inspect { input: PathBuf },
 }
 
@@ -1324,6 +1368,51 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 }
             }
             EventsAction::Inspect { input } => print(&kute_events::header(&std::fs::read(&input)?)?.0),
+        },
+        Command::Signals { action } => match action {
+            SignalsAction::Pack { input, output, max_error, column, delimiter, skip_lines } => {
+                let text = std::fs::read_to_string(&input)?;
+                let mut values = Vec::new();
+                let mut missing = 0u64;
+                for (number, line) in text.lines().enumerate().skip(skip_lines) {
+                    let field = match (column, delimiter) {
+                        (Some(column), Some(delimiter)) => line.split(delimiter).nth(column.saturating_sub(1)).ok_or_else(|| KuteError::InvalidInput(format!("line {} has no column {column}", number + 1)))?,
+                        _ => line,
+                    }
+                    .trim();
+                    if field.is_empty() || field == "?" || field.eq_ignore_ascii_case("na") || field.eq_ignore_ascii_case("nan") {
+                        missing += 1;
+                        values.push(f64::NAN);
+                    } else {
+                        values.push(field.parse::<f64>().map_err(|_| KuteError::InvalidInput(format!("line {}: {field:?} is not a number", number + 1)))?);
+                    }
+                }
+                let mode = max_error.map_or(kute_signals::Mode::Exact, |max_error| kute_signals::Mode::Bounded { max_error });
+                let (container, report) = kute_signals::pack(&values, mode)?;
+                std::fs::write(&output, &container)?;
+                print(&json!({ "output": output, "input_bytes": text.len(), "missing_values": missing, "report": report }))
+            }
+            SignalsAction::Unpack { input, output, max_values } => {
+                let values = kute_signals::unpack(&std::fs::read(&input)?, max_values)?;
+                let mut text = String::with_capacity(values.len() * 8);
+                for value in &values {
+                    text.push_str(&value.to_string());
+                    text.push('\n');
+                }
+                match output {
+                    Some(path) => {
+                        std::fs::write(&path, &text)?;
+                        print(&json!({ "output": path, "values": values.len() }))
+                    }
+                    None => {
+                        let mut out = std::io::stdout().lock();
+                        out.write_all(text.as_bytes())?;
+                        out.flush()?;
+                        Ok(())
+                    }
+                }
+            }
+            SignalsAction::Inspect { input } => print(&kute_signals::header(&std::fs::read(&input)?)?),
         },
         Command::Serve { vocab: paths, listen, insecure_remote, studio, max_input_bytes, max_output_bytes, workers, timeout } => {
             let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;

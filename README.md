@@ -111,6 +111,10 @@ Added in v0.3:
 * `kute events pack|unpack|inspect`: complete event records (entity, time
   and every other field) kept exactly and stored by column. See
   `docs/events.md`.
+* `kute signals pack|unpack|inspect`: a sequence of numbers kept exactly,
+  or within an error bound that is checked on every value and stated in
+  the file. Standard techniques; the contract is the point. See
+  `docs/signals.md`.
 * `kute serve --vocab file.kvf`: the same five operations over HTTP under
   `/v1/`, loopback only unless asked, no TLS or authentication of its own.
   See `docs/http.md`.

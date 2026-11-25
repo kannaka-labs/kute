@@ -1,0 +1,20 @@
+[package]
+name = "kute-signals"
+description = "Numeric sequences for KUTE: a signal kept exactly, or within an error bound checked on every value"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[dependencies]
+kute-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+zstd.workspace = true

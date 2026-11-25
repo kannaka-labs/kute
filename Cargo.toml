@@ -27,6 +27,7 @@ kute-bench = { path = "crates/kute-bench", version = "0.7.0" }
 kute-hrm = { path = "plugins/hrm", version = "0.7.0" }
 kute-discover = { path = "crates/kute-discover", version = "0.7.0" }
 kute-events = { path = "crates/kute-events", version = "0.7.0" }
+kute-signals = { path = "crates/kute-signals", version = "0.7.0" }
 kute-protocol = { path = "crates/kute-protocol", version = "0.7.0" }
 kute = { package = "kute-engine", path = "crates/kute", version = "0.7.0" }
 

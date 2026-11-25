@@ -382,6 +382,7 @@ dependencies = [
  "kute-engine",
  "kute-events",
  "kute-protocol",
+ "kute-signals",
  "rcgen",
  "ring",
  "serde",
@@ -456,6 +457,17 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "kute-signals"
+version = "0.7.0"
+dependencies = [
+ "kute-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zstd",
 ]
 
 [[package]]

@@ -880,6 +880,47 @@ service keep signatures and check none. Requiring one before a peer
 accepts a vocabulary is the obvious next use and is not built. The
 private key is an unencrypted file.
 
+## ADR-0045: A signal is stored as numbers under a stated contract, exact or bounded, and the bound is checked per value
+
+Status: accepted, experimental.
+
+The specification asks for signals (F3): numeric sequences, delta
+encoding, quantization, error bounds. Symbols are the wrong unit for a
+meter reading, so this is a separate crate (`kute-signals`) and a
+separate container (`KUTE-SG1`), not an adapter that turns numbers into
+tokens.
+
+Decided:
+
+* Two contracts, named in the header: `exact` (same bits, including NaN
+  payloads and the sign of zero) and `bounded` (every finite value within
+  an absolute `max_error`; values that are not finite exactly).
+* The bound is enforced per value while packing: a value whose
+  reconstruction would miss it is kept as raw bits. Rounding arithmetic
+  is not trusted to stay inside the bound near the edges of a step or at
+  large magnitudes.
+* `pack` reads its own container back and compares against the contract
+  before returning. The header carries the largest error incurred and a
+  SHA-256 of the values a reader must obtain; `unpack` refuses anything
+  else.
+* The step of a bounded container is stored as the bits of an `f64`, so
+  the reader multiplies by the same number the writer did.
+* The method is ordinary: decimal scaling or uniform steps, differences
+  of order 0 to 2 chosen by trial, varints, zstd. A bounded container is
+  written in steps and as the values are, and the smaller kept (found on
+  real data: a bound finer than the data's resolution made steps cost
+  more than the values).
+* zstd only. The events container's choice of codec is still open with
+  the maintainer; whatever is decided there applies here.
+
+Not decided, not built: relative bounds, bounds on derived quantities,
+many signals in one container, streaming, any predictor or transform.
+
+Measured on one real data set (`docs/signals.md`): 5% smaller than the
+same idea done by hand with xz, which is not a result worth a claim.
+Purpose-built float compressors were not run. The reason to have it is
+that the file says what it promises and a reader can check it.
+
 ## Deferred
 
 Registry service and signing, import from other tokenizer formats,
