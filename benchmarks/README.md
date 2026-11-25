@@ -676,13 +676,23 @@ runs, one training per process:
 | encode, one document | 0.134 s | 0.82 s |
 | tokens for the held-out text | 2,551,171 | 2,571,668 |
 
-What can be said: with one training per process the desktop gives about
-4 times faster training with narrow ranges, and that is the figure to
-quote. The laptop gives 16 times by the same method, and that figure is
-not trusted yet: `tokenizers` is 8 times slower on the laptop than on the
-desktop where KUTE is 2 times slower, and its laptop time halves with
-process history. Paging, power mode and thermal throttling on the laptop
-have not been ruled out. Encoding does not show the effect.
+The laptop was then watched through one isolated `tokenizers` training
+(62.0 s), sampled every four seconds: all eight logical processors busy
+for the whole training, the processor at a steady 2.3 times its nominal
+1.3 GHz from start to end (no throttling), 12 GB of 32 GB free throughout,
+no pages read from disk, mains power, the Balanced plan. So the three
+ordinary explanations are ruled out: the laptop (4 cores, 8 threads,
+i7-1065G7) really does take a minute.
+
+What can be said: with one training per process, KUTE trained this
+vocabulary about 4 times faster on a 24-thread desktop and about 16 times
+faster on an 8-thread laptop, each with narrow ranges over ten runs.
+`tokenizers` is 8 times slower on the laptop than on the desktop where
+KUTE is 2 times slower, so the gap between the libraries is wider on the
+smaller machine. Two machines do not make a rule, and one thing is still
+unexplained: on the laptop a `tokenizers` training takes half as long
+after the same process has encoded a large batch. Quote the range and the
+machines, not one number. Encoding does not show the effect.
 
 How to read it:
 

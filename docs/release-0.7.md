@@ -17,7 +17,7 @@ them in `benchmarks/README.md`.
 | AC-702 | Aggregate peer memory and vocabulary budgets under sustained load | `two_peers.rs`: `the_other_side_cannot_pass_the_aggregate_budgets`, `delivery_is_bounded_and_repeats_are_not_delivered_twice`, `a_container_is_refused_on_its_declared_size_before_it_is_inflated`, `long_symbols_are_bounded_by_their_bytes_not_only_their_count`. `tests/soak.rs`: 300,000 mixed messages against one peer, budgets checked at every step, peak memory of the process flat after warm-up. ADR-0031. | The soak is one process and seconds long, not days; it does not cover the TLS transport. |
 | AC-703 | Evolution-rule negotiation rejects incompatible proposals | `two_peers.rs`: `a_proposal_under_another_evolution_rule_is_refused_before_derivation`, `an_initiator_does_not_propose_to_a_peer_with_another_rule`. | |
 | AC-704 | Three materially different external datasets | enwik8 (prose), HDFS_v1 (event traces), CPython 3.12.7 `Lib` (source code); `benchmarks/README.md`, "External datasets". A fourth, an OpenSSH server log, is used by `examples/log-archive`. | The code corpus has sizes only: no timing, no other tokenizer. |
-| AC-705 | Comparison under equivalent tokenizer configurations | `benchmarks/hf_repeat.py --matched`, one training per process; reports `tokenizers-enwik8-10runs-matched-isolated.json` and `...-desktop.json`. | The two machines disagree (about 4 times and 16 times); the laptop figure is unexplained and not to be quoted. |
+| AC-705 | Comparison under equivalent tokenizer configurations | `benchmarks/hf_repeat.py --matched`, one training per process; reports `tokenizers-enwik8-10runs-matched-isolated.json` and `...-desktop.json`. | The two machines differ (about 4 times on 24 threads, 16 times on 8). Paging and throttling were ruled out on the laptop; why its `tokenizers` time halves with process history is not known. |
 | AC-706 | Persistent Python sessions with parity tests | `bindings/python/tests/test_kute.py`: `test_one_vocabulary_object_is_a_persistent_session`. ADR-0030. | |
 | AC-707 | MCP exposes encode, decode, discover, compare, inspect | `crates/kute-cli/tests/mcp.rs`; `docs/mcp.md`. ADR-0035. | Experimental. Standard input and output only. |
 | AC-708 | Streaming discovery prototype with bounded memory | `crates/kute-discover/tests/live.rs`: state stays under its stated bound over 2 million events. ADR-0036. | A prototype. Counts are estimates; occurrences cut by eviction are not inside the reported bound. Library only. |
@@ -41,10 +41,11 @@ has to be read for it:
   10 to 13% larger than `zstd -19` and `xz` on the same bytes, before the
   vocabulary is counted. On one event dataset (HDFS event names) it was
   smaller than `zstd -19`; that is one dataset of 30 event names.
-- **Speed is machine-dependent.** Training was about 4 times faster than
-  Hugging Face `tokenizers` under a matched configuration on one machine,
-  with narrow ranges. A second machine gave a much larger figure that is
-  not understood. No single ratio should be quoted from the second.
+- **Speed is machine-dependent.** Under a matched configuration training
+  was about 4 times faster than Hugging Face `tokenizers` on a 24-thread
+  desktop and about 16 times on an 8-thread laptop. Two machines, one
+  corpus, one vocabulary size; quote the range with the machines, not one
+  number.
 - **Evolution is not free and not always a gain.** On synthetic drifting
   data it recovered about what retraining at the same size did, and less
   than retraining at the size it grew to. Crossing 256 tokens can cost more
