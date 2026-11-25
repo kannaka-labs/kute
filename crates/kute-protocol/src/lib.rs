@@ -27,6 +27,8 @@ pub mod tls;
 /// delivery contract for repeated message ids. A version 1 peer is refused
 /// at `HELLO`.
 pub const PROTOCOL_VERSION: u32 = 2;
+/// Most signatures one proposal may carry: as many as a vocabulary file.
+pub const MAX_PROPOSAL_SIGNATURES: usize = 16;
 /// The rule by which this build derives an evolved vocabulary. Two peers
 /// that name different rules would derive different children from the same
 /// proposal, so a proposal is only taken under this exact name.
@@ -115,12 +117,18 @@ pub enum Message {
     /// version." Accepted with `VOCAB_ACCEPT` naming the new digest.
     /// `rule` names the derivation the proposer used; a peer that does not
     /// implement exactly that rule refuses before deriving anything.
+    /// `signatures` are of the digest of the vocabulary the proposal
+    /// derives: the proposer derived it first and vouches for the result.
+    /// A peer with a check attaches them to what it derives itself and
+    /// puts that to the check; without one that passes, nothing is held.
     SymbolPropose {
         digest: String,
         additions: Vec<Vec<String>>,
         version: String,
         #[serde(default)]
         rule: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        signatures: Vec<kute::Signature>,
     },
     /// "Re-encode this sequence under another vocabulary you hold."
     Translate {
@@ -278,9 +286,10 @@ impl Peer {
 
     /// Take a vocabulary from the other side only if `check` passes it.
     /// Vocabularies this side adds itself are not checked: their holder
-    /// chose them. While a check is set, proposals are refused, since a
-    /// vocabulary derived here from a proposal is one nobody has vouched
-    /// for.
+    /// chose them. While a check is set, a proposal is taken only if it
+    /// carries signatures and the vocabulary this side derives from it,
+    /// with those signatures attached, passes the check. A proposal with
+    /// none is refused before anything is derived.
     pub fn require_vocabulary_check(&mut self, check: VocabularyCheck) {
         self.check = Some(check);
     }
@@ -536,12 +545,15 @@ impl Peer {
                 let token_id = self.usable(&digest)?.vocabulary.tokens.iter().find(|t| t.payload == payload).map(|t| t.id);
                 Ok(vec![Message::SymbolInfo { digest, token_id, content_hash: payload.content_hash() }])
             }
-            Message::SymbolPropose { digest, additions, version, rule } => {
+            Message::SymbolPropose { digest, additions, version, rule, signatures } => {
                 if !self.policy.accept_proposals {
                     return Ok(refuse(ErrorCode::Refused, "this peer does not accept vocabulary proposals"));
                 }
-                if self.check.is_some() {
-                    return Ok(refuse(ErrorCode::Refused, "this peer takes only vocabularies that pass its check, and one derived from a proposal has nobody vouching for it"));
+                if self.check.is_some() && signatures.is_empty() {
+                    return Ok(refuse(ErrorCode::Refused, "this peer takes only vocabularies that pass its check, and this proposal carries no signature of the vocabulary it derives"));
+                }
+                if signatures.len() > MAX_PROPOSAL_SIGNATURES || signatures.iter().any(|s| s.key_id.len() > 256 || s.algorithm.len() > 64 || s.signature.len() > 1024) {
+                    return Ok(refuse(ErrorCode::TooLarge, format!("a proposal carries at most {MAX_PROPOSAL_SIGNATURES} signatures, none with an overlong field")));
                 }
                 // Before anything is derived: under another rule the child
                 // would differ, and the two sides would part silently.
@@ -564,7 +576,21 @@ impl Peer {
                 // already held: a repeat of the same proposal has to be
                 // accepted again, and only the derivation tells a repeat
                 // from a conflict. Its cost is bounded by the checks above.
-                let digest = match self.evolve(&digest, &additions, &version) {
+                let parsed = Version::parse(&version).map_err(|e| KuteError::InvalidIdentifier(format!("version {version:?}: {e}")))?;
+                let mut child = kute::bpe::sequence::evolve(&self.hold(&digest)?.vocabulary, &additions, parsed)?;
+                if !signatures.is_empty() {
+                    // Of the vocabulary derived here, not of anything
+                    // received: a signature made for other content does
+                    // not hold for this digest.
+                    child.seal()?;
+                    child.integrity.as_mut().expect("sealed").signatures = signatures;
+                }
+                if let Some(check) = &self.check {
+                    if let Err(why) = check(&child) {
+                        return Ok(refuse(ErrorCode::Refused, format!("the proposed vocabulary is not taken: {why}")));
+                    }
+                }
+                let digest = match self.add_vocabulary(child) {
                     Ok(digest) => digest,
                     Err(KuteError::VocabularyMismatch(why)) => return Ok(refuse(ErrorCode::VocabularyConflict, why)),
                     Err(e) => return Err(e),
@@ -781,6 +807,14 @@ impl<T: Transport> Session<T> {
     /// applies the step itself; the digests must agree. Returns the new
     /// digest. Nothing changes locally if the other side refuses.
     pub fn propose(&mut self, digest: &str, additions: &[Vec<String>], version: &str) -> Result<String> {
+        self.propose_signed(digest, additions, version, &|_| Ok(()))
+    }
+
+    /// [`Session::propose`], vouching for the result. `sign` is given the
+    /// vocabulary this side derived, sealed, and adds its signatures to
+    /// it; they travel with the proposal, and the vocabulary held here
+    /// afterwards carries them. The protocol makes no signature itself.
+    pub fn propose_signed(&mut self, digest: &str, additions: &[Vec<String>], version: &str, sign: &dyn Fn(&mut Vocabulary) -> Result<()>) -> Result<String> {
         if let Some(remote) = &self.remote {
             if !remote.evolution_rules.iter().any(|r| r == EVOLUTION_RULE) {
                 return Err(KuteError::Unsupported(format!(
@@ -790,13 +824,19 @@ impl<T: Transport> Session<T> {
             }
         }
         let parsed = Version::parse(version).map_err(|e| KuteError::InvalidIdentifier(format!("version {version:?}: {e}")))?;
-        let child = kute::bpe::sequence::evolve(&self.peer.hold(digest)?.vocabulary, additions, parsed)?;
+        let mut child = kute::bpe::sequence::evolve(&self.peer.hold(digest)?.vocabulary, additions, parsed)?;
+        child.seal()?;
         let expected = child.digest()?;
+        sign(&mut child)?;
+        if child.compute_digest()? != expected {
+            return Err(KuteError::Integrity("signing changed the vocabulary".into()));
+        }
         let propose = Message::SymbolPropose {
             digest: digest.to_string(),
             additions: additions.to_vec(),
             version: version.to_string(),
             rule: EVOLUTION_RULE.to_string(),
+            signatures: child.integrity.as_ref().map(|i| i.signatures.clone()).unwrap_or_default(),
         };
         match self.ask(&propose)? {
             Message::VocabAccept { digest: theirs } if theirs == expected => self.peer.add_vocabulary(child),

@@ -971,6 +971,8 @@ Decided:
   vocabulary on the receiving side that no signer has seen; accepting it
   would let the other side put an unsigned vocabulary into a peer that
   requires signed ones. The CLI refuses the two options together.
+  (Changed by ADR-0053: a proposal that carries a signature of what it
+  derives is now put to the check.)
 * Vocabularies the operator loads are not checked.
 * The requirement is per peer process, not per allowed fingerprint. A
   per-fingerprint set of trusted keys would belong in `tls::Access`
@@ -1090,10 +1092,40 @@ here: the signed vocabulary is sent whole. Measured: about 93 kB on the
 socket for the signed path against 2 kB for the proposal, and a refusal
 comes only after the file has been sent.
 
-Not done: signing what a proposal derives (each side would have to
-sign its own derivation, or the proposer sign the result and send the
-signature alone, 267 bytes here). That would join the two paths and is
-the obvious next step if the signed path is to be cheap.
+Signing what a proposal derives was not done here; it is ADR-0053.
+
+## ADR-0053: A proposal can carry the proposer's signature of what it derives
+
+Status: accepted.
+
+A peer that required signatures refused every proposal (ADR-0047), so
+a signed vocabulary had to be sent whole: about 93 kB in QueenSync
+where a proposal cost 2 kB, and a refusal came only after the file.
+
+Decided: `SYMBOL_PROPOSE` gains an optional `signatures` field, over
+the digest of the child. The proposer derives the child first and
+signs it (`kute peer send --sign-with`). A responder with a check
+refuses a proposal without signatures before deriving; otherwise it
+derives the child itself, attaches the signatures and puts that to its
+check. The signature is therefore checked against content the
+responder computed, never against content it was told about.
+`--require-signature-from` may now be combined with
+`--accept-proposals`.
+
+No protocol number change: the field is omitted when empty, older
+peers ignore it, and an older peer with a check goes on refusing every
+proposal. `Message::SymbolPropose` has a new field, which breaks Rust
+code that builds or matches the variant in full.
+
+Cost admitted: a proposal with a bad signature makes the responder
+derive before it refuses. The derivation is bounded by the limits every
+proposal has, and only peers allowed to connect can ask for it.
+
+Measured in QueenSync: taken at about 2.3 kB beside the tasks; refused
+at about 2.1 to 2.3 kB.
+
+Rejected: each side signing its own derivation (the worker's signature
+tells the queen nothing she can use, and the worker would need a key).
 
 ## ADR-0051: Rust edition 2024
 

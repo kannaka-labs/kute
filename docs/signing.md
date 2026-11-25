@@ -80,11 +80,21 @@ What it leaves alone:
 
 * Vocabularies you give the peer yourself with `--vocab` are not
   checked. You chose them.
-* It cannot be combined with `--accept-proposals`. A proposal makes the
-  peer derive a new vocabulary from one it holds, and nobody has signed
-  the result; a peer that requires signatures refuses proposals. To
-  extend a vocabulary between such peers, evolve it, sign it and send
-  it whole.
+* With `--accept-proposals`, a proposal is taken only if it carries a
+  signature, from a trusted key, of the vocabulary it derives. The
+  proposer makes it with `kute peer send --propose ... --sign-with
+  key.pem`: it derives the vocabulary first, signs its digest as
+  `kute sign` would, and sends the signature with the proposal (a few
+  hundred bytes; no vocabulary data crosses). The peer derives the
+  vocabulary itself, attaches the signature to what it derived, and
+  checks it. So the signature is never taken on trust about content:
+  one made for anything else does not hold for this digest. A proposal
+  with no signature is refused before anything is derived. One with a
+  signature that does not hold costs the peer the derivation, which is
+  bounded by the same limits as any proposal. What the peer keeps is
+  the file `kute evolve` and `kute sign` would have made. (Before 0.9
+  the two options could not be combined, and a signed vocabulary had to
+  be sent whole.)
 * It is a second lock, not a replacement for the first. Who may connect
   at all is still the TLS certificate and `--allow`. The signature says
   who vouches for the vocabulary, which need not be who delivers it.

@@ -253,7 +253,7 @@ fn the_default_policy_takes_nothing_from_the_other_side() {
     assert!(peer.digests().is_empty());
     let mut holder = ready_peer(Policy::default());
     let digest = holder.add_vocabulary(vocabulary).unwrap();
-    let propose = Message::SymbolPropose { digest, additions: vec![vec!["X".into()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    let propose = Message::SymbolPropose { digest, additions: vec![vec!["X".into()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into(), signatures: vec![] };
     assert_eq!(code(&holder.handle(propose)), ErrorCode::Refused);
     assert_eq!(holder.digests().len(), 1);
 }
@@ -269,7 +269,7 @@ fn a_proposal_under_another_evolution_rule_is_refused_before_derivation() {
 
     // What a v0.5 peer would send: the earlier rule, or no rule field at all.
     for rule in ["kute 0.5.0", "kute evolve-1", ""] {
-        let propose = Message::SymbolPropose { digest: digest.clone(), additions: additions.clone(), version: "0.2.0".into(), rule: rule.into() };
+        let propose = Message::SymbolPropose { digest: digest.clone(), additions: additions.clone(), version: "0.2.0".into(), rule: rule.into(), signatures: vec![] };
         let reply = peer.handle(propose);
         assert_eq!(code(&reply), ErrorCode::UnsupportedRule, "rule {rule:?}");
         assert_eq!(peer.digests(), vec![digest.clone()], "nothing was derived or held for rule {rule:?}");
@@ -279,7 +279,7 @@ fn a_proposal_under_another_evolution_rule_is_refused_before_derivation() {
     assert_eq!(code(&peer.handle(old)), ErrorCode::UnsupportedRule);
 
     // The same proposal under this build's rule is taken.
-    let propose = Message::SymbolPropose { digest: digest.clone(), additions, version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    let propose = Message::SymbolPropose { digest: digest.clone(), additions, version: "0.2.0".into(), rule: EVOLUTION_RULE.into(), signatures: vec![] };
     assert!(matches!(peer.handle(propose)[0], Message::VocabAccept { .. }));
     assert_eq!(peer.digests().len(), 2);
 
@@ -385,6 +385,7 @@ fn the_other_side_cannot_pass_the_aggregate_budgets() {
             additions: vec![vec![format!("NEW_{step}")]],
             version: format!("0.{}.0", step + 2),
             rule: EVOLUTION_RULE.into(),
+            signatures: vec![],
         };
         match &peer.handle(propose)[0] {
             Message::VocabAccept { digest: next } => digest = next.clone(),
@@ -573,7 +574,7 @@ fn a_conflicting_proposal_is_a_conflict_and_the_inbox_counts_what_it_keeps() {
     let vocabulary = train("test:protocol:conflict", &CYCLE);
     let mut peer = ready_peer(Policy { accept_proposals: true, ..open() });
     let digest = peer.add_vocabulary(vocabulary.clone()).unwrap();
-    let propose = |symbol: &str| Message::SymbolPropose { digest: digest.clone(), additions: vec![vec![symbol.to_string()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    let propose = |symbol: &str| Message::SymbolPropose { digest: digest.clone(), additions: vec![vec![symbol.to_string()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into(), signatures: vec![] };
     let first = peer.handle(propose("VALVE_STUCK"));
     assert!(matches!(first[0], Message::VocabAccept { .. }));
     assert_eq!(peer.handle(propose("VALVE_STUCK")), first, "a repeat is accepted again");
@@ -642,8 +643,8 @@ fn long_symbols_are_bounded_by_their_bytes_not_only_their_count() {
 
 /// B8: a peer can be given a test that a vocabulary from the other side
 /// must pass. One that fails it is refused and not held; and while the
-/// test is set, a proposal is refused, because the vocabulary it would
-/// derive is one the test never saw.
+/// test is set, a proposal with no signature is refused before anything
+/// is derived.
 #[test]
 fn a_vocabulary_that_fails_the_peers_check_is_not_taken() {
     let wanted = train("test:protocol:wanted", &CYCLE);
@@ -659,7 +660,7 @@ fn a_vocabulary_that_fails_the_peers_check_is_not_taken() {
 
     assert!(matches!(give(&mut peer, &wanted)[0], Message::VocabAccept { .. }));
     let digest = wanted.compute_digest().unwrap();
-    let propose = Message::SymbolPropose { digest, additions: vec![vec!["VALVE_STUCK".into()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    let propose = Message::SymbolPropose { digest, additions: vec![vec!["VALVE_STUCK".into()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into(), signatures: vec![] };
     assert_eq!(code(&peer.handle(propose.clone())), ErrorCode::Refused);
 
     // Without a check, both are taken as before.
@@ -667,4 +668,51 @@ fn a_vocabulary_that_fails_the_peers_check_is_not_taken() {
     assert!(matches!(give(&mut plain, &unwanted)[0], Message::VocabAccept { .. }));
     assert!(matches!(give(&mut plain, &wanted)[0], Message::VocabAccept { .. }));
     assert!(matches!(plain.handle(propose)[0], Message::VocabAccept { .. }));
+}
+
+/// A proposal can carry signatures of the vocabulary it derives. A peer
+/// with a check derives the vocabulary itself, attaches them, and holds
+/// the result only if the check passes it. The check here stands in for
+/// real signatures: it accepts the one whose text names the digest.
+#[test]
+fn a_signed_proposal_is_put_to_the_check_as_the_vocabulary_it_derives() {
+    let parent = train("test:protocol:signed-proposal", &CYCLE);
+    let digest = parent.compute_digest().unwrap();
+    let child = kute::bpe::sequence::evolve(&parent, &[vec!["VALVE_STUCK".to_string()]], kute::Version::parse("0.2.0").unwrap()).unwrap();
+    let child_digest = child.compute_digest().unwrap();
+    let vouch = |for_digest: &str| kute::Signature { key_id: "test".into(), algorithm: "test".into(), signature: format!("vouched:{for_digest}") };
+    let check = || -> kute_protocol::VocabularyCheck {
+        Box::new(|v| {
+            let integrity = v.integrity.as_ref().ok_or("it is not sealed")?;
+            if integrity.signatures.iter().any(|s| s.signature == format!("vouched:{}", integrity.digest)) { Ok(()) } else { Err("nobody this peer trusts vouches for it".into()) }
+        })
+    };
+    let propose = |signatures: Vec<kute::Signature>| Message::SymbolPropose { digest: digest.clone(), additions: vec![vec!["VALVE_STUCK".into()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into(), signatures };
+    let holds = |peer: &mut Peer| matches!(peer.handle(Message::SymbolQuery { digest: child_digest.clone(), symbols: vec!["VALVE_STUCK".into()] })[0], Message::SymbolInfo { .. });
+
+    let mut peer = ready_peer(Policy { accept_proposals: true, answer_queries: true, ..open() });
+    peer.add_vocabulary(parent.clone()).unwrap();
+    peer.handle(Message::VocabAnnounce { vocabulary: kute_protocol::VocabRef::of(&parent).unwrap() });
+    peer.require_vocabulary_check(check());
+
+    // None; one made for other content (the parent); too many: refused, nothing held.
+    for (signatures, wanted) in [(vec![], ErrorCode::Refused), (vec![vouch(&digest)], ErrorCode::Refused), (vec![vouch(&child_digest); 17], ErrorCode::TooLarge)] {
+        assert_eq!(code(&peer.handle(propose(signatures))), wanted);
+        assert!(!holds(&mut peer));
+    }
+    // One for the vocabulary the proposal derives: taken, with the digest the proposer expects.
+    let reply = peer.handle(propose(vec![vouch(&child_digest)]));
+    assert!(matches!(&reply[0], Message::VocabAccept { digest } if *digest == child_digest), "{reply:?}");
+    assert!(holds(&mut peer));
+    // The same again is accepted again.
+    assert!(matches!(peer.handle(propose(vec![vouch(&child_digest)]))[0], Message::VocabAccept { .. }));
+
+    // A proposal without signatures is the bytes it was before.
+    let plain = serde_json::to_string(&propose(vec![])).unwrap();
+    assert!(!plain.contains("signatures"), "{plain}");
+    // And a peer without a check takes a signed one as it takes any.
+    let mut open_peer = ready_peer(Policy { accept_proposals: true, answer_queries: true, ..open() });
+    open_peer.add_vocabulary(parent.clone()).unwrap();
+    open_peer.handle(Message::VocabAnnounce { vocabulary: kute_protocol::VocabRef::of(&parent).unwrap() });
+    assert!(matches!(open_peer.handle(propose(vec![vouch("anything")]))[0], Message::VocabAccept { .. }));
 }

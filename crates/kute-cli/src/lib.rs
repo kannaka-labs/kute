@@ -491,8 +491,10 @@ enum PeerAction {
         /// Take a vocabulary from the other side only if it carries a
         /// valid signature from one of these keys (the base64 public key
         /// `kute keygen` prints). Repeatable. Vocabularies given with
-        /// --vocab are yours and are not checked.
-        #[arg(long, value_name = "PUBLIC_KEY", requires = "accept_vocabularies", conflicts_with = "accept_proposals")]
+        /// --vocab are yours and are not checked. With --accept-proposals,
+        /// a proposal is taken only if it carries such a signature of the
+        /// vocabulary it derives (`kute peer send --sign-with`).
+        #[arg(long, value_name = "PUBLIC_KEY", requires = "accept_vocabularies")]
         require_signature_from: Vec<String>,
         /// Send a held vocabulary's file to the other side when it asks.
         #[arg(long)]
@@ -556,6 +558,11 @@ enum PeerAction {
         additions: Vec<String>,
         #[arg(long)]
         new_version: Option<String>,
+        /// Sign the vocabulary the proposal derives with this private key
+        /// (as `kute sign` would), and send the signature with the
+        /// proposal. For a peer that requires signatures.
+        #[arg(long, value_name = "KEY", requires = "new_version")]
+        sign_with: Option<PathBuf>,
         /// This side's certificate chain (PEM); with --tls-key and --tls-ca
         /// the connection is TLS 1.3 with a certificate on both sides.
         #[arg(long, requires_all = ["tls_key", "tls_ca"])]
@@ -708,7 +715,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 })).collect::<Vec<_>>(),
             }))
         }
-        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version, tls_cert, tls_key, tls_ca, server_name, server_fingerprint, insecure_plain } => {
+        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version, sign_with, tls_cert, tls_key, tls_ca, server_name, server_fingerprint, insecure_plain } => {
+            // Read the key before connecting: one that cannot be read
+            // is this side's mistake, to be told before anything is sent.
+            let signer = sign_with.as_deref().map(sign::signer).transpose()?;
             if tls_cert.is_none() && !insecure_plain {
                 return Err(KuteError::InvalidConfig(NO_TRANSPORT.into()));
             }
@@ -733,7 +743,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             let transferred = session.share(&digest)?;
             let mut proposed = None;
             if let Some(version) = &new_version {
-                digest = session.propose(&digest, &split_additions(&additions), version)?;
+                digest = match &signer {
+                    Some(signer) => session.propose_signed(&digest, &split_additions(&additions), version, signer)?,
+                    None => session.propose(&digest, &split_additions(&additions), version)?,
+                };
                 proposed = Some(digest.clone());
             }
             let mut sent = Vec::new();
@@ -748,6 +761,7 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 "server_identity": server_identity,
                 "vocabulary_transferred": transferred,
                 "vocabulary_after_proposal": proposed,
+                "proposal_signed": proposed.is_some() && sign_with.is_some(),
                 "sent": sent,
             }))
         }

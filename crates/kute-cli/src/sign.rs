@@ -45,7 +45,10 @@ fn bad_key(why: &str) -> KuteError {
 }
 
 fn load_key(path: &Path) -> kute::Result<Ed25519KeyPair> {
-    if std::fs::metadata(path)?.len() > 16 * 1024 {
+    // Name the file: an error about a key that says only "not found"
+    // does not say which of a command's files was meant.
+    let size = std::fs::metadata(path).map_err(|e| KuteError::InvalidConfig(format!("the private key {}: {e}", path.display())))?.len();
+    if size > 16 * 1024 {
         return Err(bad_key("the file is larger than a key"));
     }
     let text = std::fs::read_to_string(path).map_err(|_| bad_key("the file is not text"))?;
@@ -96,9 +99,18 @@ pub fn keygen(output: &Path) -> kute::Result<Value> {
 }
 
 /// Add this key's signature to the vocabulary and write it to `output`.
-pub fn sign(vocab_path: &Path, key_path: &Path, output: &Path, force: bool) -> kute::Result<Value> {
-    let pair = load_key(key_path)?;
-    let mut vocabulary = vocab::load(vocab_path)?;
+/// What signing did to a vocabulary: its digest, the key's name, whether
+/// this key's signature was already there, and how many entries under
+/// its name were replaced.
+struct Signed {
+    digest: String,
+    key_id: String,
+    already: bool,
+    replaced: usize,
+}
+
+/// Seal `vocabulary` and add this key's signature of its digest.
+fn attach(vocabulary: &mut kute::Vocabulary, pair: &Ed25519KeyPair) -> kute::Result<Signed> {
     // The digest of what is there, not the digest the file states.
     let digest = vocabulary.compute_digest()?;
     vocabulary.seal()?;
@@ -118,6 +130,21 @@ pub fn sign(vocab_path: &Path, key_path: &Path, output: &Path, force: bool) -> k
         return Err(KuteError::LimitExceeded(format!("the vocabulary already carries {MAX_SIGNATURES} signatures")));
     }
     integrity.signatures.push(kute::Signature { key_id: id.clone(), algorithm: ALGORITHM.into(), signature });
+    Ok(Signed { digest, key_id: id, already, replaced })
+}
+
+/// For `kute peer send --sign-with`: signs, with the key in `key_path`,
+/// the vocabulary a proposal derives. The key is read now, so that a
+/// key that cannot be read is told before anything is sent.
+pub fn signer(key_path: &Path) -> kute::Result<impl Fn(&mut kute::Vocabulary) -> kute::Result<()> + use<>> {
+    let pair = load_key(key_path)?;
+    Ok(move |vocabulary: &mut kute::Vocabulary| attach(vocabulary, &pair).map(|_| ()))
+}
+
+pub fn sign(vocab_path: &Path, key_path: &Path, output: &Path, force: bool) -> kute::Result<Value> {
+    let pair = load_key(key_path)?;
+    let mut vocabulary = vocab::load(vocab_path)?;
+    let Signed { digest, key_id: id, already, replaced } = attach(&mut vocabulary, &pair)?;
     vocab::save(&vocabulary, output, force)?;
     let written = vocab::load(output)?;
     Ok(json!({

@@ -100,6 +100,7 @@ fn budgets_hold_and_memory_stops_growing_over_a_long_mixed_run() {
                     additions: vec![vec![format!("NEW_{proposal}")]],
                     version: format!("0.{}.0", proposal + 1),
                     rule: EVOLUTION_RULE.into(),
+                    signatures: vec![],
                 })
             }
             4 => peer.handle(Message::SymbolQuery { digest: digest.clone(), symbols: vec![names[0].clone()] }),

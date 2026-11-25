@@ -195,20 +195,18 @@ class Bench:
             raise SystemExit(f"kute {' '.join(map(str, args))[:300]} failed: {done.stderr.decode(errors='replace')[:800]}")
         return done
 
-    def exchange(self, name, vocab, held, tasks, propose=None, cut_after=None, signers=None):
+    def exchange(self, name, vocab, held, tasks, propose=None, cut_after=None, signers=None, sign_with=None):
         """One connection: the worker's side serves, the queen's side sends
         every task in `tasks` (name, messages). Returns what was measured.
         With `signers` (public keys) the worker takes a vocabulary only if
-        one of them signed it, and takes no proposals: nobody has signed
-        what a proposal derives."""
+        one of them signed it, and a proposal only if it carries such a
+        signature of the vocabulary it derives (`sign_with`, a key file)."""
         out_dir = self.work / f"recv-{name}"
         port = free_port()
         serve = [self.kute, "peer", "serve", "--listen", f"127.0.0.1:{port}", "--insecure-plain", "--accept-vocabularies", "--output-dir", str(out_dir), "--timeout", "20"]
-        if signers:
-            for key in signers:
-                serve += ["--require-signature-from", key]
-        else:
-            serve += ["--accept-proposals"]
+        serve += ["--accept-proposals"]
+        for key in signers or []:
+            serve += ["--require-signature-from", key]
         for path in held:
             serve += ["--vocab", str(path)]
         server = subprocess.Popen(serve, cwd=self.work, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -219,6 +217,8 @@ class Bench:
             for run in propose["additions"]:
                 send += ["--propose", " ".join(run)]
             send += ["--new-version", propose["version"]]
+            if sign_with:
+                send += ["--sign-with", sign_with]
         if tasks:
             send += ["--input", *[f"tasks/{task_name}.jsonl" for task_name, _ in tasks]]
         started = time.perf_counter()
@@ -345,6 +345,24 @@ def main() -> int:
     offers = {}
     for label, path in (("unsigned", "candidate.kvf"), ("signed_by_a_stranger", "candidate-stranger.kvf"), ("signed_by_the_queen", "candidate-queen.kvf")):
         got = bench.exchange(f"signed-{label}", path, ["base.kvf"], signed_batch, signers=[queen_key])
+        offers[label] = {
+            "worker_took_the_vocabulary": bool(got["received_vocabularies"]),
+            "tasks_completed": got["completed"],
+            "tasks_sent": len(signed_batch),
+            "socket_bytes": got["socket_bytes_to_worker"] + got["socket_bytes_to_queen"],
+            "sender_was_told": got["sender_said"],
+        }
+        if got["received_vocabularies"]:
+            kept = got["received_vocabularies"][0]
+            offers[label]["digest_equals_the_unsigned_candidate"] = json.loads(bench.run("inspect", kept).stdout)["summary"]["digest"] == json.loads(bench.run("inspect", "candidate.kvf").stdout)["summary"]["digest"]
+            offers[label]["what_the_worker_kept_verifies"] = bench.run("verify", "--vocab", kept, "--trusted-key", queen_key, check=False).returncode == 0
+    # The two paths joined: the queen proposes, signs the vocabulary the
+    # proposal derives, and sends the signature with it. The worker
+    # derives the vocabulary itself and keeps it only if the signature
+    # holds for what it derived.
+    proposal = {"additions": additions, "version": "0.2.0"}
+    for label, key in (("proposed_unsigned", None), ("proposed_and_signed_by_a_stranger", "stranger.pem"), ("proposed_and_signed_by_the_queen", "queen.pem")):
+        got = bench.exchange(f"signed-{label}", "base.kvf", ["base.kvf"], signed_batch, propose=proposal, signers=[queen_key], sign_with=key)
         offers[label] = {
             "worker_took_the_vocabulary": bool(got["received_vocabularies"]),
             "tasks_completed": got["completed"],

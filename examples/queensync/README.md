@@ -30,10 +30,14 @@ traffic.
    that it was forced when it was, so that the path runs every time and
    not only when the data approves. It runs the tasks under both
    vocabularies, to show whether the decision was right.
-   The candidate is also offered three times to a worker that takes
-   vocabularies only from the queen's key (`kute peer serve
-   --require-signature-from`): unsigned, signed by another key, and
-   signed by the queen (`kute sign`).
+   The candidate is also offered to a worker that takes vocabularies
+   only from the queen's key (`kute peer serve
+   --require-signature-from`), two ways. Whole: the file unsigned,
+   signed by another key, and signed by the queen (`kute sign`). And by
+   proposal: the queen proposes the additions and sends with them her
+   signature of the vocabulary they derive (`kute peer send --propose
+   ... --sign-with`); the worker derives it and keeps it only if the
+   signature holds for what it derived.
 6. Two in a hundred of those tasks contain message kinds and keys that
    no vocabulary has seen. They are carried by escape.
 
@@ -46,8 +50,10 @@ connection is plain loopback so the count is the protocol alone.
 ## What was measured
 
 `report-kute-0.8.1-next.json`, one run, seed fixed in the script. Sizes
-are reproducible; times are not. Apart from the signed step, which is
-new, every size in it equals the run recorded on 0.7.0.
+are reproducible; times are not. Apart from the signed steps, which
+are new, every size in it equals the run recorded on 0.7.0. Each signed
+offer carries one batch of 100 tasks, about 67 kB when delivered; a
+byte or two of these figures moves between runs with the port number.
 
 | | |
 |---|---|
@@ -57,9 +63,12 @@ new, every size in it equals the run recorded on 0.7.0.
 | bytes on the socket, each completed task | 701 (both directions, with handshake and receipts) |
 | sending the vocabulary on first contact | 86,766 bytes on the socket for a 64,122-byte file |
 | negotiating the candidate (forced: the decision was reject) | 2,068 bytes on the socket; the same digest on both sides |
-| the candidate offered unsigned to a worker that requires the queen's signature | refused, told why; 0 of 100 tasks; 93,432 bytes on the socket before the refusal |
-| the same, signed by a key the worker was not told of | refused, told why; 0 of 100 tasks; 93,781 bytes |
-| the same, signed by the queen | taken; 100 of 100 tasks; the worker's copy verifies and has the digest of the unsigned file; the signature adds 267 bytes to the file |
+| the candidate sent whole, unsigned, to a worker that requires the queen's signature | refused, told why; 0 of 100 tasks; 93,431 bytes on the socket before the refusal |
+| sent whole, signed by a key the worker was not told of | refused, told why; 0 of 100 tasks; 93,780 bytes |
+| sent whole, signed by the queen | taken; 100 of 100 tasks; 161,062 bytes with the tasks; the worker's copy verifies and has the digest of the unsigned file; the signature adds 267 bytes to the file |
+| proposed to the same worker, unsigned | refused before anything is derived; 0 of 100 tasks; 2,130 bytes |
+| proposed, signed by a key the worker was not told of | refused, nothing kept; 0 of 100 tasks; 2,337 bytes |
+| proposed, signed by the queen | taken; 100 of 100 tasks; 69,610 bytes with the tasks; the worker's copy verifies and has the same digest |
 | a dropped connection | sender reports failure; nothing delivered; sending the batch again delivers all 100. No resuming part way |
 | time for a batch of 100 tasks | about 1.2 s under either vocabulary, a new process and connection each batch |
 | language model tokens | not measured, and unchanged by construction: see below |
@@ -130,16 +139,16 @@ it. Nothing here reduces what a language model is charged for.
 
 ## Not built
 
-* Signing and negotiating by proposal are two paths, not one. A peer
-  that requires signatures refuses proposals, since nobody has signed
-  the vocabulary a proposal derives; so the signed candidate is sent
-  whole (about 93 kB on the socket here) where the proposal cost 2 kB.
-  A refusal also comes after the whole file has been sent: the worker
-  cannot check a signature on content it has not received. There is no
-  registry, expiry or revocation of keys (`docs/signing.md`), and the
-  connection here is plain loopback, where a deployment would use
-  certificates on both sides (`kute peer` with TLS, tested in the
-  engine).
+* A signed vocabulary can now reach a worker either whole or by
+  proposal, and the proposal is the cheap one: about 2 kB beside the
+  tasks, against about 94 kB for the file, and a refusal costs 2 kB
+  instead of 93. Whole is still needed for a worker that does not hold
+  the parent, and there a refusal still comes after the file has been
+  sent: a signature cannot be checked on content not yet received.
+  There is no registry, expiry or revocation of keys
+  (`docs/signing.md`), and the connection here is plain loopback, where
+  a deployment would use certificates on both sides (`kute peer` with
+  TLS, tested in the engine).
 * A signature says who vouches for a file. The candidate signed here is
   the one the shadow comparison rejected.
 * No resuming a batch part way after a dropped connection.
