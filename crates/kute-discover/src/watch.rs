@@ -571,6 +571,14 @@ impl Watch {
                 return Err(bad("panes span more than a window"));
             }
         }
+        // Every counted event was at or before the watermark, so no pane
+        // can lie beyond it. One that did would never be the oldest, would
+        // never be discarded, and its events would be in every window after.
+        if let (Some(last), Some(mark)) = (watch.panes.back(), saved.watermark) {
+            if last.index > mark.div_euclid(p.pane_ticks) {
+                return Err(bad("a pane lies after the watermark"));
+            }
+        }
         if let Some((_, patterns)) = &saved.previous {
             if patterns.len() > p.max_patterns || patterns.iter().any(|(hash, symbols)| hash.len() > 96 || symbols.len() > l.max_length || symbols.iter().any(|s| s.len() > l.max_symbol_bytes)) {
                 return Err(bad("the previous report is outside its bounds"));

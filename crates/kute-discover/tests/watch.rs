@@ -300,6 +300,11 @@ fn a_checkpoint_that_lies_is_refused() {
         ("watermark", Box::new(|v| v["watermark"] = i64::MAX.into())),
         ("pane order", Box::new(|v| v["panes"][1]["index"] = v["panes"][0]["index"].clone())),
         ("pane span", Box::new(|v| v["panes"][0]["index"] = (-900).into())),
+        ("a pane after the watermark", Box::new(|v| {
+            let last = v["panes"].as_array().unwrap().len() - 1;
+            v["panes"][last]["index"] = (v["panes"][last]["index"].as_i64().unwrap() + 1).into();
+            v["panes"].as_array_mut().unwrap().remove(0);
+        })),
         ("tail", Box::new(|v| v["tails"][0][1] = serde_json::json!([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))),
         ("names", Box::new(|v| v["names"][0] = v["names"][1].clone())),
     ];
