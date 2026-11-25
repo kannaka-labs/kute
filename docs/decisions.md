@@ -1085,9 +1085,12 @@ patterns, one `unsafe extern`, one `use<>` bound). The minimum
 supported Rust stays 1.85 and is still checked in CI. No format, digest
 or public signature changes.
 
-The migration lint lists sixteen places where a temporary at the end of
-a block is now dropped earlier. None holds a lock or sends anything;
-they were not rewritten.
+The migration lint (`tail-expr-drop-order`, run over the workspace on
+the old edition) names six places where a temporary at the end of a
+block is now dropped earlier. All six are in test files
+(`kute-protocol/tests`, `kute/tests/untrusted_input.rs`); none is in a
+library or the command line. They were not rewritten, and those tests
+pass on the new edition.
 
 ## Deferred
 
