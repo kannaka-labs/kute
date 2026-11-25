@@ -496,6 +496,30 @@ trainer gains little from more threads here, while `tokenizers` gets a
 large part of its training speed from them. That is why the training gap
 narrows on the 24-thread machine.
 
+### The same split on both sides
+
+The tables above compare each library with its default split. `hf_repeat.py
+--matched` gives `tokenizers` KUTE's split pattern (the GPT-4 one, pieces
+isolated, then bytes), so both learn byte-level BPE over the same pieces.
+On a 3 MB sample the two produce the same 59,141 distinct pieces. Laptop,
+ten alternating runs, KUTE built from the `next` branch, whose trainer is
+faster than the released one and gives the same vocabulary (report `results/tokenizers-enwik8-10runs-matched.json`):
+
+| | KUTE | tokenizers 0.23.2, KUTE's split |
+|---|---:|---:|
+| train, median (range) | 4.2 s (3.8 to 5.8) | 29.9 s (24.7 to 63.7) |
+| encode, one document | 0.30 s (0.26 to 0.70) | 8.69 s |
+| encode, batch of lines | not run | 3.01 s (2.99 s without offsets) |
+| tokens for the held-out text | 2,551,171 | 2,571,668 |
+
+* **The token difference is 0.8%, not 5.6%.** Most of what the default
+  comparison shows is the split, which any `tokenizers` user can change.
+  Why 0.8% remains is not established; the two libraries break ties between
+  equally frequent pairs differently, which is one candidate.
+* The speed difference does not depend on the split: `tokenizers` took
+  27.0 s with its own and 29.9 s with KUTE's.
+* One machine, not idle (see the ranges), one dataset.
+
 How to read it:
 
 - The two trainers split text differently before merging, each by its

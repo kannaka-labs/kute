@@ -27,6 +27,14 @@ with the same script and wheels. Method, ranges, limits and the command to
 rerun it:
 [`benchmarks/README.md`](benchmarks/README.md#against-hugging-face-tokenizers-on-text-v050).
 
+**With the split matched, most of the token difference goes away.** Given
+KUTE's split pattern, `tokenizers` needs 2,571,668 tokens for the same
+text: KUTE's 2,551,171 is 0.8% fewer, not 5.6%. The larger figure compares
+defaults, and most of it is the split rather than the merging. Speed is
+the difference that remains: in that matched run, on the laptop and with
+the unreleased trainer on the `next` branch, KUTE trained in 4.2 s against
+29.9 s and encoded in 0.30 s against 3.01 s.
+
 ```
 pip install kute-engine
 ```
