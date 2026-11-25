@@ -522,8 +522,45 @@ connection announces its own end (TLS `close_notify`) when dropped, and one
 that ends without that notice is an error to the reader, so a cut
 connection is not mistaken for a finished one.
 
-Not done: there is no revocation beyond removing an identity from the
-list, and limits on connections and rate are still the caller's.
+Identity is the certificate, not the key: a renewed certificate for the
+same key has a new fingerprint and has to be allowed again. Removing a
+fingerprint is the only revocation; no revocation list is checked.
+
+Not done: limits on connections and rate are still the caller's, and
+`kute peer serve` still serves one allowed connection and exits.
+
+## ADR-0033: A peer gives nothing away by default, and a plain socket has to be asked for
+
+From the security review of ADR-0031 and ADR-0032 (pull request 20).
+
+* A compressed container can hold thousands of times its size in ids, and
+  the peer inflated it before any limit. Containers from the other side
+  are now refused on the token count in their header
+  (`TokenSequence::from_bytes_bounded`), under `max_message_tokens`
+  (16 Mi by default) and the unit limit.
+* The default policy took nothing but gave everything: any ready peer
+  could fetch a held vocabulary by digest, ask about its symbols and have
+  sequences translated. `Policy` now has `give_vocabularies`,
+  `answer_queries` and `translate`, all off by default, and
+  `vocabularies`, the digests the other side may use at all. A vocabulary
+  that is held but not listed is answered exactly as one that is not
+  held. Delivering a message under a usable vocabulary is the one thing a
+  default peer does.
+* A proposal whose id and version are already held with other content is
+  answered `VOCABULARY_CONFLICT`. It is still derived first: a repeat of
+  the same proposal must be accepted again, and only the derivation tells
+  the two apart. The cost is bounded by the budget checks before it.
+* The inbox budget counts what the inbox keeps: decoded bytes, ids at four
+  bytes each, and the container.
+* `kute peer serve` with TLS refuses a connection that fails the
+  handshake, stalls in it, or is not allowed, and waits for the next one;
+  before, anyone who could reach the port could end the listener. Reads
+  and writes time out (`--timeout`, 30 seconds by default).
+* Without the TLS options, `kute peer serve` and `kute peer send` refuse
+  to run unless given `--insecure-plain`.
+
+This changes the behaviour of protocol 2 as first written on this branch;
+it has not been released, so the protocol number stays.
 
 ## Deferred
 

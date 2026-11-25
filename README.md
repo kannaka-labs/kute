@@ -77,8 +77,10 @@ Added in v0.3:
   what it will hold in all, and does not deliver a repeated message twice.
   With `--tls-cert`, `--tls-key`, an authority file and `--allow
   <fingerprint>`, the connection is TLS 1.3 with a certificate on both
-  sides and only the named peers are served; without them it is a plain
-  socket. See `specifications/protocol`.
+  sides and only the named peers are served. A plain socket has to be
+  asked for with `--insecure-plain`. A peer gives out vocabulary files,
+  answers and translations only when told to. See
+  `specifications/protocol`.
 * `kute train --stream-bytes`: training memory that does not grow with
   file size (227 MiB against 959 MiB on a 500 MB input), and a peak-memory
   figure in every training report.

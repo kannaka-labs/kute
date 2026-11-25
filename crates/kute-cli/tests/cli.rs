@@ -181,7 +181,7 @@ fn use_case_4_industrial_events() {
     let address = format!("127.0.0.1:{port}");
     let server = std::process::Command::new(env!("CARGO_BIN_EXE_kute"))
         .current_dir(&dir)
-        .args(["peer", "serve", "--listen", &address, "--accept-vocabularies", "--accept-proposals", "--output-dir", "received"])
+        .args(["peer", "serve", "--listen", &address, "--insecure-plain", "--accept-vocabularies", "--accept-proposals", "--output-dir", "received"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -189,7 +189,7 @@ fn use_case_4_industrial_events() {
     let mut sent = None;
     for _ in 0..100 {
         let out = kute(&dir, &[
-            "peer", "send", "--connect", &address, "--vocab", "industrial.kvf", "--input", "novel.jsonl",
+            "peer", "send", "--connect", &address, "--insecure-plain", "--vocab", "industrial.kvf", "--input", "novel.jsonl",
             "--propose", "VALVE_7_STUCK", "--new-version", "0.2.0",
         ]);
         if out.status.success() {

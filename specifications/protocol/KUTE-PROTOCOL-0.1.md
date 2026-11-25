@@ -174,6 +174,19 @@ Nothing is retransmitted by the protocol; retrying is the sender's choice.
 `TRANSLATE` has no effect on the receiver's state and may be repeated
 freely.
 
+## 7a. What a peer gives
+
+A peer answers `VOCAB_REQUEST`, `SYMBOL_QUERY` and `TRANSLATE` only when
+its policy says so; otherwise the answer is `REFUSED`. A policy may also
+list the vocabularies the other side may use. A vocabulary that is held
+but not listed is answered, in every message, exactly as one that is not
+held (`UNKNOWN_VOCABULARY`); announcing it, or another vocabulary under
+its id and version, is answered `REFUSED`. A vocabulary the other side
+adds itself joins its list.
+
+A container is refused (`TOO_LARGE`) on the token count in its header,
+before its ids are decompressed.
+
 ## 8. Authenticated transport
 
 The reference implementation runs the frames of section 1 over TLS 1.3

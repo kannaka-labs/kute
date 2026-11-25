@@ -168,6 +168,23 @@ enum PeerAction {
         /// Let the other side extend vocabularies held here.
         #[arg(long)]
         accept_proposals: bool,
+        /// Send a held vocabulary's file to the other side when it asks.
+        #[arg(long)]
+        give_vocabularies: bool,
+        /// Answer whether a held vocabulary has a token for given symbols.
+        #[arg(long)]
+        answer_queries: bool,
+        /// Re-encode the other side's sequences under another held vocabulary.
+        #[arg(long)]
+        translate: bool,
+        /// Give up on a connection that sends nothing for this many
+        /// seconds, during the handshake or after. 0 waits forever.
+        #[arg(long, default_value_t = 30)]
+        timeout: u64,
+        /// Serve over a plain socket: no encryption, and whoever connects
+        /// is served. Required when no TLS options are given.
+        #[arg(long, conflicts_with = "tls_cert")]
+        insecure_plain: bool,
         /// Refuse a message that decodes to more than this many units.
         #[arg(long, default_value_t = 268_435_456)]
         max_units: u64,
@@ -176,8 +193,8 @@ enum PeerAction {
         output_dir: Option<PathBuf>,
         /// This side's certificate chain (PEM). With --tls-key,
         /// --tls-client-ca and --allow, the connection is TLS 1.3 with a
-        /// certificate on both sides. Without them it is a plain socket:
-        /// no encryption, and anyone who can connect is served.
+        /// certificate on both sides. A connection that fails the
+        /// handshake or is not allowed is refused and the next one awaited.
         #[arg(long, requires_all = ["tls_key", "tls_client_ca"])]
         tls_cert: Option<PathBuf>,
         /// This side's private key (PEM).
@@ -188,7 +205,10 @@ enum PeerAction {
         tls_client_ca: Option<PathBuf>,
         /// A peer that may connect, by certificate fingerprint as printed
         /// by `kute peer fingerprint`. Repeatable. Anyone else is refused,
-        /// even with a certificate from an accepted authority.
+        /// even with a certificate from an accepted authority. The
+        /// fingerprint is of the certificate, not the key: a renewed
+        /// certificate has to be allowed again, and removing a fingerprint
+        /// is the only revocation.
         #[arg(long, value_name = "SHA256", requires = "tls_cert")]
         allow: Vec<String>,
     },
@@ -225,8 +245,14 @@ enum PeerAction {
         #[arg(long, requires = "tls_cert")]
         server_name: Option<String>,
         /// Talk only to the server with this certificate fingerprint.
+        /// Without it, any server the authority issued a certificate for
+        /// the name is accepted, which is less than the server asks of you.
         #[arg(long, value_name = "SHA256", requires = "tls_cert")]
         server_fingerprint: Option<String>,
+        /// Connect over a plain socket: no encryption and no check of who
+        /// answers. Required when no TLS options are given.
+        #[arg(long, conflicts_with = "tls_cert")]
+        insecure_plain: bool,
     },
     /// Print the fingerprint that identifies a certificate to `--allow`.
     Fingerprint {
@@ -235,6 +261,8 @@ enum PeerAction {
         cert: PathBuf,
     },
 }
+
+const NO_TRANSPORT: &str = "give the TLS options (--tls-cert, --tls-key and an authority file), or --insecure-plain for a socket with no encryption and no authentication";
 
 /// A plain or an encrypted connection.
 trait Stream: std::io::Read + std::io::Write {}
@@ -251,8 +279,28 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             let chain = tls::load_certificates(&cert)?;
             print(&json!({ "certificate": cert, "fingerprint": tls::fingerprint(&chain[0]) }))
         }
-        PeerAction::Serve { listen, vocab: held, accept_vocabularies, accept_proposals, max_units, output_dir, tls_cert, tls_key, tls_client_ca, allow } => {
-            let policy = Policy { accept_vocabularies, accept_proposals, max_decoded_units: max_units, ..Policy::default() };
+        PeerAction::Serve {
+            listen,
+            vocab: held,
+            accept_vocabularies,
+            accept_proposals,
+            give_vocabularies,
+            answer_queries,
+            translate,
+            timeout,
+            insecure_plain,
+            max_units,
+            output_dir,
+            tls_cert,
+            tls_key,
+            tls_client_ca,
+            allow,
+        } => {
+            let policy = Policy { accept_vocabularies, accept_proposals, give_vocabularies, answer_queries, translate, max_decoded_units: max_units, ..Policy::default() };
+            if tls_cert.is_none() && !insecure_plain {
+                return Err(KuteError::InvalidConfig(NO_TRANSPORT.into()));
+            }
+            let timeout = (timeout > 0).then(|| std::time::Duration::from_secs(timeout));
             let secured = match (&tls_cert, &tls_key, &tls_client_ca) {
                 (Some(cert), Some(key), Some(ca)) => {
                     if allow.is_empty() {
@@ -271,14 +319,19 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             if secured.is_none() {
                 eprintln!("warning: no TLS. The connection is not encrypted and whoever connects is served.");
             }
-            let (tcp, from) = listener.accept()?;
-            let (stream, identity, policy): (Box<dyn Stream>, Option<String>, Policy) = match &secured {
-                Some((config, access)) => {
-                    let (stream, who) = tls::accept(config, tcp)?;
-                    let policy = access.policy_for(&who)?;
-                    (Box::new(stream), Some(who.fingerprint), policy)
+            // With TLS, a connection that fails the handshake, stalls in
+            // it, or is not allowed does not end the listener: whoever can
+            // reach the port could otherwise stop it before the allowed peer
+            // arrives.
+            let (stream, identity, policy, from): (Box<dyn Stream>, Option<String>, Policy, std::net::SocketAddr) = loop {
+                let (tcp, from) = listener.accept()?;
+                tcp.set_read_timeout(timeout)?;
+                tcp.set_write_timeout(timeout)?;
+                let Some((config, access)) = &secured else { break (Box::new(tcp), None, policy, from) };
+                match tls::accept(config, tcp).and_then(|(stream, who)| Ok((stream, access.policy_for(&who)?, who))) {
+                    Ok((stream, policy, who)) => break (Box::new(stream), Some(who.fingerprint), policy, from),
+                    Err(e) => eprintln!("refused {from}: {e}"),
                 }
-                None => (Box::new(tcp), None, policy),
             };
             let mut peer = Peer::new("kute", engine, policy);
             for path in &held {
@@ -316,7 +369,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
                 })).collect::<Vec<_>>(),
             }))
         }
-        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version, tls_cert, tls_key, tls_ca, server_name, server_fingerprint } => {
+        PeerAction::Send { connect, vocab: vocab_path, input, unknown, additions, new_version, tls_cert, tls_key, tls_ca, server_name, server_fingerprint, insecure_plain } => {
+            if tls_cert.is_none() && !insecure_plain {
+                return Err(KuteError::InvalidConfig(NO_TRANSPORT.into()));
+            }
             let policy = kute::UnknownPolicy::parse(&unknown)?;
             let mut peer = Peer::new("kute", engine, Policy::default());
             let mut digest = peer.add_vocabulary(vocab::load(&vocab_path)?)?;

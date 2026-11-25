@@ -128,24 +128,30 @@ fn two_authenticated_processes_exchange_and_an_unauthorized_one_is_refused() {
     std::fs::remove_dir_all(dir.join("received")).unwrap();
 
     // 2. A certificate from the same authority that is not listed, one from
-    //    another authority, and no certificate at all: each is refused, the
-    //    sender fails, and nothing is received.
-    let plain: Vec<&str> = Vec::new();
-    for (what, args) in [("unlisted", client("unlisted.pem", "unlisted.key")), ("stranger", client("stranger.pem", "stranger.key")), ("no TLS", plain)] {
-        let address = free_address();
-        let listener = serve(&dir, &address, &tls_serve);
+    //    another authority, no certificate at all, and a connection that
+    //    says nothing: each is refused, nothing is received, and the
+    //    listener is still there for the listed peer afterwards.
+    let address = free_address();
+    let mut with_timeout = tls_serve.to_vec();
+    with_timeout.extend_from_slice(&["--timeout", "2"]);
+    let listener = serve(&dir, &address, &with_timeout);
+    for (what, args) in [("unlisted", client("unlisted.pem", "unlisted.key")), ("stranger", client("stranger.pem", "stranger.key")), ("no TLS", vec!["--insecure-plain"])] {
         let out = send(&dir, &address, &args);
         assert!(!out.status.success(), "{what}: the sender was served");
-        let served = listener.wait_with_output().unwrap();
-        assert!(!served.status.success(), "{what}: the listener reported success");
-        let why = String::from_utf8_lossy(&served.stderr).to_string();
-        if what == "unlisted" {
-            assert!(why.contains("not authorized"), "{what}: {why}");
-        } else {
-            assert!(why.contains("tls"), "{what}: {why}");
-        }
         assert!(!dir.join("received").exists(), "{what}: something was received");
     }
+    let silent = std::net::TcpStream::connect(&address).unwrap();
+    let out = send(&dir, &address, &client("listed.pem", "listed.key"));
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    drop(silent);
+    let served = listener.wait_with_output().unwrap();
+    assert!(served.status.success(), "{}", String::from_utf8_lossy(&served.stderr));
+    let why = String::from_utf8_lossy(&served.stderr).to_string();
+    assert!(why.contains("not authorized") && why.matches("refused ").count() == 4, "{why}");
+    let served: Value = serde_json::from_slice(&served.stdout).unwrap();
+    assert_eq!(served["peer_identity"], listed.as_str());
+    assert!(dir.join("received/message-1.bin").exists());
+    std::fs::remove_dir_all(dir.join("received")).unwrap();
 
     // 3. The sender checks the server as well: the wrong fingerprint, and a
     //    server certificate from an authority the sender does not trust.
@@ -159,14 +165,20 @@ fn two_authenticated_processes_exchange_and_an_unauthorized_one_is_refused() {
     let _ = listener.wait_with_output();
     assert!(!dir.join("received").exists());
 
-    // 4. Asking for TLS without naming anyone is refused at once, and a
-    //    plain listener says on stderr that it is one.
+    // 4. Asking for TLS without naming anyone is refused at once. A plain
+    //    socket has to be asked for by name on both sides, and the listener
+    //    says on stderr that it is one.
+    for args in [vec!["peer", "serve", "--listen", "127.0.0.1:0"], vec!["peer", "send", "--connect", "127.0.0.1:9", "--vocab", "events.kvf"]] {
+        let out = kute(&dir, &args);
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("--insecure-plain"), "{}", String::from_utf8_lossy(&out.stderr));
+    }
     let out = kute(&dir, &["peer", "serve", "--listen", &free_address(), "--tls-cert", "server.pem", "--tls-key", "server.key", "--tls-client-ca", "plant-ca.pem"]);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("--allow"));
     let address = free_address();
-    let listener = serve(&dir, &address, &[]);
-    assert!(send(&dir, &address, &[]).status.success());
+    let listener = serve(&dir, &address, &["--insecure-plain"]);
+    assert!(send(&dir, &address, &["--insecure-plain"]).status.success());
     let served = listener.wait_with_output().unwrap();
     assert!(String::from_utf8_lossy(&served.stderr).contains("no TLS"));
     let served: Value = serde_json::from_slice(&served.stdout).unwrap();

@@ -54,7 +54,7 @@ fn initiator(address: std::net::SocketAddr, held: &[Vocabulary]) -> (Session<Fra
 #[test]
 fn peers_negotiate_exchange_and_extend_a_vocabulary() {
     let vocabulary = train("test:protocol:events", &CYCLE);
-    let (address, handle) = responder(Policy { accept_proposals: true, ..open() }, Vec::new());
+    let (address, handle) = responder(Policy { accept_proposals: true, answer_queries: true, translate: true, ..open() }, Vec::new());
     let (mut a, digests) = initiator(address, std::slice::from_ref(&vocabulary));
     let digest = &digests[0];
 
@@ -456,7 +456,9 @@ fn delivery_is_bounded_and_repeats_are_not_delivered_twice() {
     assert_eq!(peer.take_inbox().len(), 1, "outside the window a repeat is a new delivery");
 
     // Bytes are bounded as well as messages.
-    let mut small = ready_peer(Policy { max_inbox_bytes: raw.len() as u64 * 2, ..open() });
+    let Message::EncodedMessage { container, .. } = message(1).0 else { unreachable!() };
+    let kept = raw.len() + 4 * kute::TokenSequence::from_bytes(&container).unwrap().ids.len() + container.len();
+    let mut small = ready_peer(Policy { max_inbox_bytes: kept as u64 * 2, ..open() });
     small.add_vocabulary(vocabulary).unwrap();
     assert!(matches!(small.handle(message(1).0)[0], Message::Ack { .. }));
     assert!(matches!(small.handle(message(2).0)[0], Message::Ack { .. }));
@@ -471,7 +473,7 @@ fn delivery_is_bounded_and_repeats_are_not_delivered_twice() {
 #[test]
 fn a_container_is_refused_on_its_declared_size_before_it_is_inflated() {
     let vocabulary = train("test:protocol:inflate", &CYCLE);
-    let mut receiver = ready_peer(Policy { max_decoded_units: 1000, ..Policy::default() });
+    let mut receiver = ready_peer(Policy { max_decoded_units: 1000, translate: true, ..Policy::default() });
     let digest = receiver.add_vocabulary(vocabulary.clone()).unwrap();
     let mut sender = Peer::new("a", Engine::new(), Policy::default());
     sender.add_vocabulary(vocabulary).unwrap();
@@ -497,4 +499,82 @@ fn a_container_is_refused_on_its_declared_size_before_it_is_inflated() {
         }
     }
     assert!(receiver.take_inbox().is_empty());
+}
+
+/// Review finding: the default policy took nothing but gave everything. A
+/// peer now gives out files, answers and translations only when told to,
+/// and only for the vocabularies the other side may use.
+#[test]
+fn a_peer_gives_only_what_its_policy_says() {
+    let ours = train("test:protocol:ours", &CYCLE);
+    let private = train("test:protocol:private", &["A", "B", "A", "C"]);
+    let symbols = vec!["MOTOR_START".to_string()];
+    let mut sender = Peer::new("a", Engine::new(), Policy::default());
+    let d_ours = sender.add_vocabulary(ours.clone()).unwrap();
+    let d_private = sender.add_vocabulary(private.clone()).unwrap();
+    let container = |id: u64, digest: &str, names: &[&str]| match sender.encode_message(id, digest, &events(names), UnknownPolicy::Strict).unwrap().0 {
+        Message::EncodedMessage { container, .. } => container,
+        _ => unreachable!(),
+    };
+
+    // The default: messages are delivered, nothing else is answered.
+    let mut peer = ready_peer(Policy::default());
+    peer.add_vocabulary(ours.clone()).unwrap();
+    peer.add_vocabulary(private.clone()).unwrap();
+    assert_eq!(code(&peer.handle(Message::VocabRequest { digest: d_ours.clone() })), ErrorCode::Refused);
+    assert_eq!(code(&peer.handle(Message::SymbolQuery { digest: d_ours.clone(), symbols: symbols.clone() })), ErrorCode::Refused);
+    assert_eq!(code(&peer.handle(Message::Translate { id: 1, container: container(1, &d_ours, &CYCLE), to_digest: d_private.clone() })), ErrorCode::Refused);
+    assert!(matches!(peer.handle(Message::EncodedMessage { id: 2, container: container(2, &d_ours, &CYCLE) })[0], Message::Ack { .. }));
+
+    // Everything switched on, but for one vocabulary only: the other one
+    // is answered exactly as a vocabulary that is not held.
+    let listed = Policy { give_vocabularies: true, answer_queries: true, translate: true, vocabularies: Some([d_ours.clone()].into()), ..Policy::default() };
+    let mut peer = ready_peer(listed.clone());
+    peer.add_vocabulary(ours.clone()).unwrap();
+    let mut without = peer.handle(Message::VocabRequest { digest: d_private.clone() });
+    peer.add_vocabulary(private.clone()).unwrap();
+    assert!(matches!(peer.handle(Message::VocabRequest { digest: d_ours.clone() })[0], Message::VocabData { .. }));
+    assert!(matches!(peer.handle(Message::SymbolQuery { digest: d_ours.clone(), symbols: symbols.clone() })[0], Message::SymbolInfo { token_id: Some(_), .. }));
+    let mut with = peer.handle(Message::VocabRequest { digest: d_private.clone() });
+    assert_eq!(code(&with), ErrorCode::UnknownVocabulary);
+    assert_eq!(with.pop(), without.pop(), "held-but-hidden and not-held must be indistinguishable");
+    assert_eq!(code(&peer.handle(Message::SymbolQuery { digest: d_private.clone(), symbols: vec!["A".into()] })), ErrorCode::UnknownVocabulary);
+    assert_eq!(code(&peer.handle(Message::EncodedMessage { id: 3, container: container(3, &d_private, &["A", "B"]) })), ErrorCode::UnknownVocabulary);
+    assert_eq!(code(&peer.handle(Message::Translate { id: 4, container: container(4, &d_ours, &CYCLE), to_digest: d_private.clone() })), ErrorCode::UnknownVocabulary);
+    assert_eq!(code(&peer.handle(Message::Translate { id: 5, container: container(5, &d_private, &["A"]), to_digest: d_ours.clone() })), ErrorCode::UnknownVocabulary);
+    // Announcing the hidden one, or another under its name, says no more
+    // than "refused".
+    assert_eq!(code(&peer.handle(Message::VocabAnnounce { vocabulary: kute_protocol::VocabRef::of(&private).unwrap() })), ErrorCode::Refused);
+    assert!(peer.take_inbox().is_empty());
+
+    // A vocabulary the other side adds itself is one it may then use.
+    let mut peer = ready_peer(Policy { accept_vocabularies: true, ..listed });
+    peer.add_vocabulary(ours.clone()).unwrap();
+    assert!(matches!(give(&mut peer, &private)[0], Message::VocabAccept { .. }));
+    assert!(matches!(peer.handle(Message::EncodedMessage { id: 6, container: container(6, &d_private, &["A", "B"]) })[0], Message::Ack { .. }));
+}
+
+/// Review findings: a proposal whose version is already held with other
+/// content is a conflict and is reported as one, a repeat of the same
+/// proposal is accepted again, and the inbox budget counts what is kept.
+#[test]
+fn a_conflicting_proposal_is_a_conflict_and_the_inbox_counts_what_it_keeps() {
+    let vocabulary = train("test:protocol:conflict", &CYCLE);
+    let mut peer = ready_peer(Policy { accept_proposals: true, ..open() });
+    let digest = peer.add_vocabulary(vocabulary.clone()).unwrap();
+    let propose = |symbol: &str| Message::SymbolPropose { digest: digest.clone(), additions: vec![vec![symbol.to_string()]], version: "0.2.0".into(), rule: EVOLUTION_RULE.into() };
+    let first = peer.handle(propose("VALVE_STUCK"));
+    assert!(matches!(first[0], Message::VocabAccept { .. }));
+    assert_eq!(peer.handle(propose("VALVE_STUCK")), first, "a repeat is accepted again");
+    assert_eq!(code(&peer.handle(propose("PUMP_DRY"))), ErrorCode::VocabularyConflict);
+    assert_eq!(peer.digests().len(), 2);
+
+    let mut sender = Peer::new("a", Engine::new(), Policy::default());
+    let digest = sender.add_vocabulary(vocabulary.clone()).unwrap();
+    let raw = events(&CYCLE);
+    let (message, _) = sender.encode_message(1, &digest, &raw, UnknownPolicy::Strict).unwrap();
+    // Room for the decoded bytes alone is not room for the message.
+    let mut small = ready_peer(Policy { max_inbox_bytes: raw.len() as u64, ..Policy::default() });
+    small.add_vocabulary(vocabulary).unwrap();
+    assert_eq!(code(&small.handle(message)), ErrorCode::Busy);
 }

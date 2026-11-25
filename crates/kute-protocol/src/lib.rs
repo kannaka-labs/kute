@@ -147,10 +147,27 @@ fn refuse(code: ErrorCode, message: impl Into<String>) -> Vec<Message> {
 
 /// What a peer is willing to do for the other side.
 ///
-/// The default takes nothing new from the other side: no vocabularies and
-/// no proposals. Both have to be switched on.
+/// The default takes nothing new from the other side (no vocabularies, no
+/// proposals) and gives nothing away (no vocabulary files, no answers
+/// about symbols, no translation). It delivers messages encoded under a
+/// vocabulary this peer holds, and that is all. Everything else has to be
+/// switched on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Policy {
+    /// Send a held vocabulary's file to the other side when it asks.
+    pub give_vocabularies: bool,
+    /// Say whether a held vocabulary has a token for given symbols.
+    pub answer_queries: bool,
+    /// Re-encode the other side's sequences under another held vocabulary.
+    pub translate: bool,
+    /// The held vocabularies the other side may use at all, by digest;
+    /// `None` is every one held. One that is held but not listed is
+    /// answered as if it were not held. A vocabulary the other side adds
+    /// itself (when it may) joins the list.
+    pub vocabularies: Option<std::collections::BTreeSet<String>>,
+    /// Refuse a container that declares more tokens than this, before its
+    /// ids are decompressed. Four bytes of memory per token.
+    pub max_message_tokens: u64,
     /// Take vocabularies it does not have from the other side.
     pub accept_vocabularies: bool,
     /// Extend a held vocabulary when the other side proposes it.
@@ -167,7 +184,8 @@ pub struct Policy {
     /// Delivered messages kept until `take_inbox`. When full, a message is
     /// answered `BUSY` and not delivered.
     pub max_inbox_messages: u64,
-    /// Decoded bytes kept until `take_inbox`.
+    /// Bytes kept until `take_inbox`: for each message its decoded bytes,
+    /// its token ids at four bytes each, and its container.
     pub max_inbox_bytes: u64,
     /// How many of the latest message ids are remembered, so that a repeat
     /// gets its first receipt again instead of a second delivery.
@@ -177,6 +195,11 @@ pub struct Policy {
 impl Default for Policy {
     fn default() -> Self {
         Self {
+            give_vocabularies: false,
+            answer_queries: false,
+            translate: false,
+            vocabularies: None,
+            max_message_tokens: 16 * 1024 * 1024,
             accept_vocabularies: false,
             accept_proposals: false,
             max_frame_bytes: DEFAULT_MAX_FRAME,
@@ -302,6 +325,33 @@ impl Peer {
         self.held.get(digest).ok_or_else(|| KuteError::VocabularyMismatch(format!("no vocabulary with digest {digest} is held")))
     }
 
+    /// Whether the other side may use the vocabulary with this digest.
+    fn sees(&self, digest: &str) -> bool {
+        self.policy.vocabularies.as_ref().is_none_or(|listed| listed.contains(digest))
+    }
+
+    /// A held vocabulary, for the other side: one it may not use is
+    /// answered exactly as one that is not held.
+    fn usable(&self, digest: &str) -> Result<&Held> {
+        if !self.sees(digest) {
+            return Err(KuteError::VocabularyMismatch(format!("no vocabulary with digest {digest} is held")));
+        }
+        self.hold(digest)
+    }
+
+    /// A vocabulary the other side added is one it may use.
+    fn show(&mut self, digest: &str) {
+        if let Some(listed) = &mut self.policy.vocabularies {
+            listed.insert(digest.to_string());
+        }
+    }
+
+    /// The most tokens a container from the other side may declare. Every
+    /// token decodes to at least one unit, so the unit limit bounds it too.
+    fn token_limit(&self) -> u64 {
+        self.policy.max_message_tokens.min(self.policy.max_decoded_units)
+    }
+
     pub fn hello(&self) -> Message {
         Message::Hello { protocol: PROTOCOL_VERSION, peer: self.name.clone(), software: format!("kute {}", kute::KUTE_VERSION) }
     }
@@ -382,10 +432,18 @@ impl Peer {
     fn respond(&mut self, message: Message) -> Result<Vec<Message>> {
         match message {
             Message::VocabAnnounce { vocabulary } => {
+                let not_for_you = || Ok(refuse(ErrorCode::Refused, "this peer does not take that vocabulary from the other side"));
                 if self.held.contains_key(&vocabulary.digest) {
+                    if !self.sees(&vocabulary.digest) {
+                        return not_for_you();
+                    }
                     return Ok(vec![Message::VocabAccept { digest: vocabulary.digest }]);
                 }
-                if self.held.values().any(|h| h.vocabulary.id().as_str() == vocabulary.id && h.vocabulary.version().to_string() == vocabulary.version) {
+                if let Some(other) = self.held.values().find(|h| h.vocabulary.id().as_str() == vocabulary.id && h.vocabulary.version().to_string() == vocabulary.version) {
+                    // Only a peer that may use the other one is told it exists.
+                    if !self.sees(&other.vocabulary.digest()?) {
+                        return not_for_you();
+                    }
                     return Ok(refuse(
                         ErrorCode::VocabularyConflict,
                         format!("{} {} is held here with different content", vocabulary.id, vocabulary.version),
@@ -408,7 +466,10 @@ impl Peer {
                 Ok(vec![Message::VocabRequest { digest }])
             }
             Message::VocabRequest { digest } => {
-                let kvf = kute::vocab::to_vec(&self.hold(&digest)?.vocabulary)?;
+                if !self.policy.give_vocabularies {
+                    return Ok(refuse(ErrorCode::Refused, "this peer does not give out vocabularies"));
+                }
+                let kvf = kute::vocab::to_vec(&self.usable(&digest)?.vocabulary)?;
                 Ok(vec![Message::VocabData { digest, kvf }])
             }
             Message::VocabData { digest, kvf } => {
@@ -433,11 +494,15 @@ impl Peer {
                     return Ok(refuse(ErrorCode::Invalid, format!("the vocabulary fails its own test vectors: {}", report.failures.join("; "))));
                 }
                 let digest = self.add_vocabulary(vocabulary)?;
+                self.show(&digest);
                 Ok(vec![Message::VocabAccept { digest }])
             }
             Message::SymbolQuery { digest, symbols } => {
+                if !self.policy.answer_queries {
+                    return Ok(refuse(ErrorCode::Refused, "this peer does not answer questions about its vocabularies"));
+                }
                 let payload = TokenPayload::Symbols(symbols);
-                let token_id = self.hold(&digest)?.vocabulary.tokens.iter().find(|t| t.payload == payload).map(|t| t.id);
+                let token_id = self.usable(&digest)?.vocabulary.tokens.iter().find(|t| t.payload == payload).map(|t| t.id);
                 Ok(vec![Message::SymbolInfo { digest, token_id, content_hash: payload.content_hash() }])
             }
             Message::SymbolPropose { digest, additions, version, rule } => {
@@ -454,21 +519,34 @@ impl Peer {
                 }
                 // An addition of n symbols adds at most n symbols and n merges.
                 let most: u64 = additions.iter().map(|a| 2 * a.len() as u64).sum();
-                let parent = self.hold(&digest)?.vocabulary.len() as u64;
+                let parent = self.usable(&digest)?.vocabulary.len() as u64;
                 if parent.saturating_add(most) > self.policy.max_vocabulary_tokens {
                     return Ok(refuse(ErrorCode::TooLarge, "the proposal would pass the vocabulary token limit"));
                 }
                 if let Some(refusal) = self.over_budget(parent.saturating_add(most)) {
                     return Ok(refusal);
                 }
-                let digest = self.evolve(&digest, &additions, &version)?;
+                // The child is derived even when its id and version are
+                // already held: a repeat of the same proposal has to be
+                // accepted again, and only the derivation tells a repeat
+                // from a conflict. Its cost is bounded by the checks above.
+                let digest = match self.evolve(&digest, &additions, &version) {
+                    Ok(digest) => digest,
+                    Err(KuteError::VocabularyMismatch(why)) => return Ok(refuse(ErrorCode::VocabularyConflict, why)),
+                    Err(e) => return Err(e),
+                };
+                self.show(&digest);
                 Ok(vec![Message::VocabAccept { digest }])
             }
             Message::Translate { id, container, to_digest } => {
-                // Every token decodes to at least one unit, so a container
-                // that declares more tokens than the unit limit is over it,
-                // and is refused before its ids are decompressed.
-                let sequence = TokenSequence::from_bytes_bounded(&container, self.policy.max_decoded_units)?;
+                if !self.policy.translate {
+                    return Ok(refuse(ErrorCode::Refused, "this peer does not translate for the other side"));
+                }
+                // A container that declares more tokens than the limit is
+                // refused before its ids are decompressed.
+                let sequence = TokenSequence::from_bytes_bounded(&container, self.token_limit())?;
+                self.usable(&sequence.vocabulary_digest)?;
+                self.usable(&to_digest)?;
                 let translated = self.translate(&sequence, &to_digest)?;
                 Ok(vec![Message::EncodedMessage { id, container: translated.to_bytes_compressed()? }])
             }
@@ -487,15 +565,18 @@ impl Peer {
                 if self.inbox.len() as u64 >= self.policy.max_inbox_messages {
                     return Ok(refuse(ErrorCode::Busy, format!("the inbox holds {} messages, its limit", self.inbox.len())));
                 }
-                let sequence = TokenSequence::from_bytes_bounded(&container, self.policy.max_decoded_units)?;
-                let held = self.hold(&sequence.vocabulary_digest)?;
+                let sequence = TokenSequence::from_bytes_bounded(&container, self.token_limit())?;
+                let held = self.usable(&sequence.vocabulary_digest)?;
                 let units = kute::decoded_units(&held.vocabulary, &sequence)?;
                 let bytes = self.engine.decode_raw_bounded(held.tokenizer.as_ref(), &sequence, self.policy.max_decoded_units)?;
-                if self.inbox_bytes.saturating_add(bytes.len() as u64) > self.policy.max_inbox_bytes {
+                // What the inbox keeps for this message: the decoded bytes
+                // and the sequence (ids, and the escapes the container holds).
+                let kept = (bytes.len() as u64).saturating_add(4 * sequence.ids.len() as u64).saturating_add(container.len() as u64);
+                if self.inbox_bytes.saturating_add(kept) > self.policy.max_inbox_bytes {
                     return Ok(refuse(ErrorCode::Busy, format!("the inbox holds {} bytes and takes at most {}", self.inbox_bytes, self.policy.max_inbox_bytes)));
                 }
                 let receipt = Message::Ack { id, units, sha256: sha256_hex(&bytes) };
-                self.inbox_bytes += bytes.len() as u64;
+                self.inbox_bytes += kept;
                 self.inbox.push(Delivered { id, sequence, bytes });
                 self.seen.push_back((id, fingerprint, receipt.clone()));
                 while self.seen.len() as u64 > self.policy.replay_window {
