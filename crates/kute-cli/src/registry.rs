@@ -383,7 +383,12 @@ pub fn mirror(engine: &Engine, from: &[String], dir: &Path, trusted: &[String], 
     let mut failures = Vec::new();
     let mut not_tried = 0usize;
     let mut total = 0u64;
-    for (at, digest) in digests.iter().enumerate() {
+    // Counted where a vocabulary is asked for, not by its place in the
+    // listing: what is already there takes none of a run's allowance,
+    // or the run after one that stopped at the limit would stop at the
+    // same place.
+    let mut asked = 0usize;
+    for digest in &digests {
         let target = dir.join(format!("{}.kvf", &digest["sha256:".len()..]));
         let mut replace = false;
         if target.exists() {
@@ -405,10 +410,11 @@ pub fn mirror(engine: &Engine, from: &[String], dir: &Path, trusted: &[String], 
                 }
             }
         }
-        if at >= limits.max_files || total >= limits.max_total_bytes {
+        if asked >= limits.max_files || total >= limits.max_total_bytes {
             not_tried += 1;
             continue;
         }
+        asked += 1;
         match fetch(engine, from, digest, &target, trusted, replace, limits.max_bytes, timeout) {
             Ok(report) => {
                 total += report["bytes_received"].as_u64().unwrap_or(0);

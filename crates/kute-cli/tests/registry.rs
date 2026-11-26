@@ -244,6 +244,13 @@ fn a_mirror_takes_everything_listed_checks_each_file_and_deletes_nothing() {
     let report: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!((out.status.success(), report["written"].as_array().unwrap().len(), report["already_there"].clone()), (true, 1, json!(1)), "{report}");
 
+    // The same limit on the next run takes the next one: what is already there uses none of it.
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "steps", "--max-files", "1"]);
+    assert!(!out.status.success());
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "steps", "--max-files", "1"]);
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!((out.status.success(), report["written"].as_array().unwrap().len(), report["already_there"].clone(), report["not_tried"].clone()), (true, 1, json!(1), json!(0)), "{report}");
+
     // A registry that cannot be reached makes the run incomplete, and what the other holds is still taken.
     let out = kute(&dir, &["fetch", "--from", "http://127.0.0.1:1", "--from", &url, "--mirror", "two", "--timeout", "5"]);
     assert!(!out.status.success());
