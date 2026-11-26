@@ -96,6 +96,9 @@ not covered.
 - Rust, `kute-cli` as a library: `http::Options` has a new field,
   `jobs` (`None` is the service as it was). `kute serve --jobs-dir` is
   new and off unless given.
+- Rust, `kute-discover`: `HeldOutPattern` has a new field,
+  `evidence_bits`. Code that builds one by naming its fields needs it;
+  JSON written before reads with the field absent.
 - Studio has a ninth view, Jobs, between Peer and Reports. Anything
   that picks a view by its position needs the new order.
 - **Python `kute.signals_unpack` reads at most 16,777,216 values by

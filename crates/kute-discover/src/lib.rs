@@ -152,7 +152,14 @@ pub struct HeldOutPattern {
     /// occurs there.
     pub cohesion_bits: Option<f64>,
     /// Occurs at least twice in the held-out data with positive cohesion.
+    /// That is a low bar: twice is enough. Weigh it by `support` or
+    /// `evidence_bits`.
     pub confirmed: bool,
+    /// Support times cohesion on the held-out data alone, the measure
+    /// patterns are ranked by where they were found. `None` when the
+    /// pattern does not occur there.
+    #[serde(default)]
+    pub evidence_bits: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -561,7 +568,7 @@ pub fn evaluate(discovery: &Discovery, held_out: &[Vec<String>]) -> Result<Evalu
         };
         let ok = support >= 2 && bits.is_some_and(|b| b > 0.0);
         confirmed += ok as u64;
-        patterns.push(HeldOutPattern { pattern: i, support, cohesion_bits: bits, confirmed: ok });
+        patterns.push(HeldOutPattern { pattern: i, support, cohesion_bits: bits, confirmed: ok, evidence_bits: bits.map(|b| support as f64 * b) });
     }
     Ok(Evaluation {
         held_out: observe(held_out),

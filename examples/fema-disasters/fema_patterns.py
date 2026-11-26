@@ -73,6 +73,7 @@ def reading(entities, params):
         "cohesion_bits": round(p["cohesion_bits"], 3), "evidence_bits": round(p["evidence_bits"], 1),
         "median_days": days(found["timing"], i),
         "held_out_support": after[i]["support"], "held_out_confirmed": after[i]["confirmed"],
+        "held_out_evidence_bits": None if after[i].get("evidence_bits") is None else round(after[i]["evidence_bits"], 1),
         "held_out_median_days": days(found["held_out_timing"], i),
     } for i, p in enumerate(found["patterns"])]
     return {

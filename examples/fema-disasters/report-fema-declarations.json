@@ -54,6 +54,7 @@
     "median_days": 360,
     "held_out_support": 1071,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 1420.6,
     "held_out_median_days": 354
    },
    {
@@ -69,6 +70,7 @@
     "median_days": 8,
     "held_out_support": 474,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 2232.2,
     "held_out_median_days": 5
    },
    {
@@ -84,6 +86,7 @@
     "median_days": 298,
     "held_out_support": 132,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -157.6,
     "held_out_median_days": 1215
    },
    {
@@ -99,6 +102,7 @@
     "median_days": 1024,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -114,6 +118,7 @@
     "median_days": 3,
     "held_out_support": 1986,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 4403.6,
     "held_out_median_days": 5
    },
    {
@@ -131,6 +136,7 @@
     "median_days": 131,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -147,6 +153,7 @@
     "median_days": 1104,
     "held_out_support": 49,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -62.2,
     "held_out_median_days": 2214
    },
    {
@@ -162,6 +169,7 @@
     "median_days": 105,
     "held_out_support": 403,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 1308.8,
     "held_out_median_days": 67
    },
    {
@@ -177,6 +185,7 @@
     "median_days": 1417,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -193,6 +202,7 @@
     "median_days": 22,
     "held_out_support": 418,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 180.5,
     "held_out_median_days": 409
    },
    {
@@ -209,6 +219,7 @@
     "median_days": 348,
     "held_out_support": 2,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -5.7,
     "held_out_median_days": 3264
    },
    {
@@ -226,6 +237,7 @@
     "median_days": 3864,
     "held_out_support": 63,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 89.8,
     "held_out_median_days": 3420
    },
    {
@@ -241,6 +253,7 @@
     "median_days": 109,
     "held_out_support": 9,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -18.8,
     "held_out_median_days": 332
    },
    {
@@ -257,6 +270,7 @@
     "median_days": 385,
     "held_out_support": 574,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 797.5,
     "held_out_median_days": 394
    },
    {
@@ -272,6 +286,7 @@
     "median_days": 184,
     "held_out_support": 122,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -30.8,
     "held_out_median_days": 1832
    },
    {
@@ -289,6 +304,7 @@
     "median_days": 1140,
     "held_out_support": 1,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -2.5,
     "held_out_median_days": 2214
    },
    {
@@ -306,6 +322,7 @@
     "median_days": 1259,
     "held_out_support": 72,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -74.7,
     "held_out_median_days": 2328
    },
    {
@@ -321,6 +338,7 @@
     "median_days": 793,
     "held_out_support": 2,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 3.4,
     "held_out_median_days": 311
    },
    {
@@ -337,6 +355,7 @@
     "median_days": 1033,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -354,6 +373,7 @@
     "median_days": 905,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -371,6 +391,7 @@
     "median_days": 2215,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -387,6 +408,7 @@
     "median_days": 328,
     "held_out_support": 191,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 672.0,
     "held_out_median_days": 398
    },
    {
@@ -403,6 +425,7 @@
     "median_days": 2212,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -418,6 +441,7 @@
     "median_days": 668,
     "held_out_support": 50,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 91.2,
     "held_out_median_days": 70
    },
    {
@@ -434,6 +458,7 @@
     "median_days": 3203,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -449,6 +474,7 @@
     "median_days": 359,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -464,6 +490,7 @@
     "median_days": 51,
     "held_out_support": 660,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 685.0,
     "held_out_median_days": 26
    },
    {
@@ -480,6 +507,7 @@
     "median_days": 3885,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -495,6 +523,7 @@
     "median_days": 2193,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -512,6 +541,7 @@
     "median_days": 28,
     "held_out_support": 469,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 732.0,
     "held_out_median_days": 401
    },
    {
@@ -528,6 +558,7 @@
     "median_days": 2617,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -544,6 +575,7 @@
     "median_days": 2182,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -560,6 +592,7 @@
     "median_days": 793,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -575,6 +608,7 @@
     "median_days": 301,
     "held_out_support": 58,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 117.1,
     "held_out_median_days": 342
    },
    {
@@ -592,6 +626,7 @@
     "median_days": 902,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -607,6 +642,7 @@
     "median_days": 335,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -622,6 +658,7 @@
     "median_days": 10,
     "held_out_support": 35,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 149.3,
     "held_out_median_days": 2
    },
    {
@@ -638,6 +675,7 @@
     "median_days": 2176,
     "held_out_support": 6,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -14.0,
     "held_out_median_days": 2964
    },
    {
@@ -655,6 +693,7 @@
     "median_days": 966,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -671,6 +710,7 @@
     "median_days": 823,
     "held_out_support": 14,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -28.8,
     "held_out_median_days": 1682
    },
    {
@@ -687,6 +727,7 @@
     "median_days": 262,
     "held_out_support": 113,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -20.1,
     "held_out_median_days": 1837
    },
    {
@@ -702,6 +743,7 @@
     "median_days": 16,
     "held_out_support": 149,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 503.7,
     "held_out_median_days": 36
    },
    {
@@ -717,6 +759,7 @@
     "median_days": 370,
     "held_out_support": 13,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 36.9,
     "held_out_median_days": 0
    },
    {
@@ -734,6 +777,7 @@
     "median_days": 331,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -749,6 +793,7 @@
     "median_days": 369,
     "held_out_support": 38,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 88.8,
     "held_out_median_days": 3516
    },
    {
@@ -765,6 +810,7 @@
     "median_days": 496,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -781,6 +827,7 @@
     "median_days": 2547,
     "held_out_support": 1,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -3.6,
     "held_out_median_days": 1874
    },
    {
@@ -798,6 +845,7 @@
     "median_days": 3967,
     "held_out_support": 7,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 8.1,
     "held_out_median_days": 1257
    },
    {
@@ -815,6 +863,7 @@
     "median_days": 5962,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -832,6 +881,7 @@
     "median_days": 1096,
     "held_out_support": 285,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 434.9,
     "held_out_median_days": 1056
    },
    {
@@ -848,6 +898,7 @@
     "median_days": 2564,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -865,6 +916,7 @@
     "median_days": 2583,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -882,6 +934,7 @@
     "median_days": 3290,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -898,6 +951,7 @@
     "median_days": 1236,
     "held_out_support": 1,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -4.3,
     "held_out_median_days": 3883
    },
    {
@@ -915,6 +969,7 @@
     "median_days": 1693,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -932,6 +987,7 @@
     "median_days": 1244,
     "held_out_support": 1,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -4.1,
     "held_out_median_days": 3888
    },
    {
@@ -949,6 +1005,7 @@
     "median_days": 4420,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -965,6 +1022,7 @@
     "median_days": 1312,
     "held_out_support": 17,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -10.2,
     "held_out_median_days": 1282
    },
    {
@@ -980,6 +1038,7 @@
     "median_days": 187,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -996,6 +1055,7 @@
     "median_days": 5717,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1012,6 +1072,7 @@
     "median_days": 1033,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1029,6 +1090,7 @@
     "median_days": 1234,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1045,6 +1107,7 @@
     "median_days": 387,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1062,6 +1125,7 @@
     "median_days": 874,
     "held_out_support": 3,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -11.2,
     "held_out_median_days": 1715
    },
    {
@@ -1077,6 +1141,7 @@
     "median_days": 944,
     "held_out_support": 9,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 15.1,
     "held_out_median_days": 349
    },
    {
@@ -1092,6 +1157,7 @@
     "median_days": 2208,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1108,6 +1174,7 @@
     "median_days": 709,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1125,6 +1192,7 @@
     "median_days": 464,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1142,6 +1210,7 @@
     "median_days": 1067,
     "held_out_support": 29,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -32.7,
     "held_out_median_days": 2216
    },
    {
@@ -1159,6 +1228,7 @@
     "median_days": 1312,
     "held_out_support": 4,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -4.8,
     "held_out_median_days": 2425
    },
    {
@@ -1176,6 +1246,7 @@
     "median_days": 2186,
     "held_out_support": 3,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -5.9,
     "held_out_median_days": 3229
    },
    {
@@ -1192,6 +1263,7 @@
     "median_days": 613,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1209,6 +1281,7 @@
     "median_days": 1445,
     "held_out_support": 16,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -16.2,
     "held_out_median_days": 2214
    },
    {
@@ -1225,6 +1298,7 @@
     "median_days": 1914,
     "held_out_support": 5,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -10.1,
     "held_out_median_days": 363
    },
    {
@@ -1242,6 +1316,7 @@
     "median_days": 514,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1259,6 +1334,7 @@
     "median_days": 3717,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1275,6 +1351,7 @@
     "median_days": 1693,
     "held_out_support": 7,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -14.1,
     "held_out_median_days": 2088
    },
    {
@@ -1291,6 +1368,7 @@
     "median_days": 976,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1306,6 +1384,7 @@
     "median_days": 127,
     "held_out_support": 2,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -12.6,
     "held_out_median_days": 367
    },
    {
@@ -1321,6 +1400,7 @@
     "median_days": 355,
     "held_out_support": 443,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 823.6,
     "held_out_median_days": 339
    },
    {
@@ -1336,6 +1416,7 @@
     "median_days": 415,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1351,6 +1432,7 @@
     "median_days": 793,
     "held_out_support": 4,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 4.5,
     "held_out_median_days": 395
    },
    {
@@ -1366,6 +1448,7 @@
     "median_days": 400,
     "held_out_support": 9,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -23.1,
     "held_out_median_days": 58
    },
    {
@@ -1381,6 +1464,7 @@
     "median_days": 938,
     "held_out_support": 5,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -2.6,
     "held_out_median_days": 349
    },
    {
@@ -1396,6 +1480,7 @@
     "median_days": 1046,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": 1866
    },
    {
@@ -1411,6 +1496,7 @@
     "median_days": 1425,
     "held_out_support": 155,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -198.1,
     "held_out_median_days": 706
    },
    {
@@ -1426,6 +1512,7 @@
     "median_days": 1700,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1441,6 +1528,7 @@
     "median_days": 1829,
     "held_out_support": 7,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -16.1,
     "held_out_median_days": 1547
    },
    {
@@ -1456,6 +1544,7 @@
     "median_days": 330,
     "held_out_support": 74,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 62.6,
     "held_out_median_days": 753
    },
    {
@@ -1471,6 +1560,7 @@
     "median_days": 2324,
     "held_out_support": 13,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 36.9,
     "held_out_median_days": 7
    },
    {
@@ -1486,6 +1576,7 @@
     "median_days": 3076,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1501,6 +1592,7 @@
     "median_days": 10446,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1516,6 +1608,7 @@
     "median_days": 711,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1531,6 +1624,7 @@
     "median_days": 1249,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1546,6 +1640,7 @@
     "median_days": 1050,
     "held_out_support": 7,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 4.6,
     "held_out_median_days": 306
    },
    {
@@ -1561,6 +1656,7 @@
     "median_days": 335,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1576,6 +1672,7 @@
     "median_days": 2617,
     "held_out_support": 39,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -41.3,
     "held_out_median_days": 799
    },
    {
@@ -1591,6 +1688,7 @@
     "median_days": 2308,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1606,6 +1704,7 @@
     "median_days": 1734,
     "held_out_support": 1,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -0.4,
     "held_out_median_days": 1774
    }
   ]
@@ -1658,6 +1757,7 @@
     "median_days": 4,
     "held_out_support": 646,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 619.0,
     "held_out_median_days": 5
    },
    {
@@ -1674,6 +1774,7 @@
     "median_days": 12,
     "held_out_support": 516,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 520.9,
     "held_out_median_days": 15
    },
    {
@@ -1691,6 +1792,7 @@
     "median_days": 19,
     "held_out_support": 417,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 428.0,
     "held_out_median_days": 24
    },
    {
@@ -1706,6 +1808,7 @@
     "median_days": 361,
     "held_out_support": 54,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 63.3,
     "held_out_median_days": 149
    },
    {
@@ -1721,6 +1824,7 @@
     "median_days": 150,
     "held_out_support": 207,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 202.6,
     "held_out_median_days": 88
    },
    {
@@ -1737,6 +1841,7 @@
     "median_days": 970,
     "held_out_support": 16,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 23.6,
     "held_out_median_days": 510
    },
    {
@@ -1753,6 +1858,7 @@
     "median_days": 383,
     "held_out_support": 99,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 109.0,
     "held_out_median_days": 292
    },
    {
@@ -1770,6 +1876,7 @@
     "median_days": 1420,
     "held_out_support": 8,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 17.8,
     "held_out_median_days": 1656
    },
    {
@@ -1785,6 +1892,7 @@
     "median_days": 345,
     "held_out_support": 2,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 11.4,
     "held_out_median_days": 1214
    },
    {
@@ -1801,6 +1909,7 @@
     "median_days": 1149,
     "held_out_support": 1,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": 6.9,
     "held_out_median_days": 1432
    },
    {
@@ -1818,6 +1927,7 @@
     "median_days": 525,
     "held_out_support": 47,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 51.2,
     "held_out_median_days": 343
    },
    {
@@ -1835,6 +1945,7 @@
     "median_days": 1829,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1850,6 +1961,7 @@
     "median_days": 342,
     "held_out_support": 10,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 7.3,
     "held_out_median_days": 52
    },
    {
@@ -1865,6 +1977,7 @@
     "median_days": 3,
     "held_out_support": 75,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 278.4,
     "held_out_median_days": 7
    },
    {
@@ -1880,6 +1993,7 @@
     "median_days": 258,
     "held_out_support": 2,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 4.9,
     "held_out_median_days": 1780
    },
    {
@@ -1895,6 +2009,7 @@
     "median_days": 338,
     "held_out_support": 23,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 46.1,
     "held_out_median_days": 322
    },
    {
@@ -1911,6 +2026,7 @@
     "median_days": 793,
     "held_out_support": 4,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 8.9,
     "held_out_median_days": 391
    },
    {
@@ -1927,6 +2043,7 @@
     "median_days": 1045,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1942,6 +2059,7 @@
     "median_days": 474,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1958,6 +2076,7 @@
     "median_days": 841,
     "held_out_support": 1,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": 0.2,
     "held_out_median_days": 2323
    },
    {
@@ -1975,6 +2094,7 @@
     "median_days": 1382,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -1990,6 +2110,7 @@
     "median_days": 713,
     "held_out_support": 51,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 80.0,
     "held_out_median_days": 375
    },
    {
@@ -2005,6 +2126,7 @@
     "median_days": 1196,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -2020,6 +2142,7 @@
     "median_days": 374,
     "held_out_support": 43,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 60.1,
     "held_out_median_days": 388
    },
    {
@@ -2035,6 +2158,7 @@
     "median_days": 470,
     "held_out_support": 5,
     "held_out_confirmed": true,
+    "held_out_evidence_bits": 10.9,
     "held_out_median_days": 531
    },
    {
@@ -2050,6 +2174,7 @@
     "median_days": 358,
     "held_out_support": 0,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": null,
     "held_out_median_days": null
    },
    {
@@ -2065,6 +2190,7 @@
     "median_days": 707,
     "held_out_support": 8,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -0.3,
     "held_out_median_days": 389
    },
    {
@@ -2080,6 +2206,7 @@
     "median_days": 577,
     "held_out_support": 16,
     "held_out_confirmed": false,
+    "held_out_evidence_bits": -0.8,
     "held_out_median_days": 289
    }
   ]

@@ -89,7 +89,9 @@ partly a count.
   with another sequence miner.
 * "Confirmed" is `kute.discover`'s own test on the held-out records, and
   it passes a pattern seen twice (`DR:Typhoon` then `DR:Typhoon` by
-  state). Read the held-out counts, not the word.
+  state, held-out evidence 11 bits, against 4,404 bits for the hurricane
+  pair by county). Read the held-out counts and `held_out_evidence_bits`
+  in the report, not the word.
 * No claim is made about disasters. Declarations are decisions by an
   agency, and their rules changed over seventy years.
 
