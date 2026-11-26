@@ -195,6 +195,79 @@ fn a_vocabulary_is_fetched_by_digest_and_kept_only_if_it_is_that_one() {
 }
 
 #[test]
+fn a_mirror_takes_everything_listed_checks_each_file_and_deletes_nothing() {
+    let dir = scratch("registry-mirror");
+    let (signed, other, ours, theirs) = prepare(&dir);
+    let registry = Service::start(&dir, &["--vocab", "signed.kvf", "--vocab", "other.kvf", "--registry"]);
+    let url = registry.url();
+    let name = |digest: &str| format!("{}.kvf", &digest["sha256:".len()..]);
+
+    let first = ok(&dir, &["fetch", "--from", &url, "--mirror", "copy"]);
+    assert_eq!((first["listed"].clone(), first["written"].as_array().unwrap().len(), first["already_there"].clone(), first["complete"].clone()), (json!(2), 2, json!(0), json!(true)), "{first}");
+    for digest in [&signed, &other] {
+        assert_eq!(ok(&dir, &["inspect", &format!("copy/{}", name(digest))])["summary"]["digest"], json!(digest));
+    }
+    assert_eq!(ok(&dir, &["verify", "--vocab", &format!("copy/{}", name(&signed)), "--trusted-key", &ours])["verified"], true, "a signature travels with the file");
+    // Again: nothing is asked for twice.
+    let again = ok(&dir, &["fetch", "--from", &url, "--mirror", "copy"]);
+    assert_eq!((again["written"].as_array().unwrap().len(), again["already_there"].clone(), again["bytes_written"].clone()), (0, json!(2), json!(0)), "{again}");
+
+    // A file under a digest's name that is not that vocabulary is left alone, and the run fails.
+    std::fs::copy(dir.join("other.kvf"), dir.join("copy").join(name(&signed))).unwrap();
+    std::fs::write(dir.join("copy/mine.txt"), "kept").unwrap();
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "copy"]);
+    assert!(!out.status.success());
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!((report["complete"].clone(), report["failed"].as_array().unwrap().len()), (json!(false), 1), "{report}");
+    assert!(report["failed"][0]["why"].as_str().unwrap().contains("left as it is"), "{report}");
+    assert_eq!(ok(&dir, &["inspect", &format!("copy/{}", name(&signed))])["summary"]["digest"], json!(other), "the wrong file is still the wrong file");
+    assert_eq!(std::fs::read_to_string(dir.join("copy/mine.txt")).unwrap(), "kept");
+    assert!(fails(&dir, &["fetch", "--from", &url, "--mirror", "copy", "--force"]).contains("not for a mirror"));
+
+    // With a trusted key only what that key signed is kept; the rest is reported.
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "trusted", "--trusted-key", &ours]);
+    assert!(!out.status.success());
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!((report["written"].as_array().unwrap().len(), report["failed"].as_array().unwrap().len()), (1, 1), "{report}");
+    assert_eq!(report["written"][0]["digest"], json!(signed));
+    assert!(!dir.join("trusted").join(name(&other)).exists());
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "nobody", "--trusted-key", &theirs]);
+    assert!(!out.status.success());
+    assert_eq!(std::fs::read_dir(dir.join("nobody")).unwrap().count(), 0, "nothing that key did not sign is written");
+
+    // One run takes no more than it was allowed, says so, and the next goes on.
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "slow", "--max-files", "1"]);
+    assert!(!out.status.success());
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!((report["written"].as_array().unwrap().len(), report["not_tried"].clone()), (1, json!(1)), "{report}");
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "slow", "--max-total-bytes", "1"]);
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!((out.status.success(), report["written"].as_array().unwrap().len(), report["already_there"].clone()), (true, 1, json!(1)), "{report}");
+
+    // A registry that cannot be reached makes the run incomplete, and what the other holds is still taken.
+    let out = kute(&dir, &["fetch", "--from", "http://127.0.0.1:1", "--from", &url, "--mirror", "two", "--timeout", "5"]);
+    assert!(!out.status.success());
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(report["registries"][0]["error"].is_string() && report["registries"][1]["listed"] == json!(2), "{report}");
+    assert_eq!(report["written"].as_array().unwrap().len(), 2, "{report}");
+
+    // A listing is the other side's: names that are not digests are counted and never asked for or written.
+    let listing = json!({ "vocabularies": [{ "digest": "../../outside" }, { "digest": format!("sha256:{}", "A".repeat(64)) }, { "id": "no digest" }, "text"] }).to_string();
+    let liar = impostor(with_length(listing.as_bytes()), 1);
+    let report = ok(&dir, &["fetch", "--from", &liar, "--mirror", "liar"]);
+    assert_eq!((report["listed"].clone(), report["listed_without_a_digest"].clone()), (json!(0), json!(4)), "{report}");
+    assert_eq!(std::fs::read_dir(dir.join("liar")).unwrap().count(), 0);
+    assert!(!dir.join("outside.kvf").exists() && !dir.parent().unwrap().join("outside.kvf").exists());
+    // And one that lists a digest it then answers with something else: nothing is written.
+    let listing = json!({ "vocabularies": [{ "digest": format!("sha256:{}", "0".repeat(64)) }] }).to_string();
+    let liar = impostor(with_length(listing.as_bytes()), 2);
+    let out = kute(&dir, &["fetch", "--from", &liar, "--mirror", "liar2"]);
+    assert!(!out.status.success());
+    assert_eq!(std::fs::read_dir(dir.join("liar2")).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_registry_exists_only_when_asked_for_and_can_be_all_there_is() {
     let dir = scratch("registry-modes");
     let (signed, _, _, _) = prepare(&dir);

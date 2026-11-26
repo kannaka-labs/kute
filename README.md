@@ -215,7 +215,9 @@ Added in v0.8 (each has a doc under `docs/` and a record in
 * After 0.9.3, on `next`: a training job that is still waiting can be
   withdrawn (`DELETE /v1/jobs/{id}`), and `kute job` gives a job from
   the command line, waits, and keeps the file only if its content is
-  what the service named.
+  what the service named. `kute fetch --mirror DIR` copies everything a
+  registry lists, each file checked as a single fetch is; nothing in
+  the directory is deleted or replaced.
 * Since 0.9.3, `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
@@ -228,7 +230,7 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   --studio --peer-status` shows it, a second or two old. It is the
   peer's own account; a killed peer is shown as not running after a few
   seconds. `docs/studio.md`.
-* Not built: discovery or mirroring of registries, uploads to one, TLS for
+* Not built: discovery of registries, uploads to one, TLS for
   the HTTP service, expiry or revocation of keys,
   learned representations.
 

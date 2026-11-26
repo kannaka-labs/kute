@@ -445,11 +445,24 @@ enum Command {
         #[arg(long, required = true)]
         from: Vec<String>,
         /// The vocabulary wanted: sha256: and 64 hex digits.
-        #[arg(long, required_unless_present = "list", conflicts_with = "list")]
+        #[arg(long, required_unless_present_any = ["list", "mirror"], conflicts_with_all = ["list", "mirror"])]
         digest: Option<String>,
         /// Where to write it.
-        #[arg(long, required_unless_present = "list")]
+        #[arg(long, required_unless_present_any = ["list", "mirror"], conflicts_with = "mirror")]
         output: Option<PathBuf>,
+        /// Bring every vocabulary the registries say they hold into this
+        /// directory, each checked as one fetched by digest is, each
+        /// named by its digest. Files already there and right are kept;
+        /// nothing is deleted. Ends with an error if anything listed
+        /// is not there afterwards.
+        #[arg(long, value_name = "DIR", conflicts_with = "list")]
+        mirror: Option<PathBuf>,
+        /// With --mirror: vocabularies taken in one run, at most.
+        #[arg(long, default_value_t = 1024, requires = "mirror")]
+        max_files: usize,
+        /// With --mirror: bytes written in one run, at most.
+        #[arg(long, default_value_t = 1 << 30, requires = "mirror")]
+        max_total_bytes: u64,
         /// Keep the vocabulary only if one of these keys signed it (the
         /// base64 public key `kute keygen` prints). Repeatable.
         #[arg(long = "trusted-key", value_name = "BASE64")]
@@ -1667,8 +1680,16 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
         Command::Job { at, input, id, vocab_version, algorithm, adapter, adapter_options, vocab_size, min_frequency, output, force, wait, max_bytes } => {
             print(&job::run(&engine, job::Ask { at, input, id, vocab_version, algorithm, adapter, adapter_options, vocab_size, min_frequency, output, force, wait: std::time::Duration::from_secs(wait), max_bytes })?)
         }
-        Command::Fetch { from, digest, output, trusted_keys, force, list, max_bytes, timeout } => {
+        Command::Fetch { from, digest, output, mirror, max_files, max_total_bytes, trusted_keys, force, list, max_bytes, timeout } => {
             let timeout = std::time::Duration::from_secs(timeout.max(1));
+            if let Some(dir) = mirror {
+                if force {
+                    return Err(KuteError::InvalidConfig("--force is not for a mirror: a file there that is not the vocabulary its name says is left alone and reported".into()));
+                }
+                let (report, complete) = registry::mirror(&engine, &from, &dir, &trusted_keys, &registry::MirrorLimits { max_files, max_total_bytes, max_bytes }, timeout)?;
+                print(&report)?;
+                return if complete { Ok(()) } else { Err(KuteError::Integrity("the mirror is not complete; the report says what is missing and why".into())) };
+            }
             match (list, digest, output) {
                 (true, _, _) => print(&registry::list(&from, timeout)?),
                 (false, Some(digest), Some(output)) => print(&registry::fetch(&engine, &from, &digest, &output, &trusted_keys, force, max_bytes, timeout)?),

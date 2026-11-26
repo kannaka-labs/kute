@@ -1239,6 +1239,11 @@ repeats another's listing.
   the registry passes on what came and the client's own check is the
   only one, which was already true of a single registry.
 
+(After 0.9.3 a client can copy what a registry lists, `kute fetch
+--mirror`: the client's own checks on each file, so no registry is
+trusted more for it, and it never deletes, so a registry that stops
+listing a file cannot make a mirror lose it.)
+
 Not built: discovery of registries, mirroring, anything written to
 disk, refresh or expiry of kept files, TLS, a registry vouching for
 another. The failure this leaves: a registry with no key of its own,

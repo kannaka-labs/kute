@@ -202,9 +202,43 @@ What it does not do:
   another's listing, so there is no listing to believe at second hand.
 * Nothing is written to disk, nothing is refreshed, and nothing is
   announced: a registry learns of a vocabulary only by being asked for
-  its digest. There is no discovery of registries, no mirroring of a
-  whole registry, and no agreement between registries about anything.
+  its digest. There is no discovery of registries and no agreement
+  between registries about anything. A registry does not mirror
+  another; a client can, after 0.9.3 (below).
 * Upstream connections are plain HTTP, as every other connection here.
+
+### A copy of everything a registry lists (after 0.9.3)
+
+```
+kute fetch --from http://registry:8787 --mirror DIR [--trusted-key BASE64]
+```
+
+asks each registry what it holds and brings every vocabulary listed
+into `DIR`, as `<64 hex digits of the digest>.kvf`. Each file is fetched
+by digest and checked exactly as a single fetch is: the digest computed
+from the content, the file's own test vectors, and with `--trusted-key`
+a signature by one of those keys. Run again, it asks only for what is
+not there.
+
+* The listing is the registries' word and is used only to know what to
+  ask for. A name in it that is not a digest is counted and never asked
+  for; a registry can leave out what it holds, and nothing can show that.
+* Nothing is deleted and nothing is replaced. A file no registry lists
+  any more stays. A file under a digest's name that is not that
+  vocabulary is left as it is and reported, and `--force` is refused.
+  The one replacement: with `--trusted-key`, a file with the right
+  content and no trusted signature is fetched again, since signatures
+  are not part of the digest.
+* One run takes at most `--max-files` (1024) vocabularies and stops
+  asking once `--max-total-bytes` (1 GiB) have been written; each file
+  is at most `--max-bytes`. What was not tried is counted, and the next
+  run goes on from there.
+* The report is printed either way. The command ends with an error
+  unless every vocabulary listed is in the directory afterwards and
+  every registry answered.
+* It is a copy made once, by hand or by a scheduler. Nothing watches
+  the registry, and `kute serve` does not serve a directory: the files
+  are named to it with `--vocab`.
 
 ## Training jobs (0.9.3)
 

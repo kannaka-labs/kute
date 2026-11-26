@@ -315,6 +315,134 @@ pub fn fetch(engine: &Engine, from: &[String], digest: &str, output: &Path, trus
     Err(KuteError::Integrity(format!("nothing was written. {}", said.join(" | "))))
 }
 
+/// What a mirror may take.
+pub struct MirrorLimits {
+    /// Vocabularies asked for, at most. A listing is the other side's
+    /// and can be as long as it likes.
+    pub max_files: usize,
+    /// Bytes written in one run, at most. The file that passes it is
+    /// kept and nothing after it is asked for.
+    pub max_total_bytes: u64,
+    /// Largest single file, as for a fetch.
+    pub max_bytes: u64,
+}
+
+/// Bring every vocabulary the registries say they hold into `dir`, each
+/// as `<64 hex digits>.kvf`, each fetched and checked as `fetch` does.
+/// A file already there with the right content is kept and not asked
+/// for. Nothing is ever deleted, and a file there under a digest's name
+/// that is not that vocabulary is left alone and reported.
+///
+/// Returns the report, and whether everything listed is now in `dir`.
+pub fn mirror(engine: &Engine, from: &[String], dir: &Path, trusted: &[String], limits: &MirrorLimits, timeout: Duration) -> kute::Result<(Value, bool)> {
+    let gate = if trusted.is_empty() { None } else { Some(sign::gate(trusted)?) };
+    for registry in from {
+        parse_url(registry)?;
+    }
+    std::fs::create_dir_all(dir)?;
+    // What each says it holds. A listing is not believed about content,
+    // only about what to ask for.
+    let mut complete = true;
+    let mut registries = Vec::new();
+    let mut digests: Vec<String> = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut not_digests = 0usize;
+    for registry in from {
+        let listed = (|| -> kute::Result<Vec<Value>> {
+            let (authority, base) = parse_url(registry)?;
+            let (status, body) = get(&authority, &format!("{base}{LIST_PATH}"), MAX_LISTING_BYTES, timeout, false)?;
+            if status != 200 {
+                return Err(refusal(status, &body));
+            }
+            let listing: Value = serde_json::from_slice(&body).map_err(|_| failed("the listing is not JSON"))?;
+            listing["vocabularies"].as_array().cloned().ok_or_else(|| failed("the listing names no vocabularies"))
+        })();
+        match listed {
+            Ok(rows) => {
+                for row in &rows {
+                    match row["digest"].as_str().filter(|d| is_digest(d)) {
+                        Some(digest) => {
+                            if seen.insert(digest.to_string()) {
+                                digests.push(digest.to_string());
+                            }
+                        }
+                        None => not_digests += 1,
+                    }
+                }
+                registries.push(json!({ "registry": registry, "listed": rows.len() }));
+            }
+            Err(e) => {
+                complete = false;
+                registries.push(json!({ "registry": registry, "error": e.to_string() }));
+            }
+        }
+    }
+    let listed = digests.len();
+    let mut written = Vec::new();
+    let mut already_there = 0usize;
+    let mut failures = Vec::new();
+    let mut not_tried = 0usize;
+    let mut total = 0u64;
+    for (at, digest) in digests.iter().enumerate() {
+        let target = dir.join(format!("{}.kvf", &digest["sha256:".len()..]));
+        let mut replace = false;
+        if target.exists() {
+            let there = vocab::load(&target).and_then(|v| Ok((v.compute_digest()?, v)));
+            match there {
+                Ok((held, vocabulary)) if held == *digest => {
+                    if gate.as_ref().is_none_or(|gate| gate(&vocabulary).is_ok()) {
+                        already_there += 1;
+                        continue;
+                    }
+                    // The right content with no trusted signature on it:
+                    // a registry may have a signed copy.
+                    replace = true;
+                }
+                _ => {
+                    complete = false;
+                    failures.push(json!({ "digest": digest, "why": format!("{} is there and is not that vocabulary; it was left as it is", target.display()) }));
+                    continue;
+                }
+            }
+        }
+        if at >= limits.max_files || total >= limits.max_total_bytes {
+            not_tried += 1;
+            continue;
+        }
+        match fetch(engine, from, digest, &target, trusted, replace, limits.max_bytes, timeout) {
+            Ok(report) => {
+                total += report["bytes_received"].as_u64().unwrap_or(0);
+                written.push(json!({ "digest": digest, "id": report["id"], "version": report["version"], "bytes": report["bytes_received"], "registry": report["registry"], "file": target }));
+            }
+            Err(e) => {
+                complete = false;
+                failures.push(json!({ "digest": digest, "why": e.to_string() }));
+            }
+        }
+    }
+    if not_tried > 0 {
+        complete = false;
+    }
+    Ok((
+        json!({
+            "mirror": dir,
+            "registries": registries,
+            "listed": listed,
+            "listed_without_a_digest": not_digests,
+            "written": written,
+            "bytes_written": total,
+            "already_there": already_there,
+            "failed": failures,
+            "not_tried": not_tried,
+            "not_tried_because": if not_tried > 0 { json!(format!("this run takes at most {} vocabularies and {} bytes (--max-files, --max-total-bytes); run it again to go on", limits.max_files, limits.max_total_bytes)) } else { Value::Null },
+            "complete": complete,
+            "signature": if gate.is_some() { "every file written or kept carries a signature by a trusted key over its content" } else { "not checked: no --trusted-key was given" },
+            "means": "every file written, and every file counted as already there, holds the content its name says and passes its own test vectors. What there was to mirror is the registries' word: one can leave out what it holds. Nothing was deleted: a file in the directory that no registry lists any more is still there.",
+        }),
+        complete,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
