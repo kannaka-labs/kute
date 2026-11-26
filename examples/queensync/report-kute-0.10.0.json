@@ -2,7 +2,7 @@
  "synthetic": true,
  "language_model_calls": 0,
  "seed": 20261125,
- "kute_version": "kute 0.9.4",
+ "kute_version": "kute 0.10.0",
  "settings": {
   "train_tasks": 400,
   "observe_tasks": 300,
@@ -22,7 +22,7 @@
  },
  "patterns_proposed": 32,
  "vocabulary_files": {
-  "base_bytes": 64122,
+  "base_bytes": 64123,
   "candidate_bytes": 69089
  },
  "shadow": {
@@ -35,7 +35,7 @@
    "container_bytes_saved_on_inputs": 120.0,
    "container_ratio": 0.9989500393735234,
    "distribution_cost_bytes": 69089.0,
-   "encode_slowdown": 1.035,
+   "encode_slowdown": 1.033,
    "inputs_larger": 46,
    "inputs_smaller": 154,
    "inputs_unchanged": 100,
@@ -46,8 +46,8 @@
   }
  },
  "distribution": {
-  "first_contact_socket_bytes": 86766,
-  "proposal_socket_bytes": 2068,
+  "first_contact_socket_bytes": 86772,
+  "proposal_socket_bytes": 2070,
   "same_digest_on_both_sides": true,
   "negotiation_ran_because": "forced, to exercise the path: the decision was reject and a deployment would not have negotiated",
   "signed": {
@@ -56,21 +56,21 @@
      "worker_took_the_vocabulary": false,
      "tasks_completed": 0,
      "tasks_sent": 100,
-     "socket_bytes": 93431,
+     "socket_bytes": 93433,
      "sender_was_told": "kute: backend error: the peer answered Refused: the vocabulary is not taken: it carries no signature, and this peer requires one from a key it trusts"
     },
     "signed_by_a_stranger": {
      "worker_took_the_vocabulary": false,
      "tasks_completed": 0,
      "tasks_sent": 100,
-     "socket_bytes": 93780,
+     "socket_bytes": 93782,
      "sender_was_told": "kute: backend error: the peer answered Refused: the vocabulary is not taken: none of its signatures is a valid one from a key this peer trusts"
     },
     "signed_by_the_queen": {
      "worker_took_the_vocabulary": true,
      "tasks_completed": 100,
      "tasks_sent": 100,
-     "socket_bytes": 161062,
+     "socket_bytes": 161064,
      "sender_was_told": "",
      "digest_equals_the_unsigned_candidate": true,
      "what_the_worker_kept_verifies": true
@@ -79,21 +79,21 @@
      "worker_took_the_vocabulary": false,
      "tasks_completed": 0,
      "tasks_sent": 100,
-     "socket_bytes": 2130,
+     "socket_bytes": 2132,
      "sender_was_told": "kute: backend error: the peer answered Refused: this peer takes only vocabularies that pass its check, and this proposal carries no signature of the vocabulary it derives"
     },
     "proposed_and_signed_by_a_stranger": {
      "worker_took_the_vocabulary": false,
      "tasks_completed": 0,
      "tasks_sent": 100,
-     "socket_bytes": 2337,
+     "socket_bytes": 2339,
      "sender_was_told": "kute: backend error: the peer answered Refused: the proposed vocabulary is not taken: none of its signatures is a valid one from a key this peer trusts"
     },
     "proposed_and_signed_by_the_queen": {
      "worker_took_the_vocabulary": true,
      "tasks_completed": 100,
      "tasks_sent": 100,
-     "socket_bytes": 69610,
+     "socket_bytes": 69612,
      "sender_was_told": "",
      "digest_equals_the_unsigned_candidate": true,
      "what_the_worker_kept_verifies": true
@@ -108,10 +108,10 @@
    "tasks": 1000,
    "completed": 1000,
    "completion_rate": 1.0,
-   "socket_bytes": 701060,
-   "socket_bytes_per_completed_task": 701.06,
+   "socket_bytes": 701080,
+   "socket_bytes_per_completed_task": 701.08,
    "escaped_symbols": 72,
-   "seconds_per_batch_of_100": 1.292,
+   "seconds_per_batch_of_100": 1.119,
    "container_bytes_one_task_each": {
     "compressed": 391941,
     "plain": 383043,
@@ -123,10 +123,10 @@
    "tasks": 1000,
    "completed": 1000,
    "completion_rate": 1.0,
-   "socket_bytes": 700468,
-   "socket_bytes_per_completed_task": 700.47,
+   "socket_bytes": 700488,
+   "socket_bytes_per_completed_task": 700.49,
    "escaped_symbols": 72,
-   "seconds_per_batch_of_100": 1.186,
+   "seconds_per_batch_of_100": 1.125,
    "container_bytes_one_task_each": {
     "compressed": 391463,
     "plain": 383043,
@@ -149,11 +149,11 @@
   "escaped_symbols": 72
  },
  "recovery": {
-  "dropped_after_bytes": 28151,
+  "dropped_after_bytes": 28152,
   "sender_reported_failure": true,
   "tasks_delivered_by_the_dropped_connection": 0,
   "tasks_delivered_on_sending_again": 100,
-  "bytes_spent_on_the_dropped_connection": 28310,
+  "bytes_spent_on_the_dropped_connection": 28312,
   "resumes_part_way": false
  },
  "llm_tokens": "not measured: no language model is called. Each agent reads the decoded message, which is byte for byte the message that was sent, so a model reading it would be given the same text whichever vocabulary carried it. Fewer bytes between agents is not fewer model tokens."

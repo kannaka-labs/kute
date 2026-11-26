@@ -28,7 +28,7 @@ and refuses to start on any other address unless `--insecure-remote` is
 given. With that flag, anyone who can reach the address can use it. To
 put it on a network, give it certificates, as below.
 
-### Over TLS (after 0.9.4)
+### Over TLS (0.10)
 
 ```
 kute serve --vocab file.kvf --listen 0.0.0.0:8787 \
@@ -130,7 +130,7 @@ One request per connection: every answer carries `Connection: close`.
 Started with `--registry`, the service also gives the files of the
 vocabularies it was started with to whoever asks. It is off unless asked
 for, and without it these paths answer 404. With `--jobs-dir` as well
-(after 0.9.4) it gives what its jobs trained too, as soon as a job is
+(0.10) it gives what its jobs trained too, as soon as a job is
 done: see "Training jobs".
 
 | request | answer |
@@ -396,7 +396,7 @@ What it does not do:
 * Jobs are not kept across a restart. The files are.
 * With `--registry`, a vocabulary a job made is listed under
   `/v1/vocabularies` and given by its digest as soon as the job is done
-  (after 0.9.4), with `trained_by` naming the job, and for as long as
+  (0.10), with `trained_by` naming the job, and for as long as
   the service runs: not only while the job is among the 64 remembered.
   (Up to 4,096 such vocabularies; past that the oldest is no longer
   given.) At this service that adds no reader: whoever can ask the

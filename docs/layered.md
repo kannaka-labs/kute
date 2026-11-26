@@ -121,8 +121,8 @@ and then compressing is worse than compressing without it.
 
 KVF stays flat (ADR-0046). The child-of-a-parent relation that `kute
 evolve` and `kute peer send --propose` already give is the only layering
-in the engine: a proposal of 32 additions crossed the wire in 2,068
-bytes in `examples/queensync` against 86,766 for the vocabulary.
+in the engine: a proposal of 32 additions crossed the wire in 2,070
+bytes in `examples/queensync` against 86,772 for the vocabulary.
 
 That layering is not a row in the table above, and could not be:
 `kute evolve` is defined for event vocabularies (`sequence-bpe`), and

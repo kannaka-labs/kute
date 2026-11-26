@@ -158,7 +158,7 @@ was sent is the service's word; `kute train` on the same input gives the
 digest to compare.
 
 Being a registry too, the service gives the file by its digest as
-soon as the job is done (after 0.9.4). Its own operations do
+soon as the job is done (0.10). Its own operations do
 not use what it trained until it is started again: what a service
 encodes with is what its operator started it with. After a
 restart with the same command, `example:service` can be named to
@@ -174,7 +174,7 @@ arrived. The mirror never deletes, so a file the first service stops
 listing stays in the copy. `docs/http.md` has the limits of each step
 and what none of them does.
 
-## 7. The same service for other machines, over TLS (after 0.9.4)
+## 7. The same service for other machines, over TLS (0.10)
 
 The sixth case is for one machine. To let named callers on other
 machines use it, the service and each caller get a certificate from an
