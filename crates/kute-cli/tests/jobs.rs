@@ -224,6 +224,35 @@ fn what_a_job_may_ask_is_bounded_and_nothing_else_can_be_done_to_one() {
     }
 }
 
+/// A vocabulary larger than the whole limit fits no directory. It fails,
+/// and the jobs after it that do fit are still taken: one job cannot
+/// close the door on a directory with room in it.
+#[test]
+fn a_vocabulary_larger_than_the_whole_limit_does_not_stop_the_jobs_after_it() {
+    let dir = scratch("jobs-too-large");
+    let job = |id: &str, vocab_size: u32| json!({ "texts": [TEXT.repeat(30)], "vocabulary_id": id, "vocab_size": vocab_size });
+    let (large, small) = {
+        let service = Service::start(&dir, &["--jobs-dir", "sizes"]);
+        let size = |id: &str, vocab_size: u32| {
+            let (status, taken) = service.post("/v1/jobs", &job(id, vocab_size));
+            assert_eq!(status, 202, "{taken}");
+            service.finished(taken["id"].as_str().unwrap())["result"]["file_bytes"].as_u64().unwrap()
+        };
+        (size("test:large", 300), size("test:small", 256))
+    };
+    assert!(small < large, "{small} {large}");
+    let limit = (large - 1).to_string();
+    let service = Service::start(&dir, &["--jobs-dir", "made", "--jobs-max-dir-bytes", &limit]);
+    let (status, taken) = service.post("/v1/jobs", &job("test:large", 300));
+    assert_eq!(status, 202, "{taken}");
+    let failed = service.finished(taken["id"].as_str().unwrap());
+    assert_eq!(failed["state"], "failed", "{failed}");
+    assert_eq!(service.get("/v1/jobs").1["directory"]["bytes"], 0);
+    let (status, taken) = service.post("/v1/jobs", &job("test:small", 256));
+    assert_eq!(status, 202, "the directory is empty and this one fits: {taken}");
+    assert_eq!(service.finished(taken["id"].as_str().unwrap())["state"], "done");
+}
+
 #[test]
 fn the_directory_holds_no_more_than_its_operator_allowed() {
     let dir = scratch("jobs-room");

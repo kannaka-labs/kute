@@ -358,7 +358,13 @@ impl Jobs {
         if !path.exists() {
             let (_, held) = self.held()?;
             if held.saturating_add(bytes.len() as u64) > self.limits.max_dir_bytes {
-                self.lock().did_not_fit = bytes.len() as u64;
+                // Remembered only when making room could help. A
+                // vocabulary larger than the whole limit fits no
+                // directory, even an empty one: remembering it would
+                // refuse every later job, however small, until a restart.
+                if bytes.len() as u64 <= self.limits.max_dir_bytes {
+                    self.lock().did_not_fit = bytes.len() as u64;
+                }
                 return Err(KuteError::LimitExceeded(format!("the vocabulary is {} bytes; the jobs directory holds {held} and may hold {}", bytes.len(), self.limits.max_dir_bytes)));
             }
         }
