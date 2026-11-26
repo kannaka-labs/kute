@@ -104,6 +104,12 @@ fn broke(e: &std::io::Error, secure: bool) -> KuteError {
         let why: String = e.to_string().chars().filter(|c| !c.is_control()).take(200).collect();
         return failed(format!("the service ended the TLS connection before a complete answer: {why}. If that names a certificate, it is this side's that was not accepted"));
     }
+    // The alert does not always arrive: a service that closes while this
+    // side's request is still unread resets the connection, and the alert
+    // is lost with it (seen on Windows in CI, once).
+    if secure && matches!(e.kind(), std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted) {
+        return failed(format!("the connection failed before a complete answer: {}. Over TLS a service that does not accept this side's certificate can end it this way, with its reason lost", e.kind()));
+    }
     failed(format!("the connection failed before a complete answer: {}", e.kind()))
 }
 

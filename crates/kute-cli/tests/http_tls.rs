@@ -157,7 +157,8 @@ fn a_service_over_tls_answers_a_caller_with_a_certificate_and_nobody_else() {
     // A certificate from an authority the service was not given. The service
     // says why in an alert, and the caller is told (found in review: it was "invalid data").
     let said = nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "b.kvf", "--tls-cert", "outsider.pem", "--tls-key", "outsider.key", "--tls-ca", "ours.pem"], "b.kvf");
-    assert!(said.contains("this side's that was not accepted"), "{said}");
+    // The alert can be lost to a reset (seen in CI on Windows); the caller is then told that much.
+    assert!(said.contains("this side's that was not accepted") || said.contains("does not accept this side's certificate"), "{said}");
     // A caller that believes another authority does not believe this service.
     assert!(nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "c.kvf", "--tls-cert", "caller.pem", "--tls-key", "caller.key", "--tls-ca", "theirs.pem"], "c.kvf").contains("tls"));
     // The certificate is for 127.0.0.1, and not for any other name of the same machine.
