@@ -1,0 +1,2087 @@
+{
+ "data": "OpenFEMA Disaster Declarations Summaries v2 (real data; the API is live, so a later fetch has more rows)",
+ "file_sha256": "38594ce9291f8fcc5a3b98e089c9d9e98ef4b3db96e314e7008eec6b0b243c2b",
+ "rows": 70607,
+ "left_out": "incidentType Biological",
+ "split": "2010-01-01",
+ "shuffle_seeds": 10,
+ "kute": "0.9.2",
+ "by_county": {
+  "params": {
+   "examples": 3,
+   "max_candidates": 4000000,
+   "max_length": 4,
+   "max_patterns": 200,
+   "min_cohesion_bits": 1.0,
+   "min_support": 50,
+   "window": 4
+  },
+  "entities": 3263,
+  "events": 61698,
+  "searched_records": 3223,
+  "searched_events": 36654,
+  "held_out_records": 2932,
+  "held_out_events": 24808,
+  "distinct_symbols_searched": 33,
+  "patterns_found": 99,
+  "patterns_in_shuffled_control": [
+   24,
+   25,
+   22,
+   23,
+   24,
+   23,
+   23,
+   22,
+   26,
+   24
+  ],
+  "patterns_in_shuffled_control_mean": 23.6,
+  "held_out_confirmed": 25,
+  "coverage_searched": 0.4267,
+  "coverage_held_out": 0.3432,
+  "patterns": [
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 996,
+    "records": 803,
+    "cohesion_bits": 1.582,
+    "evidence_bits": 1575.3,
+    "median_days": 360,
+    "held_out_support": 1071,
+    "held_out_confirmed": true,
+    "held_out_median_days": 354
+   },
+   {
+    "symbols": [
+     "EM:Severe Ice Storm",
+     "DR:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 275,
+    "records": 262,
+    "cohesion_bits": 4.086,
+    "evidence_bits": 1123.5,
+    "median_days": 8,
+    "held_out_support": 474,
+    "held_out_confirmed": true,
+    "held_out_median_days": 5
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 766,
+    "records": 415,
+    "cohesion_bits": 1.452,
+    "evidence_bits": 1111.9,
+    "median_days": 298,
+    "held_out_support": 132,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1215
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "DR:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 388,
+    "records": 380,
+    "cohesion_bits": 2.799,
+    "evidence_bits": 1086.0,
+    "median_days": 1024,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 776,
+    "records": 539,
+    "cohesion_bits": 1.221,
+    "evidence_bits": 947.9,
+    "median_days": 3,
+    "held_out_support": 1986,
+    "held_out_confirmed": true,
+    "held_out_median_days": 5
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane",
+     "DR:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 245,
+    "records": 245,
+    "cohesion_bits": 3.267,
+    "evidence_bits": 800.5,
+    "median_days": 131,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 350,
+    "records": 328,
+    "cohesion_bits": 2.007,
+    "evidence_bits": 702.5,
+    "median_days": 1104,
+    "held_out_support": 49,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2214
+   },
+   {
+    "symbols": [
+     "FM:Fire",
+     "FM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 202,
+    "records": 91,
+    "cohesion_bits": 3.447,
+    "evidence_bits": 696.3,
+    "median_days": 105,
+    "held_out_support": 403,
+    "held_out_confirmed": true,
+    "held_out_median_days": 67
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "EM:Drought"
+    ],
+    "kind": "contiguous",
+    "support": 559,
+    "records": 556,
+    "cohesion_bits": 1.186,
+    "evidence_bits": 662.8,
+    "median_days": 1417,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 309,
+    "records": 271,
+    "cohesion_bits": 1.939,
+    "evidence_bits": 599.1,
+    "median_days": 22,
+    "held_out_support": 418,
+    "held_out_confirmed": true,
+    "held_out_median_days": 409
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 271,
+    "records": 183,
+    "cohesion_bits": 2.017,
+    "evidence_bits": 546.6,
+    "median_days": 348,
+    "held_out_support": 2,
+    "held_out_confirmed": false,
+    "held_out_median_days": 3264
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 497,
+    "records": 250,
+    "cohesion_bits": 1.037,
+    "evidence_bits": 515.2,
+    "median_days": 3864,
+    "held_out_support": 63,
+    "held_out_confirmed": true,
+    "held_out_median_days": 3420
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 248,
+    "records": 248,
+    "cohesion_bits": 2.021,
+    "evidence_bits": 501.2,
+    "median_days": 109,
+    "held_out_support": 9,
+    "held_out_confirmed": false,
+    "held_out_median_days": 332
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 289,
+    "records": 196,
+    "cohesion_bits": 1.731,
+    "evidence_bits": 500.2,
+    "median_days": 385,
+    "held_out_support": 574,
+    "held_out_confirmed": true,
+    "held_out_median_days": 394
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 400,
+    "records": 305,
+    "cohesion_bits": 1.093,
+    "evidence_bits": 437.4,
+    "median_days": 184,
+    "held_out_support": 122,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1832
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 173,
+    "records": 171,
+    "cohesion_bits": 2.499,
+    "evidence_bits": 432.4,
+    "median_days": 1140,
+    "held_out_support": 1,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2214
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "DR:Severe Storm",
+     "DR:Severe Storm",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 410,
+    "records": 410,
+    "cohesion_bits": 1.016,
+    "evidence_bits": 416.4,
+    "median_days": 1259,
+    "held_out_support": 72,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2328
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "EM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 123,
+    "records": 123,
+    "cohesion_bits": 3.289,
+    "evidence_bits": 404.5,
+    "median_days": 793,
+    "held_out_support": 2,
+    "held_out_confirmed": true,
+    "held_out_median_days": 311
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "DR:Snowstorm",
+     "DR:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 112,
+    "records": 112,
+    "cohesion_bits": 3.464,
+    "evidence_bits": 387.9,
+    "median_days": 1033,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Hurricane",
+     "DR:Fire",
+     "EM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 118,
+    "records": 118,
+    "cohesion_bits": 3.267,
+    "evidence_bits": 385.5,
+    "median_days": 905,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Fire",
+     "EM:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 113,
+    "records": 111,
+    "cohesion_bits": 3.37,
+    "evidence_bits": 380.9,
+    "median_days": 2215,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "FM:Fire",
+     "FM:Fire",
+     "FM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 87,
+    "records": 36,
+    "cohesion_bits": 4.26,
+    "evidence_bits": 370.6,
+    "median_days": 328,
+    "held_out_support": 191,
+    "held_out_confirmed": true,
+    "held_out_median_days": 398
+   },
+   {
+    "symbols": [
+     "EM:Fire",
+     "EM:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 125,
+    "records": 121,
+    "cohesion_bits": 2.709,
+    "evidence_bits": 338.7,
+    "median_days": 2212,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Snowstorm",
+     "DR:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 137,
+    "records": 137,
+    "cohesion_bits": 2.449,
+    "evidence_bits": 335.5,
+    "median_days": 668,
+    "held_out_support": 50,
+    "held_out_confirmed": true,
+    "held_out_median_days": 70
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "EM:Snowstorm",
+     "DR:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 221,
+    "records": 221,
+    "cohesion_bits": 1.477,
+    "evidence_bits": 326.4,
+    "median_days": 3203,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "EM:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 277,
+    "records": 212,
+    "cohesion_bits": 1.161,
+    "evidence_bits": 321.5,
+    "median_days": 359,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Severe Storm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 220,
+    "records": 220,
+    "cohesion_bits": 1.266,
+    "evidence_bits": 278.5,
+    "median_days": 51,
+    "held_out_support": 660,
+    "held_out_confirmed": true,
+    "held_out_median_days": 26
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "EM:Drought",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 243,
+    "records": 241,
+    "cohesion_bits": 1.087,
+    "evidence_bits": 264.2,
+    "median_days": 3885,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Fire",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 184,
+    "records": 178,
+    "cohesion_bits": 1.424,
+    "evidence_bits": 262.1,
+    "median_days": 2193,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 126,
+    "records": 85,
+    "cohesion_bits": 2.07,
+    "evidence_bits": 260.8,
+    "median_days": 28,
+    "held_out_support": 469,
+    "held_out_confirmed": true,
+    "held_out_median_days": 401
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood",
+     "EM:Drought"
+    ],
+    "kind": "contiguous",
+    "support": 233,
+    "records": 233,
+    "cohesion_bits": 1.026,
+    "evidence_bits": 239.2,
+    "median_days": 2617,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Drought",
+     "DR:Severe Storm",
+     "EM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 79,
+    "records": 79,
+    "cohesion_bits": 2.969,
+    "evidence_bits": 234.5,
+    "median_days": 2182,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "DR:Severe Storm",
+     "EM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 66,
+    "records": 66,
+    "cohesion_bits": 3.49,
+    "evidence_bits": 230.3,
+    "median_days": 793,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "FM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 89,
+    "records": 86,
+    "cohesion_bits": 2.502,
+    "evidence_bits": 222.7,
+    "median_days": 301,
+    "held_out_support": 58,
+    "held_out_confirmed": true,
+    "held_out_median_days": 342
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Fire",
+     "DR:Severe Storm",
+     "EM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 62,
+    "records": 62,
+    "cohesion_bits": 3.426,
+    "evidence_bits": 212.4,
+    "median_days": 902,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Other",
+     "DR:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 58,
+    "records": 58,
+    "cohesion_bits": 3.446,
+    "evidence_bits": 199.9,
+    "median_days": 335,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "FM:Fire",
+     "EM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 80,
+    "records": 79,
+    "cohesion_bits": 2.431,
+    "evidence_bits": 194.5,
+    "median_days": 10,
+    "held_out_support": 35,
+    "held_out_confirmed": true,
+    "held_out_median_days": 2
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Severe Storm",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 130,
+    "records": 124,
+    "cohesion_bits": 1.438,
+    "evidence_bits": 186.9,
+    "median_days": 2176,
+    "held_out_support": 6,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2964
+   },
+   {
+    "symbols": [
+     "EM:Other",
+     "EM:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 53,
+    "records": 53,
+    "cohesion_bits": 3.516,
+    "evidence_bits": 186.3,
+    "median_days": 966,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Severe Storm",
+     "EM:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 80,
+    "records": 80,
+    "cohesion_bits": 2.295,
+    "evidence_bits": 183.6,
+    "median_days": 823,
+    "held_out_support": 14,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1682
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Severe Ice Storm",
+     "DR:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 168,
+    "records": 163,
+    "cohesion_bits": 1.022,
+    "evidence_bits": 171.6,
+    "median_days": 262,
+    "held_out_support": 113,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1837
+   },
+   {
+    "symbols": [
+     "FM:Fire",
+     "DR:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 74,
+    "records": 70,
+    "cohesion_bits": 2.235,
+    "evidence_bits": 165.4,
+    "median_days": 16,
+    "held_out_support": 149,
+    "held_out_confirmed": true,
+    "held_out_median_days": 36
+   },
+   {
+    "symbols": [
+     "EM:Fire",
+     "FM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 71,
+    "records": 69,
+    "cohesion_bits": 2.259,
+    "evidence_bits": 160.4,
+    "median_days": 370,
+    "held_out_support": 13,
+    "held_out_confirmed": true,
+    "held_out_median_days": 0
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 86,
+    "records": 62,
+    "cohesion_bits": 1.86,
+    "evidence_bits": 160.0,
+    "median_days": 331,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 65,
+    "records": 65,
+    "cohesion_bits": 2.452,
+    "evidence_bits": 159.4,
+    "median_days": 369,
+    "held_out_support": 38,
+    "held_out_confirmed": true,
+    "held_out_median_days": 3516
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Fire",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 53,
+    "records": 53,
+    "cohesion_bits": 2.973,
+    "evidence_bits": 157.6,
+    "median_days": 496,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Flood",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 95,
+    "records": 81,
+    "cohesion_bits": 1.614,
+    "evidence_bits": 153.3,
+    "median_days": 2547,
+    "held_out_support": 1,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1874
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Hurricane",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 96,
+    "records": 75,
+    "cohesion_bits": 1.561,
+    "evidence_bits": 149.9,
+    "median_days": 3967,
+    "held_out_support": 7,
+    "held_out_confirmed": true,
+    "held_out_median_days": 1257
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood",
+     "EM:Snowstorm",
+     "DR:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 113,
+    "records": 113,
+    "cohesion_bits": 1.321,
+    "evidence_bits": 149.3,
+    "median_days": 5962,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 91,
+    "records": 71,
+    "cohesion_bits": 1.6,
+    "evidence_bits": 145.6,
+    "median_days": 1096,
+    "held_out_support": 285,
+    "held_out_confirmed": true,
+    "held_out_median_days": 1056
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Fire",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 121,
+    "records": 120,
+    "cohesion_bits": 1.128,
+    "evidence_bits": 136.5,
+    "median_days": 2564,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Fire",
+     "EM:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 98,
+    "records": 98,
+    "cohesion_bits": 1.382,
+    "evidence_bits": 135.4,
+    "median_days": 2583,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Flood",
+     "DR:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 52,
+    "records": 52,
+    "cohesion_bits": 2.573,
+    "evidence_bits": 133.8,
+    "median_days": 3290,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Severe Storm",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 101,
+    "records": 101,
+    "cohesion_bits": 1.282,
+    "evidence_bits": 129.4,
+    "median_days": 1236,
+    "held_out_support": 1,
+    "held_out_confirmed": false,
+    "held_out_median_days": 3883
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Hurricane",
+     "DR:Severe Storm",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 86,
+    "records": 86,
+    "cohesion_bits": 1.501,
+    "evidence_bits": 129.1,
+    "median_days": 1693,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Severe Storm",
+     "EM:Severe Ice Storm",
+     "DR:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 66,
+    "records": 66,
+    "cohesion_bits": 1.919,
+    "evidence_bits": 126.7,
+    "median_days": 1244,
+    "held_out_support": 1,
+    "held_out_confirmed": false,
+    "held_out_median_days": 3888
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Hurricane",
+     "DR:Flood",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 66,
+    "records": 55,
+    "cohesion_bits": 1.764,
+    "evidence_bits": 116.4,
+    "median_days": 4420,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Severe Ice Storm",
+     "DR:Severe Storm",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 96,
+    "records": 96,
+    "cohesion_bits": 1.212,
+    "evidence_bits": 116.3,
+    "median_days": 1312,
+    "held_out_support": 17,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1282
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "EM:Other"
+    ],
+    "kind": "contiguous",
+    "support": 59,
+    "records": 57,
+    "cohesion_bits": 1.863,
+    "evidence_bits": 109.9,
+    "median_days": 187,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Drought",
+     "DR:Flood",
+     "EM:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 75,
+    "records": 75,
+    "cohesion_bits": 1.46,
+    "evidence_bits": 109.5,
+    "median_days": 5717,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "DR:Severe Storm",
+     "DR:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 58,
+    "records": 58,
+    "cohesion_bits": 1.817,
+    "evidence_bits": 105.4,
+    "median_days": 1033,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Hurricane",
+     "EM:Snowstorm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 77,
+    "records": 77,
+    "cohesion_bits": 1.356,
+    "evidence_bits": 104.4,
+    "median_days": 1234,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "EM:Severe Ice Storm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 62,
+    "records": 62,
+    "cohesion_bits": 1.664,
+    "evidence_bits": 103.2,
+    "median_days": 387,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Severe Storm",
+     "EM:Severe Storm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 67,
+    "records": 67,
+    "cohesion_bits": 1.477,
+    "evidence_bits": 98.9,
+    "median_days": 874,
+    "held_out_support": 3,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1715
+   },
+   {
+    "symbols": [
+     "EM:Other",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 73,
+    "records": 73,
+    "cohesion_bits": 1.333,
+    "evidence_bits": 97.3,
+    "median_days": 944,
+    "held_out_support": 9,
+    "held_out_confirmed": true,
+    "held_out_median_days": 349
+   },
+   {
+    "symbols": [
+     "DR:Drought",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 55,
+    "records": 55,
+    "cohesion_bits": 1.767,
+    "evidence_bits": 97.2,
+    "median_days": 2208,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "EM:Snowstorm",
+     "EM:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 54,
+    "records": 36,
+    "cohesion_bits": 1.746,
+    "evidence_bits": 94.3,
+    "median_days": 709,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Snowstorm",
+     "DR:Severe Storm",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 86,
+    "records": 86,
+    "cohesion_bits": 1.082,
+    "evidence_bits": 93.1,
+    "median_days": 464,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 73,
+    "records": 72,
+    "cohesion_bits": 1.255,
+    "evidence_bits": 91.6,
+    "median_days": 1067,
+    "held_out_support": 29,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2216
+   },
+   {
+    "symbols": [
+     "DR:Severe Ice Storm",
+     "DR:Severe Storm",
+     "DR:Severe Storm",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 55,
+    "records": 55,
+    "cohesion_bits": 1.65,
+    "evidence_bits": 90.8,
+    "median_days": 1312,
+    "held_out_support": 4,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2425
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Severe Storm",
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 65,
+    "records": 65,
+    "cohesion_bits": 1.363,
+    "evidence_bits": 88.6,
+    "median_days": 2186,
+    "held_out_support": 3,
+    "held_out_confirmed": false,
+    "held_out_median_days": 3229
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "EM:Snowstorm",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 68,
+    "records": 68,
+    "cohesion_bits": 1.241,
+    "evidence_bits": 84.4,
+    "median_days": 613,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane",
+     "EM:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 77,
+    "records": 73,
+    "cohesion_bits": 1.083,
+    "evidence_bits": 83.4,
+    "median_days": 1445,
+    "held_out_support": 16,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2214
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Severe Ice Storm",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 67,
+    "records": 67,
+    "cohesion_bits": 1.236,
+    "evidence_bits": 82.8,
+    "median_days": 1914,
+    "held_out_support": 5,
+    "held_out_confirmed": false,
+    "held_out_median_days": 363
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Fire",
+     "EM:Severe Ice Storm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 50,
+    "records": 50,
+    "cohesion_bits": 1.649,
+    "evidence_bits": 82.4,
+    "median_days": 514,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "EM:Snowstorm",
+     "DR:Snowstorm",
+     "DR:Snowstorm"
+    ],
+    "kind": "contiguous",
+    "support": 59,
+    "records": 59,
+    "cohesion_bits": 1.364,
+    "evidence_bits": 80.5,
+    "median_days": 3717,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Hurricane",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "contiguous",
+    "support": 54,
+    "records": 54,
+    "cohesion_bits": 1.238,
+    "evidence_bits": 66.8,
+    "median_days": 1693,
+    "held_out_support": 7,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2088
+   },
+   {
+    "symbols": [
+     "DR:Severe Ice Storm",
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 54,
+    "records": 54,
+    "cohesion_bits": 1.06,
+    "evidence_bits": 57.3,
+    "median_days": 976,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Fire"
+    ],
+    "kind": "gapped",
+    "support": 528,
+    "records": 274,
+    "cohesion_bits": 1.305,
+    "evidence_bits": 689.1,
+    "median_days": 127,
+    "held_out_support": 2,
+    "held_out_confirmed": false,
+    "held_out_median_days": 367
+   },
+   {
+    "symbols": [
+     "FM:Fire",
+     "FM:Fire"
+    ],
+    "kind": "gapped",
+    "support": 272,
+    "records": 123,
+    "cohesion_bits": 2.324,
+    "evidence_bits": 632.1,
+    "median_days": 355,
+    "held_out_support": 443,
+    "held_out_confirmed": true,
+    "held_out_median_days": 339
+   },
+   {
+    "symbols": [
+     "EM:Severe Ice Storm",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "gapped",
+    "support": 167,
+    "records": 163,
+    "cohesion_bits": 2.419,
+    "evidence_bits": 403.9,
+    "median_days": 415,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "EM:Fire"
+    ],
+    "kind": "gapped",
+    "support": 162,
+    "records": 161,
+    "cohesion_bits": 2.127,
+    "evidence_bits": 344.6,
+    "median_days": 793,
+    "held_out_support": 4,
+    "held_out_confirmed": true,
+    "held_out_median_days": 395
+   },
+   {
+    "symbols": [
+     "DR:Severe Ice Storm",
+     "EM:Severe Ice Storm"
+    ],
+    "kind": "gapped",
+    "support": 172,
+    "records": 149,
+    "cohesion_bits": 1.848,
+    "evidence_bits": 317.9,
+    "median_days": 400,
+    "held_out_support": 9,
+    "held_out_confirmed": false,
+    "held_out_median_days": 58
+   },
+   {
+    "symbols": [
+     "EM:Other",
+     "EM:Hurricane"
+    ],
+    "kind": "gapped",
+    "support": 195,
+    "records": 192,
+    "cohesion_bits": 1.318,
+    "evidence_bits": 257.0,
+    "median_days": 938,
+    "held_out_support": 5,
+    "held_out_confirmed": false,
+    "held_out_median_days": 349
+   },
+   {
+    "symbols": [
+     "EM:Other",
+     "EM:Other"
+    ],
+    "kind": "gapped",
+    "support": 63,
+    "records": 63,
+    "cohesion_bits": 3.317,
+    "evidence_bits": 209.0,
+    "median_days": 1046,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1866
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "EM:Severe Storm"
+    ],
+    "kind": "gapped",
+    "support": 169,
+    "records": 76,
+    "cohesion_bits": 1.096,
+    "evidence_bits": 185.2,
+    "median_days": 1425,
+    "held_out_support": 155,
+    "held_out_confirmed": false,
+    "held_out_median_days": 706
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "EM:Other"
+    ],
+    "kind": "gapped",
+    "support": 125,
+    "records": 93,
+    "cohesion_bits": 1.372,
+    "evidence_bits": 171.5,
+    "median_days": 1700,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Severe Ice Storm",
+     "DR:Fire"
+    ],
+    "kind": "gapped",
+    "support": 128,
+    "records": 101,
+    "cohesion_bits": 1.259,
+    "evidence_bits": 161.1,
+    "median_days": 1829,
+    "held_out_support": 7,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1547
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "FM:Fire"
+    ],
+    "kind": "gapped",
+    "support": 118,
+    "records": 114,
+    "cohesion_bits": 1.356,
+    "evidence_bits": 160.0,
+    "median_days": 330,
+    "held_out_support": 74,
+    "held_out_confirmed": true,
+    "held_out_median_days": 753
+   },
+   {
+    "symbols": [
+     "EM:Fire",
+     "DR:Fire"
+    ],
+    "kind": "gapped",
+    "support": 101,
+    "records": 101,
+    "cohesion_bits": 1.447,
+    "evidence_bits": 146.2,
+    "median_days": 2324,
+    "held_out_support": 13,
+    "held_out_confirmed": true,
+    "held_out_median_days": 7
+   },
+   {
+    "symbols": [
+     "DR:Freezing",
+     "DR:Fire"
+    ],
+    "kind": "gapped",
+    "support": 62,
+    "records": 34,
+    "cohesion_bits": 1.895,
+    "evidence_bits": 117.5,
+    "median_days": 3076,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Drought",
+     "EM:Coastal Storm"
+    ],
+    "kind": "gapped",
+    "support": 72,
+    "records": 72,
+    "cohesion_bits": 1.343,
+    "evidence_bits": 96.7,
+    "median_days": 10446,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Fire",
+     "EM:Other"
+    ],
+    "kind": "gapped",
+    "support": 53,
+    "records": 53,
+    "cohesion_bits": 1.742,
+    "evidence_bits": 92.3,
+    "median_days": 711,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "EM:Fire",
+     "EM:Other"
+    ],
+    "kind": "gapped",
+    "support": 51,
+    "records": 42,
+    "cohesion_bits": 1.77,
+    "evidence_bits": 90.3,
+    "median_days": 1249,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Coastal Storm",
+     "DR:Hurricane"
+    ],
+    "kind": "gapped",
+    "support": 82,
+    "records": 78,
+    "cohesion_bits": 1.077,
+    "evidence_bits": 88.3,
+    "median_days": 1050,
+    "held_out_support": 7,
+    "held_out_confirmed": true,
+    "held_out_median_days": 306
+   },
+   {
+    "symbols": [
+     "EM:Other",
+     "DR:Fire"
+    ],
+    "kind": "gapped",
+    "support": 51,
+    "records": 51,
+    "cohesion_bits": 1.703,
+    "evidence_bits": 86.9,
+    "median_days": 335,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Snowstorm",
+     "EM:Severe Storm"
+    ],
+    "kind": "gapped",
+    "support": 60,
+    "records": 54,
+    "cohesion_bits": 1.342,
+    "evidence_bits": 80.5,
+    "median_days": 2617,
+    "held_out_support": 39,
+    "held_out_confirmed": false,
+    "held_out_median_days": 799
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Volcanic Eruption"
+    ],
+    "kind": "gapped",
+    "support": 64,
+    "records": 35,
+    "cohesion_bits": 1.121,
+    "evidence_bits": 71.7,
+    "median_days": 2308,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Snowstorm",
+     "EM:Other"
+    ],
+    "kind": "gapped",
+    "support": 54,
+    "records": 54,
+    "cohesion_bits": 1.313,
+    "evidence_bits": 70.9,
+    "median_days": 1734,
+    "held_out_support": 1,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1774
+   }
+  ]
+ },
+ "by_state": {
+  "params": {
+   "examples": 3,
+   "max_candidates": 4000000,
+   "max_length": 4,
+   "max_patterns": 200,
+   "min_cohesion_bits": 1.0,
+   "min_support": 20,
+   "window": 4
+  },
+  "entities": 59,
+  "events": 5121,
+  "searched_records": 58,
+  "searched_events": 3008,
+  "held_out_records": 56,
+  "held_out_events": 2112,
+  "distinct_symbols_searched": 34,
+  "patterns_found": 28,
+  "patterns_in_shuffled_control": [
+   9,
+   8,
+   9,
+   9,
+   9,
+   11,
+   8,
+   7,
+   8,
+   10
+  ],
+  "patterns_in_shuffled_control_mean": 8.8,
+  "held_out_confirmed": 18,
+  "coverage_searched": 0.6453,
+  "coverage_held_out": 0.6283,
+  "patterns": [
+   {
+    "symbols": [
+     "FM:Fire",
+     "FM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 639,
+    "records": 26,
+    "cohesion_bits": 1.446,
+    "evidence_bits": 923.8,
+    "median_days": 4,
+    "held_out_support": 646,
+    "held_out_confirmed": true,
+    "held_out_median_days": 5
+   },
+   {
+    "symbols": [
+     "FM:Fire",
+     "FM:Fire",
+     "FM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 517,
+    "records": 24,
+    "cohesion_bits": 1.535,
+    "evidence_bits": 793.4,
+    "median_days": 12,
+    "held_out_support": 516,
+    "held_out_confirmed": true,
+    "held_out_median_days": 15
+   },
+   {
+    "symbols": [
+     "FM:Fire",
+     "FM:Fire",
+     "FM:Fire",
+     "FM:Fire"
+    ],
+    "kind": "contiguous",
+    "support": 424,
+    "records": 20,
+    "cohesion_bits": 1.554,
+    "evidence_bits": 659.0,
+    "median_days": 19,
+    "held_out_support": 417,
+    "held_out_confirmed": true,
+    "held_out_median_days": 24
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 353,
+    "records": 47,
+    "cohesion_bits": 1.268,
+    "evidence_bits": 447.6,
+    "median_days": 361,
+    "held_out_support": 54,
+    "held_out_confirmed": true,
+    "held_out_median_days": 149
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 291,
+    "records": 41,
+    "cohesion_bits": 1.118,
+    "evidence_bits": 325.4,
+    "median_days": 150,
+    "held_out_support": 207,
+    "held_out_confirmed": true,
+    "held_out_median_days": 88
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 208,
+    "records": 38,
+    "cohesion_bits": 1.416,
+    "evidence_bits": 294.6,
+    "median_days": 970,
+    "held_out_support": 16,
+    "held_out_confirmed": true,
+    "held_out_median_days": 510
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "DR:Severe Storm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 155,
+    "records": 35,
+    "cohesion_bits": 1.335,
+    "evidence_bits": 207.0,
+    "median_days": 383,
+    "held_out_support": 99,
+    "held_out_confirmed": true,
+    "held_out_median_days": 292
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 126,
+    "records": 32,
+    "cohesion_bits": 1.456,
+    "evidence_bits": 183.5,
+    "median_days": 1420,
+    "held_out_support": 8,
+    "held_out_confirmed": true,
+    "held_out_median_days": 1656
+   },
+   {
+    "symbols": [
+     "DR:Typhoon",
+     "DR:Typhoon"
+    ],
+    "kind": "contiguous",
+    "support": 33,
+    "records": 5,
+    "cohesion_bits": 5.49,
+    "evidence_bits": 181.2,
+    "median_days": 345,
+    "held_out_support": 2,
+    "held_out_confirmed": true,
+    "held_out_median_days": 1214
+   },
+   {
+    "symbols": [
+     "DR:Typhoon",
+     "DR:Typhoon",
+     "DR:Typhoon"
+    ],
+    "kind": "contiguous",
+    "support": 25,
+    "records": 3,
+    "cohesion_bits": 5.599,
+    "evidence_bits": 140.0,
+    "median_days": 1149,
+    "held_out_support": 1,
+    "held_out_confirmed": false,
+    "held_out_median_days": 1432
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "DR:Severe Storm",
+     "DR:Severe Storm",
+     "DR:Severe Storm"
+    ],
+    "kind": "contiguous",
+    "support": 87,
+    "records": 24,
+    "cohesion_bits": 1.411,
+    "evidence_bits": 122.7,
+    "median_days": 525,
+    "held_out_support": 47,
+    "held_out_confirmed": true,
+    "held_out_median_days": 343
+   },
+   {
+    "symbols": [
+     "DR:Typhoon",
+     "DR:Typhoon",
+     "DR:Typhoon",
+     "DR:Typhoon"
+    ],
+    "kind": "contiguous",
+    "support": 20,
+    "records": 3,
+    "cohesion_bits": 5.678,
+    "evidence_bits": 113.6,
+    "median_days": 1829,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 42,
+    "records": 18,
+    "cohesion_bits": 2.179,
+    "evidence_bits": 91.5,
+    "median_days": 342,
+    "held_out_support": 10,
+    "held_out_confirmed": true,
+    "held_out_median_days": 52
+   },
+   {
+    "symbols": [
+     "EM:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 28,
+    "records": 12,
+    "cohesion_bits": 2.828,
+    "evidence_bits": 79.2,
+    "median_days": 3,
+    "held_out_support": 75,
+    "held_out_confirmed": true,
+    "held_out_median_days": 7
+   },
+   {
+    "symbols": [
+     "DR:Tornado",
+     "DR:Tornado"
+    ],
+    "kind": "contiguous",
+    "support": 29,
+    "records": 15,
+    "cohesion_bits": 2.238,
+    "evidence_bits": 64.9,
+    "median_days": 258,
+    "held_out_support": 2,
+    "held_out_confirmed": true,
+    "held_out_median_days": 1780
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "contiguous",
+    "support": 21,
+    "records": 13,
+    "cohesion_bits": 2.413,
+    "evidence_bits": 50.7,
+    "median_days": 338,
+    "held_out_support": 23,
+    "held_out_confirmed": true,
+    "held_out_median_days": 322
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Tornado"
+    ],
+    "kind": "contiguous",
+    "support": 33,
+    "records": 20,
+    "cohesion_bits": 1.048,
+    "evidence_bits": 34.6,
+    "median_days": 793,
+    "held_out_support": 4,
+    "held_out_confirmed": true,
+    "held_out_median_days": 391
+   },
+   {
+    "symbols": [
+     "DR:Tornado",
+     "DR:Flood",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 32,
+    "records": 17,
+    "cohesion_bits": 1.004,
+    "evidence_bits": 32.1,
+    "median_days": 1045,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "EM:Drought"
+    ],
+    "kind": "contiguous",
+    "support": 21,
+    "records": 18,
+    "cohesion_bits": 1.402,
+    "evidence_bits": 29.4,
+    "median_days": 474,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "DR:Tornado",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 25,
+    "records": 15,
+    "cohesion_bits": 1.095,
+    "evidence_bits": 27.4,
+    "median_days": 841,
+    "held_out_support": 1,
+    "held_out_confirmed": false,
+    "held_out_median_days": 2323
+   },
+   {
+    "symbols": [
+     "DR:Tornado",
+     "DR:Flood",
+     "DR:Flood",
+     "DR:Flood"
+    ],
+    "kind": "contiguous",
+    "support": 21,
+    "records": 13,
+    "cohesion_bits": 1.159,
+    "evidence_bits": 24.3,
+    "median_days": 1382,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "DR:Hurricane"
+    ],
+    "kind": "gapped",
+    "support": 77,
+    "records": 17,
+    "cohesion_bits": 1.55,
+    "evidence_bits": 119.3,
+    "median_days": 713,
+    "held_out_support": 51,
+    "held_out_confirmed": true,
+    "held_out_median_days": 375
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "EM:Drought"
+    ],
+    "kind": "gapped",
+    "support": 57,
+    "records": 25,
+    "cohesion_bits": 1.275,
+    "evidence_bits": 72.7,
+    "median_days": 1196,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Hurricane",
+     "EM:Hurricane"
+    ],
+    "kind": "gapped",
+    "support": 34,
+    "records": 14,
+    "cohesion_bits": 1.558,
+    "evidence_bits": 53.0,
+    "median_days": 374,
+    "held_out_support": 43,
+    "held_out_confirmed": true,
+    "held_out_median_days": 388
+   },
+   {
+    "symbols": [
+     "DR:Tornado",
+     "DR:Tornado"
+    ],
+    "kind": "gapped",
+    "support": 40,
+    "records": 18,
+    "cohesion_bits": 1.182,
+    "evidence_bits": 47.3,
+    "median_days": 470,
+    "held_out_support": 5,
+    "held_out_confirmed": true,
+    "held_out_median_days": 531
+   },
+   {
+    "symbols": [
+     "EM:Snowstorm",
+     "EM:Snowstorm"
+    ],
+    "kind": "gapped",
+    "support": 28,
+    "records": 8,
+    "cohesion_bits": 1.683,
+    "evidence_bits": 47.1,
+    "median_days": 358,
+    "held_out_support": 0,
+    "held_out_confirmed": false,
+    "held_out_median_days": null
+   },
+   {
+    "symbols": [
+     "DR:Flood",
+     "EM:Flood"
+    ],
+    "kind": "gapped",
+    "support": 24,
+    "records": 12,
+    "cohesion_bits": 1.187,
+    "evidence_bits": 28.5,
+    "median_days": 707,
+    "held_out_support": 8,
+    "held_out_confirmed": false,
+    "held_out_median_days": 389
+   },
+   {
+    "symbols": [
+     "DR:Severe Storm",
+     "EM:Severe Storm"
+    ],
+    "kind": "gapped",
+    "support": 23,
+    "records": 12,
+    "cohesion_bits": 1.19,
+    "evidence_bits": 27.4,
+    "median_days": 577,
+    "held_out_support": 16,
+    "held_out_confirmed": false,
+    "held_out_median_days": 289
+   }
+  ]
+ }
+}
