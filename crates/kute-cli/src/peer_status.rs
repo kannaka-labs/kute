@@ -36,6 +36,11 @@ pub fn now() -> u64 {
 struct Writer {
     path: PathBuf,
     value: Mutex<Value>,
+    /// Held for the whole of a write. The beat and a change of state
+    /// write from two threads to one temporary name: without this, one
+    /// renames the other's file away, and the write that fails may be
+    /// the one saying the peer ended, which nothing writes again.
+    writing: Mutex<()>,
 }
 
 static WRITER: OnceLock<Arc<Writer>> = OnceLock::new();
@@ -44,6 +49,7 @@ impl Writer {
     /// Write the whole file beside the old one, then put it in its place,
     /// so a reader sees one state or the next and never half of one.
     fn write(&self) -> std::io::Result<()> {
+        let _one_at_a_time = self.writing.lock().unwrap_or_else(|p| p.into_inner());
         let mut value = self.value.lock().unwrap_or_else(|p| p.into_inner()).clone();
         value["written"] = json!(now());
         let bytes = serde_json::to_vec_pretty(&value).map_err(std::io::Error::other)?;
@@ -64,7 +70,7 @@ pub fn start(path: &Path, mut first: Value) -> kute::Result<()> {
     first["heartbeat_seconds"] = json!(HEARTBEAT.as_secs());
     first["started"] = json!(now());
     first["since"] = json!(now());
-    let writer = Arc::new(Writer { path: path.to_path_buf(), value: Mutex::new(first) });
+    let writer = Arc::new(Writer { path: path.to_path_buf(), value: Mutex::new(first), writing: Mutex::new(()) });
     writer.write().map_err(|e| kute::KuteError::InvalidConfig(format!("the status file {} cannot be written: {e}", path.display())))?;
     if WRITER.set(writer.clone()).is_ok() {
         std::thread::spawn(move || {
@@ -143,4 +149,67 @@ pub fn read(path: &Path) -> Value {
             "a process wrote this within the last few seconds. It is that process's own account; this service did not connect to it."
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The beat and a change of state write from two threads. Whatever
+    /// order they finish in, a reader finds a whole status, and the file
+    /// left at the end is the last state entered.
+    #[test]
+    fn two_writers_at_once_leave_a_whole_file_saying_the_last_state() {
+        let dir = std::env::temp_dir().join(format!("kute-peer-status-writers-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("peer.json");
+        // Large enough that a write takes long enough to be met halfway.
+        let writer = Arc::new(Writer { path: path.clone(), value: Mutex::new(json!({ "kute_peer_status": FORMAT, "state": WAITING, "pad": "x".repeat(40_000) })), writing: Mutex::new(()) });
+        writer.write().unwrap();
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let beats: Vec<_> = (0..3)
+            .map(|_| {
+                let (writer, stop) = (writer.clone(), stop.clone());
+                std::thread::spawn(move || {
+                    while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        let _ = writer.write();
+                    }
+                })
+            })
+            .collect();
+        let reader = {
+            let (path, stop) = (path.clone(), stop.clone());
+            std::thread::spawn(move || {
+                let (mut whole, mut broken) = (0u64, 0u64);
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    if let Ok(bytes) = std::fs::read(&path) {
+                        if serde_json::from_slice::<Value>(&bytes).is_ok() { whole += 1 } else { broken += 1 }
+                    }
+                }
+                (whole, broken)
+            })
+        };
+        let mut lost = 0;
+        let mut failed: Vec<String> = Vec::new();
+        for round in 0..60 {
+            let state = format!("state {round}");
+            writer.value.lock().unwrap()["state"] = json!(state);
+            if let Err(e) = writer.write() { failed.push(e.to_string()); }
+            std::thread::sleep(Duration::from_millis(1));
+            stop.store(round == 59, std::sync::atomic::Ordering::Relaxed);
+        }
+        for beat in beats {
+            beat.join().unwrap();
+        }
+        let (whole, broken) = reader.join().unwrap();
+        let last: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        if last["state"] != json!("state 59") {
+            lost += 1;
+        }
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).filter(|n| n.to_string_lossy().contains("writing")).collect();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(whole > 0);
+        assert_eq!((broken, lost, left.len(), failed.len()), (0, 0, 0, 0), "state writes that failed: {} (first: {:?}); reads that were not a whole status: {broken} of {}; last state lost: {lost}; temp files left: {left:?}", failed.len(), failed.first(), whole + broken);
+    }
 }
