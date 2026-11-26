@@ -13,7 +13,7 @@ twice.
 ## Run it
 
 ```
-pip install kute-engine        # a release after 0.9.2: discover takes times and held-out records
+pip install kute-engine        # 0.9.3 or later: discover takes times and held-out records
 python fema_fetch.py declarations.csv
 python fema_patterns.py declarations.csv report.json
 ```
@@ -27,7 +27,7 @@ records the SHA-256 of the file it read.
 ## What was measured
 
 `report-fema-declarations.json`: fetched 2026-11-26, 70,607 rows, with
-the package built from this repository after 0.9.2. The 2020 COVID-19
+`kute-engine` 0.9.3. The 2020 COVID-19
 declarations are left out: they named every county in the country.
 An event is the declaration type and the incident type together
 (`DR:Hurricane`, a major disaster; `EM:Hurricane`, an emergency;

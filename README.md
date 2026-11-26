@@ -212,7 +212,7 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
-* After 0.9.2, on `next`: `kute serve --jobs-dir DIR` takes training
+* Since 0.9.3, `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
   what it trained, and a job cannot be stopped. Studio lists the
@@ -310,7 +310,7 @@ compressor on the same bytes, and finds the timed loops of one or two
 agents. No Kannaka service uses KUTE yet; its README says what that run
 does and does not show.
 
-`examples/fema-disasters` (after 0.9.2) runs `kute.discover` on a public
+`examples/fema-disasters` (0.9.3) runs `kute.discover` on a public
 event log, FEMA's 70,607 disaster declarations since 1953: 99 recurring
 sequences by county against 56 when the disasters trade places in
 time, 25 of them still there after 2010, the two strongest being one

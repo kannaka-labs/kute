@@ -2,7 +2,7 @@
  "synthetic": true,
  "language_model_calls": 0,
  "seed": 20261125,
- "kute_version": "kute 0.9.2",
+ "kute_version": "kute 0.9.3",
  "settings": {
   "train_tasks": 400,
   "observe_tasks": 300,
@@ -35,7 +35,7 @@
    "container_bytes_saved_on_inputs": 120.0,
    "container_ratio": 0.9989500393735234,
    "distribution_cost_bytes": 69089.0,
-   "encode_slowdown": 1.044,
+   "encode_slowdown": 1.093,
    "inputs_larger": 46,
    "inputs_smaller": 154,
    "inputs_unchanged": 100,
@@ -111,7 +111,7 @@
    "socket_bytes": 701060,
    "socket_bytes_per_completed_task": 701.06,
    "escaped_symbols": 72,
-   "seconds_per_batch_of_100": 1.105,
+   "seconds_per_batch_of_100": 1.505,
    "container_bytes_one_task_each": {
     "compressed": 391941,
     "plain": 383043,
@@ -126,7 +126,7 @@
    "socket_bytes": 700468,
    "socket_bytes_per_completed_task": 700.47,
    "escaped_symbols": 72,
-   "seconds_per_batch_of_100": 1.122,
+   "seconds_per_batch_of_100": 1.317,
    "container_bytes_one_task_each": {
     "compressed": 391463,
     "plain": 383043,

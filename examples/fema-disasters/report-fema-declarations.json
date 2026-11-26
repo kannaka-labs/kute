@@ -5,7 +5,7 @@
  "left_out": "incidentType Biological",
  "split": "2010-01-01",
  "shuffle_seeds": 10,
- "kute": "0.9.2",
+ "kute": "0.9.3",
  "by_county": {
   "params": {
    "examples": 3,

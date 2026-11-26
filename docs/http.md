@@ -206,7 +206,7 @@ What it does not do:
   whole registry, and no agreement between registries about anything.
 * Upstream connections are plain HTTP, as every other connection here.
 
-## Training jobs (after 0.9.2)
+## Training jobs (0.9.3)
 
 `kute serve --jobs-dir DIR` takes training jobs. It is off unless the
 directory is named, and refused on any address but loopback: the service

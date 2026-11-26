@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "kute-adapters"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -436,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "kute-algorithms"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -446,7 +446,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bench"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "flate2",
  "kute-engine",
@@ -458,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "kute-bpe"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "fancy-regex",
  "kute-core",
@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "kute-cli"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "base64",
  "clap",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "kute-core"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "kute-types",
  "sha2",
@@ -496,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "kute-discover"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "kute-core",
  "kute-types",
@@ -507,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "kute-engine"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "kute-adapters",
  "kute-algorithms",
@@ -521,7 +521,7 @@ dependencies = [
 
 [[package]]
 name = "kute-events"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "flate2",
  "kute-adapters",
@@ -534,7 +534,7 @@ dependencies = [
 
 [[package]]
 name = "kute-protocol"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "kute-engine",
  "rustls",
@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "kute-rustbpe"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "kute-bpe",
  "kute-cli",
@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "kute-signals"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "flate2",
  "kute-types",
@@ -570,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "kute-types"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "base64",
  "flate2",
@@ -583,7 +583,7 @@ dependencies = [
 
 [[package]]
 name = "kute-vocab"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "flate2",
  "kute-types",
