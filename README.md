@@ -296,6 +296,13 @@ original = engine.decode(tokens, vocabulary=vocab)
 Five worked use cases, each independent of the others, are in
 `docs/use-cases.md`.
 
+`examples/kannaka-bus` (after 0.9.1) is the first use on a Kannaka
+system's own data: it reads the bus's memory events, read-only, keeps
+125,275 of them in a container 12.8% smaller than the best general
+compressor on the same bytes, and finds the timed loops of one or two
+agents. No Kannaka service uses KUTE yet; its README says what that run
+does and does not show.
+
 `examples/log-archive` is a separate application built on the published
 Python package: it archives a public 70 MB server log with an exact round
 trip and checks discovered event sequences on sessions it had not seen.
