@@ -1256,6 +1256,52 @@ given meanwhile, the deadline holds); the size limit and a cache too
 small to keep a file; and a client given a dead address, a liar, a
 registry without the file and an honest one, in that order.
 
+## ADR-0056: A running peer is seen through a status file it keeps, which the service reads
+
+Status: accepted.
+
+The specification's F2 lists peer status among Studio's views. Until
+now the page showed only what a peer printed when it ended, because the
+peer is another process and the service cannot see it.
+
+Chosen: `kute peer serve --status-file FILE` writes a small JSON file
+at each change of state and every second, whole and then renamed into
+place; `kute serve --peer-status FILE` reads it for `GET /v1/peer`;
+Studio's Peer view asks every two seconds.
+
+Considered and not chosen:
+
+* A status port on the peer. It would be a second listening socket on a
+  program whose one socket is its whole exposure, with its own question
+  of who may ask.
+* The service connecting to the peer as a peer. A peer answers one
+  connection and ends; asking after its status would use it up, and
+  would show nothing while it is in an exchange with someone else.
+* Running the peer inside the HTTP service. Two programs with different
+  exposure, one for the person at the machine and one for another
+  machine, would become one.
+
+A file needs no new socket and no new trust: the two processes already
+share a machine and a user. What it costs is that a file cannot prove
+its writer alive, so the writer beats every second and the reader calls
+a running state stale after three missed beats. The reader takes the
+beat from the file but holds it to a minute at most, so a file cannot
+excuse its own age.
+
+`Session::serve_observed` was added to the protocol library so the
+peer can count messages as they are handled; the observer is called
+after each message is answered and cannot change the answer.
+
+The status names who connected, so `--peer-status` is loopback only.
+Not built: status for `kute peer send`, more than one peer in a view,
+history of past exchanges, and anything sent from the page to a peer.
+
+Checked by tests with both processes real: waiting, a connection that
+says nothing, a whole exchange (the final counts equal the peer's
+printed report), an end in error, a killed peer (reported stale, not
+running), files that are not a status (none of their content is passed
+on), and the page in a browser following a peer through its states.
+
 ## Deferred
 
 Import from other tokenizer formats,

@@ -1,0 +1,429 @@
+{
+ "what": "memory operation events of the Kannaka bus (NATS JetStream), read once, read-only",
+ "kute_version": "0.9.1",
+ "dump_sha256": "500d9470526a8a48e5b58e93865518e7b16862a1904ca287cd3f62bb5f9bd452",
+ "events": 125275,
+ "messages_left_out": {
+  "payload is not JSON": 4
+ },
+ "agents": 60,
+ "days_covered": 89.9,
+ "operations": {
+  "remember/perception": 54250,
+  "remember/cli": 34859,
+  "recall/daemon": 20243,
+  "forget/cli": 9636,
+  "forget/dream": 2298,
+  "remember/none": 2110,
+  "remember/dream": 1541,
+  "remember/research": 337,
+  "other/none": 1
+ },
+ "archive": {
+  "source": "every event as canonical JSON, one a line, in bus order",
+  "source_bytes": 65452468,
+  "of_which_free_text_bytes": 9585147,
+  "round_trip_exact": true,
+  "byte_exact_header": true,
+  "bytes": {
+   "gzip_9": 16951515,
+   "xz_9_extreme": 10356580,
+   "zstd_19": 10860618,
+   "zstd_22": 10730095,
+   "kute_events_container": 9036042
+  },
+  "container_over_best_general_compressor": 0.872,
+  "general_compressor_seconds": {
+   "gzip_9": 1.24,
+   "xz_9_extreme": 145.12,
+   "zstd_19": 54.21,
+   "zstd_22": 150.34
+  },
+  "pack_seconds": 29.1,
+  "unpack_seconds": 0.32,
+  "columns": 25
+ },
+ "archive_without_free_text": {
+  "source": "the same events with the `content` field removed",
+  "source_bytes": 55350508,
+  "round_trip_exact": true,
+  "bytes": {
+   "gzip_9": 13716671,
+   "xz_9_extreme": 9373936,
+   "zstd_19": 9679275,
+   "zstd_22": 9634830,
+   "kute_events_container": 8115791
+  },
+  "container_over_best_general_compressor": 0.866
+ },
+ "sequences": {
+  "symbol": "operation/via, for example remember/cli",
+  "burst": "one agent's events with no silence longer than ten minutes",
+  "bursts": 2123,
+  "learned_on": {
+   "bursts": 1577,
+   "events": 87191,
+   "share_of_time_ordered_events": 0.7
+  },
+  "held_out": {
+   "bursts": 543,
+   "events": 37152
+  },
+  "bursts_across_the_cut_used_for_neither": 3,
+  "min_support": 20,
+  "runs_found": 55,
+  "runs_of_more_than_one_kind_of_operation": 29,
+  "top_by_held_out_occurrences": [
+   {
+    "sequence": [
+     "forget/cli",
+     "forget/cli"
+    ],
+    "occurrences_learned_on": 151,
+    "per_1000_events_learned_on": 1.73,
+    "occurrences_held_out": 4449,
+    "per_1000_events_held_out": 119.75,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 0.0
+   },
+   {
+    "sequence": [
+     "forget/cli",
+     "forget/cli",
+     "forget/cli"
+    ],
+    "occurrences_learned_on": 98,
+    "per_1000_events_learned_on": 1.12,
+    "occurrences_held_out": 2898,
+    "per_1000_events_held_out": 78.0,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 0.0
+   },
+   {
+    "sequence": [
+     "remember/perception",
+     "remember/cli",
+     "remember/perception"
+    ],
+    "occurrences_learned_on": 9246,
+    "per_1000_events_learned_on": 106.04,
+    "occurrences_held_out": 2648,
+    "per_1000_events_held_out": 71.27,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 176.828
+   },
+   {
+    "sequence": [
+     "forget/cli",
+     "forget/cli",
+     "forget/cli",
+     "forget/cli"
+    ],
+    "occurrences_learned_on": 71,
+    "per_1000_events_learned_on": 0.81,
+    "occurrences_held_out": 2128,
+    "per_1000_events_held_out": 57.28,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 0.0
+   },
+   {
+    "sequence": [
+     "forget/cli",
+     "forget/cli",
+     "forget/cli",
+     "forget/cli",
+     "forget/cli"
+    ],
+    "occurrences_learned_on": 56,
+    "per_1000_events_learned_on": 0.64,
+    "occurrences_held_out": 1670,
+    "per_1000_events_held_out": 44.95,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 0.0
+   },
+   {
+    "sequence": [
+     "forget/cli",
+     "forget/cli",
+     "forget/cli",
+     "forget/cli",
+     "forget/cli",
+     "forget/cli"
+    ],
+    "occurrences_learned_on": 45,
+    "per_1000_events_learned_on": 0.52,
+    "occurrences_held_out": 1358,
+    "per_1000_events_held_out": 36.55,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 0.0
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 5680,
+    "per_1000_events_learned_on": 65.14,
+    "occurrences_held_out": 1168,
+    "per_1000_events_held_out": 31.44,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 232.643
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 2724,
+    "per_1000_events_learned_on": 31.24,
+    "occurrences_held_out": 902,
+    "per_1000_events_held_out": 24.28,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 251.82
+   },
+   {
+    "sequence": [
+     "remember/perception",
+     "remember/perception",
+     "remember/perception",
+     "remember/perception",
+     "remember/perception",
+     "remember/perception"
+    ],
+    "occurrences_learned_on": 2092,
+    "per_1000_events_learned_on": 23.99,
+    "occurrences_held_out": 829,
+    "per_1000_events_held_out": 22.31,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 1594.275
+   },
+   {
+    "sequence": [
+     "remember/perception",
+     "remember/cli",
+     "remember/perception",
+     "remember/perception",
+     "remember/cli",
+     "remember/perception"
+    ],
+    "occurrences_learned_on": 3169,
+    "per_1000_events_learned_on": 36.35,
+    "occurrences_held_out": 736,
+    "per_1000_events_held_out": 19.81,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 409.353
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 1582,
+    "per_1000_events_learned_on": 18.14,
+    "occurrences_held_out": 505,
+    "per_1000_events_held_out": 13.59,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 488.895
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 1443,
+    "per_1000_events_learned_on": 16.55,
+    "occurrences_held_out": 499,
+    "per_1000_events_held_out": 13.43,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 487.074
+   }
+  ],
+  "top_mixed_by_held_out_occurrences": [
+   {
+    "sequence": [
+     "remember/perception",
+     "remember/cli",
+     "remember/perception"
+    ],
+    "occurrences_learned_on": 9246,
+    "per_1000_events_learned_on": 106.04,
+    "occurrences_held_out": 2648,
+    "per_1000_events_held_out": 71.27,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 176.828
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 2724,
+    "per_1000_events_learned_on": 31.24,
+    "occurrences_held_out": 902,
+    "per_1000_events_held_out": 24.28,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 251.82
+   },
+   {
+    "sequence": [
+     "remember/perception",
+     "remember/cli",
+     "remember/perception",
+     "remember/perception",
+     "remember/cli",
+     "remember/perception"
+    ],
+    "occurrences_learned_on": 3169,
+    "per_1000_events_learned_on": 36.35,
+    "occurrences_held_out": 736,
+    "per_1000_events_held_out": 19.81,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 409.353
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 1582,
+    "per_1000_events_learned_on": 18.14,
+    "occurrences_held_out": 505,
+    "per_1000_events_held_out": 13.59,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 488.895
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 1443,
+    "per_1000_events_learned_on": 16.55,
+    "occurrences_held_out": 499,
+    "per_1000_events_held_out": 13.43,
+    "agents_held_out": 2,
+    "median_seconds_first_to_last_held_out": 487.074
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 1584,
+    "per_1000_events_learned_on": 18.17,
+    "occurrences_held_out": 363,
+    "per_1000_events_held_out": 9.77,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 279.652
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 691,
+    "per_1000_events_learned_on": 7.93,
+    "occurrences_held_out": 249,
+    "per_1000_events_held_out": 6.7,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 733.42
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 641,
+    "per_1000_events_learned_on": 7.35,
+    "occurrences_held_out": 225,
+    "per_1000_events_held_out": 6.06,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 523.478
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "recall/daemon",
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 805,
+    "per_1000_events_learned_on": 9.23,
+    "occurrences_held_out": 225,
+    "per_1000_events_held_out": 6.06,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 724.059
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "recall/daemon",
+     "recall/daemon",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 764,
+    "per_1000_events_learned_on": 8.76,
+    "occurrences_held_out": 215,
+    "per_1000_events_held_out": 5.79,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 725.932
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "remember/cli",
+     "remember/cli",
+     "recall/daemon",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 941,
+    "per_1000_events_learned_on": 10.79,
+    "occurrences_held_out": 200,
+    "per_1000_events_held_out": 5.38,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 508.961
+   },
+   {
+    "sequence": [
+     "recall/daemon",
+     "recall/daemon",
+     "remember/cli",
+     "remember/cli",
+     "recall/daemon"
+    ],
+    "occurrences_learned_on": 829,
+    "per_1000_events_learned_on": 9.51,
+    "occurrences_held_out": 187,
+    "per_1000_events_held_out": 5.03,
+    "agents_held_out": 1,
+    "median_seconds_first_to_last_held_out": 515.131
+   }
+  ]
+ },
+ "limits": [
+  "One stream, one read. The stream keeps what its retention allows, so this is what was there, not everything that happened.",
+  "A recurring sequence is a regularity in the order of operations. Nothing here says what it means or that it causes anything.",
+  "The held-out part is later in time and has a different mix of agents; a rate that differs between the two parts may be the mix.",
+  "The payloads are private. The report holds no payload text, and the dump and the container stay on the machine that made them."
+ ]
+}

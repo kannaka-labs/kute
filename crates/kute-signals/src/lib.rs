@@ -572,6 +572,14 @@ pub fn unpack(container: &[u8], max_values: u64) -> Result<Vec<f64>> {
     if at != container.len() {
         return Err(damaged("bytes after the last part"));
     }
+    // Every value takes at least one byte of the first part. Checked
+    // before anything is set aside for the values: a header that claims
+    // two thousand million values around a few bytes would otherwise ask
+    // for 16 GB, which a machine short of memory refuses by ending the
+    // process.
+    if parts[0].len() < count {
+        return Err(damaged("fewer numbers than values"));
+    }
     let mut values = Vec::with_capacity(count);
     match header.scheme {
         Scheme::Bits => {

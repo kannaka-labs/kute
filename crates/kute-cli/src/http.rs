@@ -52,6 +52,8 @@ pub struct Options {
     pub operations: bool,
     /// Other registries to ask for a vocabulary this one does not hold.
     pub federation: Option<Arc<Federation>>,
+    /// The status file of a peer on this machine, read for `GET /v1/peer`.
+    pub peer_status: Option<std::path::PathBuf>,
 }
 
 /// Asking other registries, and what that may cost this one.
@@ -206,7 +208,7 @@ const STUDIO_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 's
 
 impl Default for Options {
     fn default() -> Self {
-        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true, federation: None }
+        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true, federation: None, peer_status: None }
     }
 }
 
@@ -374,8 +376,18 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         held["software"] = json!(format!("kute {}", kute::KUTE_VERSION));
         held["operations"] = if options.operations { json!(OPERATIONS) } else { json!([]) };
         held["registry"] = json!(options.registry);
+        held["peer_status"] = json!(options.peer_status.is_some());
         held["limits"]["max_body_bytes"] = json!(options.max_body_bytes);
         return ok(held);
+    }
+    if operation == "peer" {
+        let Some(path) = &options.peer_status else {
+            return problem(404, "Not Found", "not_found", "this service was not told of a peer: start it with --peer-status FILE");
+        };
+        if request.method != "GET" {
+            return Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "the peer's status is read with GET; nothing can be sent to the peer from here") };
+        }
+        return ok(crate::peer_status::read(path));
     }
     if operation == "vocabularies" || operation.starts_with("vocabularies/") {
         // Without the option the paths do not exist, and the answer does

@@ -10,6 +10,7 @@
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
@@ -140,7 +141,7 @@ async function run() {
 
   // The frame, and the first view.
   const tabs = await page('[...document.querySelectorAll("#tabs button")].map((b) => b.textContent)');
-  must(JSON.stringify(tabs) === JSON.stringify(["Runtime", "Vocabulary", "Encode", "Compare", "Patterns", "Reports", "Not here"]), "the seven views are offered: " + tabs.join(", "));
+  must(JSON.stringify(tabs) === JSON.stringify(["Runtime", "Vocabulary", "Encode", "Compare", "Patterns", "Peer", "Reports", "Not here"]), "the eight views are offered: " + tabs.join(", "));
   const line = await page('document.getElementById("runtime-line").textContent');
   must(/^kute \d+\.\d+\.\d+ · interface v1 · 2 vocabularies/.test(line), "the header names the software and what it holds: " + line);
   const runtime = await page("window.__t.text()");
@@ -212,6 +213,32 @@ async function run() {
   await page('window.__t.set("time-field", ""); window.__t.press("Look for recurring sequences")');
   await until('window.__t.text().includes("POST /v1/discover") && !window.__t.asking()', "patterns without times");
   must((await page('window.__t.rowsAfter("How long each took")')) === null, "no time field, no timing table");
+
+  // Peer: a real `kute peer serve` is waiting, and says so in its status
+  // file. The page follows it by itself: someone connects, then leaves.
+  await open("Peer");
+  await until('document.getElementById("peer-headline") !== null', "the peer's status");
+  const waiting = await page('document.getElementById("peer-headline").textContent');
+  must(waiting.startsWith("Waiting for a connection on 127.0.0.1:"), "Peer shows a peer that is waiting: " + waiting.slice(0, 60));
+  must((await page("window.__t.text()")).includes("GET /v1/peer"), "and names the request it came from");
+  const [host, port] = waiting.match(/on (\S+?):(\d+),/).slice(1);
+  const visitor = net.connect(Number(port), host);
+  await new Promise((resolve, reject) => { visitor.once("connect", resolve); visitor.once("error", reject); });
+  await until('document.getElementById("peer-headline").textContent.startsWith("In an exchange with 127.0.0.1:")', "the page to show the exchange without being asked");
+  must((await page('document.getElementById("peer-headline").textContent')).includes("no certificate (plain connection)"), "Peer follows the peer into an exchange, and says the connection is plain");
+  visitor.destroy();
+  await until('document.getElementById("peer-headline").textContent.startsWith("Ended normally")', "the page to show the end");
+  must((await page('document.getElementById("peer-headline").className')) === "limit", "Peer shows that it ended, and not as running");
+  // The status file is whatever is in it. Words in it that look like
+  // markup are shown as words, and a file that stops being written
+  // while claiming to run is not shown as running.
+  const forged = { kute_peer_status: 1, heartbeat_seconds: 1, written: 1000, since: 1000, started: 1000, state: "waiting for a connection", listening: '<img src=x onerror="window.__pwned=2">', software: "<script>window.__pwned=3</script>", takes: {}, gives: {}, exchange: null, ended: null, connections_refused: 0, last_refusal: null };
+  fs.writeFileSync(path.join(fixtures, "peer.json"), JSON.stringify(forged));
+  await until('document.getElementById("peer-headline").textContent.startsWith("Not shown as running")', "a stale status");
+  must((await page("window.__pwned")) === undefined && (await page('document.querySelector("#view img, #view script")')) === null && (await page("window.__t.text()")).includes("<img src=x"), "a status file with markup in it is shown as text, and one that is stale is not shown as running");
+  fs.writeFileSync(path.join(fixtures, "peer.json"), "not a status");
+  await until('window.__t.text().includes("No peer to show")', "a file that is not a status");
+  must((await page("window.__t.alerts()")).length === 0, "a file that is not a status is said to be none");
 
   // Reports: what the command line printed, one exchange and several.
   await open("Reports");

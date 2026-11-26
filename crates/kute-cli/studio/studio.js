@@ -48,7 +48,7 @@ async function call(operation, body) {
 function provenance(result, extra) {
   const software = state.capabilities ? state.capabilities.software : "unknown";
   return el("div", {},
-    el("div", { class: "prov" }, `${result.operation === "capabilities" ? "GET" : "POST"} /v1/${result.operation} · ${software} · asked ${result.at.toLocaleTimeString()} · answered in ${fmt(Math.round(result.ms))} ms${extra ? " · " + extra : ""}`),
+    el("div", { class: "prov" }, `${result.operation === "capabilities" || result.operation === "peer" ? "GET" : "POST"} /v1/${result.operation} · ${software} · asked ${result.at.toLocaleTimeString()} · answered in ${fmt(Math.round(result.ms))} ms${extra ? " · " + extra : ""}`),
     el("details", {}, el("summary", {}, "The answer as the service gave it"), el("pre", {}, JSON.stringify(result.data, null, 1))));
 }
 
@@ -395,6 +395,76 @@ function recognise(report) {
   return ["a JSON file", "Not a report this page recognises; shown as it is.", null];
 }
 
+// A running peer, as it describes itself in its status file. The service
+// reads the file; this page asks the service every two seconds while the
+// view is open.
+const clock = (seconds) => (typeof seconds === "number" && seconds > 0 ? new Date(seconds * 1000).toLocaleTimeString() : "unknown");
+
+function peerStatus(result) {
+  const d = result.data;
+  if (!d.present) {
+    return [el("p", { class: "limit" }, `No peer to show: ${d.why}.`), el("div", { class: "panel" }, pairs({ file: d.file })), provenance(result)];
+  }
+  const s = d.status;
+  const x = s.exchange && typeof s.exchange === "object" ? s.exchange : null;
+  const state = String(s.state);
+  let headline;
+  if (state === "ended") {
+    const how = s.ended && s.ended.ok === false ? `with an error: ${s.ended.error}` : "normally";
+    headline = `Ended ${how}, at ${clock(s.since)}.` + (x ? ` It had handled ${fmt(x.messages_handled)} protocol message(s) from ${x.from} and been delivered ${fmt(x.delivered)}.` : " Nobody had connected.");
+  } else if (d.stale) {
+    headline = d.written_later_than_now
+      ? `Not shown as running: the file says "${state}" and that it was written later than now, which a running peer on this machine's clock cannot say.`
+      : `Not shown as running: the file says "${state}" but was last written ${fmt(d.age_seconds)} s ago, and a running peer writes every ${fmt(s.heartbeat_seconds)} s.`;
+  } else if (x) {
+    headline = `In an exchange with ${x.from}${x.peer_identity ? `, certificate ${x.peer_identity}` : ", no certificate (plain connection)"}, since ${clock(s.since)}: ${fmt(x.messages_handled)} protocol message(s) handled, ${fmt(x.delivered)} delivered so far.`;
+  } else {
+    headline = `Waiting for a connection on ${s.listening}, since ${clock(s.since)}.`;
+  }
+  const running = state !== "ended" && !d.stale;
+  return [
+    el("p", { class: running ? "note" : "limit", id: "peer-headline" }, headline),
+    el("div", { class: "panel" }, pairs({
+      state, last_written: `${clock(s.written)} (${fmt(d.age_seconds)} s before it was read)`, software: s.software, process: s.process, listening: s.listening,
+      transport: s.transport, certificates_allowed: s.certificates_allowed, started: clock(s.started),
+      quiet_connection_dropped_after_seconds: s.quiet_connection_dropped_after_seconds,
+    })),
+    el("h3", {}, "What it takes and gives"),
+    el("div", { class: "panel" }, pairs({ ...Object.fromEntries(Object.entries(s.takes || {}).map(([k, v]) => ["takes " + k, v ? "yes" : "no"])), ...Object.fromEntries(Object.entries(s.gives || {}).map(([k, v]) => ["gives " + k, v ? "yes" : "no"])), vocabulary_files_given_at_start: s.vocabulary_files_given_at_start })),
+    x ? el("h3", {}, "The exchange") : null,
+    x ? el("div", { class: "panel" }, pairs(x)) : null,
+    el("h3", {}, "Connections refused"),
+    el("div", { class: "panel" }, pairs({ connections_refused: s.connections_refused, last_refusal: s.last_refusal ? `${s.last_refusal.from} at ${clock(s.last_refusal.at)}: ${s.last_refusal.why}` : "none" })),
+    el("p", { class: "note" }, d.means),
+    provenance(result, `file ${d.file}`),
+  ].filter(Boolean);
+}
+
+views["Peer"] = async (root) => {
+  root.append(el("h2", {}, "A running peer"));
+  const about = el("p", { class: "note" }, "kute peer serve is another process. Started with --status-file it keeps a small file saying what it is doing, and this service, started with --peer-status naming that file, reads it. So this is the peer's own account, a second or two old, not something this page measured; and a peer answers one connection and then ends.");
+  if (!state.capabilities.peer_status) {
+    return root.append(
+      el("p", { class: "limit" }, "This service was not told of a peer, so there is nothing to show."),
+      el("pre", {}, "kute peer serve --listen 127.0.0.1:7411 ... --status-file peer.json\nkute serve --studio --vocab ... --peer-status peer.json"),
+      about);
+  }
+  const output = el("div", { id: "peer-status" });
+  const draw = async () => {
+    try {
+      output.replaceChildren(...peerStatus(await call("peer")));
+    } catch (error) {
+      output.replaceChildren(failure(error));
+    }
+  };
+  root.append(output, about);
+  await draw();
+  const timer = setInterval(() => {
+    if (state.view !== "Peer" || !output.isConnected) clearInterval(timer);
+    else draw();
+  }, 2000);
+};
+
 views["Reports"] = async (root) => {
   const file = el("input", { type: "file", id: "report-file", accept: ".json,.jsonl" });
   const output = el("div", {});
@@ -435,7 +505,6 @@ views["Not here"] = async (root) => {
     el("h2", {}, "What this page does not show"),
     el("p", {}, "The specification lists these for Studio. The service has no operation for them, so there is nothing real to show, and this page shows nothing rather than a mock-up."),
     el("div", { class: "panel" }, table([{ name: "view" }, { name: "why not" }, { name: "where it is today" }], [
-      ["Status of a running peer", "kute peer is a separate process, one connection at a time, and reports when it ends. This service cannot see it.", "What kute peer serve and kute peer send print when an exchange ends; it opens under Reports."],
       ["Running a benchmark again", "The service is read-only and runs nothing but its five operations.", "The scripts in benchmarks/; open their reports under Reports."],
       ["Representation experiments", "The service has no operation for them. One measurement exists, and its result is negative.", "docs/representations.md; its report opens under Reports as plain JSON."],
       ["Training and evolving", "The service cannot create or change a vocabulary.", "kute train, kute evolve, kute shadow."],

@@ -88,6 +88,15 @@ All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
 
+## Changes since v0.9.1 that need action
+
+None for the command line: `--status-file` and `--peer-status` are new
+and off unless given. Rust: `kute-cli`'s `http::Options` has a new
+field, `peer_status` (`None` is the service as it was), and
+`kute_protocol::Session` gains `serve_observed`; `serve` is unchanged.
+Studio has an eighth view, Peer, and its "Not here" list no longer
+names peer status.
+
 ## Changes since v0.9.0 that need action
 
 - **`kute fetch --max-bytes` defaults to 64 MiB, not 256 MiB.** A

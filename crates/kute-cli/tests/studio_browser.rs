@@ -1,8 +1,8 @@
 //! KUTE Studio in a real browser. A `kute serve --studio` process is
 //! started, report files are made by the command line, and
 //! `studio_browser.mjs` drives the page in headless Chrome or Edge over
-//! the DevTools protocol: every view, the timing table, the reports, and
-//! what the browser's own policy refuses.
+//! the DevTools protocol: every view, the timing table, a running peer,
+//! the reports, and what the browser's own policy refuses.
 //!
 //! It needs Node 22 or later and a Chromium browser, which a build
 //! machine may not have, so it runs only when asked:
@@ -129,11 +129,24 @@ fn studio_works_in_a_browser() {
     std::fs::write(dir.join("other.json"), b"{\"hello\": [1, 2, 3]}").unwrap();
     std::fs::write(dir.join("broken.json"), b"{\"hello\": [1, 2").unwrap();
 
+    // A peer that is running while the page is looked at.
+    let mut waiting = Command::new(env!("CARGO_BIN_EXE_kute"))
+        .current_dir(&dir)
+        .args(["peer", "serve", "--listen", "127.0.0.1:0", "--insecure-plain", "--status-file", "peer.json", "--timeout", "120"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(waiting.stderr.take().unwrap()).read_line(&mut line).unwrap();
+    assert!(line.contains("listening"), "{line}");
+    let waiting = Killed(waiting);
+
     // The service with the page.
     let mut service = Killed(
         Command::new(env!("CARGO_BIN_EXE_kute"))
             .current_dir(&dir)
-            .args(["serve", "--listen", "127.0.0.1:0", "--vocab", "events.kvf", "--vocab", "text.kvf", "--studio"])
+            .args(["serve", "--listen", "127.0.0.1:0", "--vocab", "events.kvf", "--vocab", "text.kvf", "--studio", "--peer-status", "peer.json"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -159,5 +172,6 @@ fn studio_works_in_a_browser() {
     assert!(report["checked"].as_array().unwrap().last().unwrap().as_str().unwrap().starts_with("no script error"), "{said}");
     println!("{said}");
     drop(service);
+    drop(waiting);
     let _ = std::fs::remove_dir_all(&dir);
 }
