@@ -238,8 +238,19 @@ is counted.
   unless every vocabulary listed is in the directory afterwards and
   every registry answered.
 * It is a copy made once, by hand or by a scheduler. Nothing watches
-  the registry, and `kute serve` does not serve a directory: the files
-  are named to it with `--vocab`.
+  the registry.
+
+`kute serve --vocab-dir DIR` (after 0.9.3) holds every `.kvf` and
+`.kvfb` file in a directory, as if each had been named with `--vocab`,
+so `--vocab-dir DIR --registry-only` gives a mirror on. The same serves
+what `--jobs-dir` trained. The directory is read once, at start, and
+not the directories under it: a file added later is held after a
+restart. It is read strictly, because the operator named it: a file
+with one of those endings that is not a vocabulary stops the start, and
+so does a file named for a digest that its content does not have. Other
+files are not looked at, and a directory with no vocabulary in it is
+not a mistake: the service starts and holds none from it. At most 4,096 files are read from one
+directory, each held whole in memory.
 
 ## Training jobs (0.9.3)
 

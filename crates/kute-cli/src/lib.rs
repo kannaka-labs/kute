@@ -351,6 +351,15 @@ enum Command {
         /// Vocabularies the operations may use. Repeatable.
         #[arg(long)]
         vocab: Vec<PathBuf>,
+        /// A directory of vocabularies: every .kvf and .kvfb file in it,
+        /// not in directories under it, as if each were named with
+        /// --vocab. Read once, at start: a file added later is not held
+        /// until the service is started again. A file there that is not
+        /// a vocabulary, or is named for a digest its content does not
+        /// have, stops the start. Repeatable. This is how a directory
+        /// made by `kute fetch --mirror` or by --jobs-dir is served.
+        #[arg(long = "vocab-dir", value_name = "DIR")]
+        vocab_dir: Vec<PathBuf>,
         /// Address to listen on. Port 0 picks a free one; the address in
         /// use is printed as JSON on standard output.
         #[arg(long, default_value = "127.0.0.1:8787")]
@@ -1330,6 +1339,48 @@ fn train(engine: &Engine, args: TrainArgs) -> kute::Result<()> {
     }))
 }
 
+/// Vocabulary files a service will read from one directory, at most.
+/// Each is held whole in memory with its tokenizer.
+const MAX_VOCAB_DIR_FILES: usize = 4096;
+
+/// Every vocabulary file in `dir`, in the order of their names. The
+/// operator named the directory, so anything wrong in it is told at
+/// start and not passed over: a service that held less than its
+/// operator thought would answer 404 for what they believe it has.
+fn load_vocab_dir(dir: &std::path::Path) -> kute::Result<Vec<kute::Vocabulary>> {
+    let wrong = |why: String| KuteError::InvalidConfig(format!("--vocab-dir {}: {why}", dir.display()));
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| wrong(e.to_string()))? {
+        let path = entry.map_err(|e| wrong(e.to_string()))?.path();
+        let is_vocabulary = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e == "kvf" || e == "kvfb");
+        if is_vocabulary && path.is_file() {
+            files.push(path);
+        }
+    }
+    // None is not a mistake: a jobs directory before its first job is
+    // empty. What is held is printed at start and listed on request.
+    if files.len() > MAX_VOCAB_DIR_FILES {
+        return Err(wrong(format!("it holds {} vocabulary files; a service reads at most {MAX_VOCAB_DIR_FILES} from one directory", files.len())));
+    }
+    files.sort();
+    let mut vocabularies = Vec::with_capacity(files.len());
+    for path in files {
+        let vocabulary = vocab::load(&path).map_err(|e| wrong(format!("{} is not a vocabulary: {e}", path.display())))?;
+        // A file named as a mirror or a jobs directory names its files
+        // says what it holds. One that holds something else was put
+        // there by mistake or by someone.
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        if stem.len() == 64 && stem.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+            let digest = vocabulary.compute_digest()?;
+            if digest != format!("sha256:{stem}") {
+                return Err(wrong(format!("{} is named for a digest its content does not have: it holds {digest}", path.display())));
+            }
+        }
+        vocabularies.push(vocabulary);
+    }
+    Ok(vocabularies)
+}
+
 fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
     match cli.command {
         Command::Train(args) => train(&engine, *args),
@@ -1696,7 +1747,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 _ => Err(KuteError::InvalidConfig("give --digest and --output, or --list".into())),
             }
         }
-        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, peer_status, jobs_dir, jobs_queue, jobs_max_vocab_size, jobs_max_dir_bytes, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Serve { vocab: paths, vocab_dir, listen, insecure_remote, studio, registry, registry_only, peer_status, jobs_dir, jobs_queue, jobs_max_vocab_size, jobs_max_dir_bytes, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
             let registry = registry || registry_only;
             if !upstream.is_empty() && !registry {
                 return Err(KuteError::InvalidConfig("--upstream is for a registry: add --registry or --registry-only".into()));
@@ -1712,7 +1763,10 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 let check: Option<http::UpstreamCheck> = if upstream_trusted_key.is_empty() { None } else { Some(Box::new(sign::gate(&upstream_trusted_key)?)) };
                 Some(std::sync::Arc::new(http::Federation::new(upstream.clone(), std::time::Duration::from_secs(upstream_timeout.max(1)), upstream_max_bytes, upstream_cache_bytes, check)?))
             };
-            let vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
+            let mut vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
+            for dir in &vocab_dir {
+                vocabularies.extend(load_vocab_dir(dir)?);
+            }
             let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);
             let limits = mcp::Limits { max_input_bytes, max_output_bytes, max_request_bytes: max_body_bytes, ..Default::default() };
             let server = mcp::Server::new(engine, vocabularies, limits)?;

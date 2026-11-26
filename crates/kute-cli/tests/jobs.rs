@@ -406,14 +406,14 @@ fn a_job_given_from_the_command_line_that_does_not_start_in_time_is_withdrawn() 
     let service = Service::start(&dir, &["--jobs-dir", "made"]);
     let at = format!("http://{}", service.address);
     let slow = slow_text();
-    for name in ["test:s:a", "test:s:b", "test:s:c"] {
-        let (status, job) = service.post("/v1/jobs", &json!({ "texts": [slow, slow], "vocabulary_id": name, "vocab_size": 60_000 }));
-        assert_eq!(status, 202, "{job}");
-    }
+    // One slow job stands before it. One, not several: this test runs
+    // beside the others, and training is what loads the machine.
+    let (status, job) = service.post("/v1/jobs", &json!({ "texts": [slow, slow], "vocabulary_id": "test:s:a", "vocab_size": 60_000 }));
+    assert_eq!(status, 202, "{job}");
     let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "late.kvf", "--wait", "0"]);
-    assert!(!ok && said.contains("job-4 had not started after 0 s and was withdrawn"), "{said}");
+    assert!(!ok && said.contains("job-2 had not started after 0 s and was withdrawn"), "{said}");
     assert!(!dir.join("late.kvf").exists());
-    assert_eq!(service.get("/v1/jobs/job-4").1["state"], "withdrawn");
+    assert_eq!(service.get("/v1/jobs/job-2").1["state"], "withdrawn");
 }
 
 #[test]

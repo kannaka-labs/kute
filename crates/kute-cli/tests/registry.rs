@@ -212,6 +212,33 @@ fn a_mirror_takes_everything_listed_checks_each_file_and_deletes_nothing() {
     let again = ok(&dir, &["fetch", "--from", &url, "--mirror", "copy"]);
     assert_eq!((again["written"].as_array().unwrap().len(), again["already_there"].clone(), again["bytes_written"].clone()), (0, json!(2), json!(0)), "{again}");
 
+    // The copy is served as it stands, and what it gives is fetched and checked like any other.
+    {
+        let second = Service::start(&dir, &["--vocab-dir", "copy", "--registry-only"]);
+        let listing = ok(&dir, &["fetch", "--from", &second.url(), "--list"]);
+        assert_eq!(listing["says_it_holds"].as_array().unwrap().len(), 2, "{listing}");
+        ok(&dir, &["fetch", "--from", &second.url(), "--digest", &signed, "--output", "from-copy.kvf", "--trusted-key", &ours]);
+        // A mirror of the mirror.
+        let third = ok(&dir, &["fetch", "--from", &second.url(), "--mirror", "copy-of-copy"]);
+        assert_eq!((third["written"].as_array().unwrap().len(), third["complete"].clone()), (2, json!(true)), "{third}");
+    }
+    // A directory is read strictly: the operator is told at start what is wrong in it.
+    std::fs::create_dir_all(dir.join("empty/under")).unwrap();
+    std::fs::copy(dir.join("other.kvf"), dir.join("empty/under/deeper.kvf")).unwrap();
+    std::fs::write(dir.join("empty/notes.txt"), "not a vocabulary, and not asked to be").unwrap();
+    {
+        let none = Service::start(&dir, &["--vocab-dir", "empty", "--registry-only"]);
+        assert_eq!(ok(&dir, &["fetch", "--from", &none.url(), "--list"])["says_it_holds"], json!([]), "directories under it are not read, and none is not a mistake");
+    }
+    assert!(fails(&dir, &["serve", "--listen", "127.0.0.1:0", "--vocab-dir", "no-such-dir"]).contains("--vocab-dir"));
+    std::fs::create_dir_all(dir.join("junk")).unwrap();
+    std::fs::copy(dir.join("other.kvf"), dir.join("junk/good.kvf")).unwrap();
+    std::fs::write(dir.join("junk/bad.kvf"), "{}").unwrap();
+    assert!(fails(&dir, &["serve", "--listen", "127.0.0.1:0", "--vocab-dir", "junk"]).contains("bad.kvf is not a vocabulary"));
+    std::fs::create_dir_all(dir.join("misnamed")).unwrap();
+    std::fs::copy(dir.join("other.kvf"), dir.join("misnamed").join(name(&signed))).unwrap();
+    assert!(fails(&dir, &["serve", "--listen", "127.0.0.1:0", "--vocab-dir", "misnamed"]).contains("named for a digest its content does not have"));
+
     // A file under a digest's name that is not that vocabulary is left alone, and the run fails.
     std::fs::copy(dir.join("other.kvf"), dir.join("copy").join(name(&signed))).unwrap();
     std::fs::write(dir.join("copy/mine.txt"), "kept").unwrap();
