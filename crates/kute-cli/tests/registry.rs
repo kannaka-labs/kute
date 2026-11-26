@@ -238,6 +238,10 @@ fn a_mirror_takes_everything_listed_checks_each_file_and_deletes_nothing() {
     std::fs::create_dir_all(dir.join("misnamed")).unwrap();
     std::fs::copy(dir.join("other.kvf"), dir.join("misnamed").join(name(&signed))).unwrap();
     assert!(fails(&dir, &["serve", "--listen", "127.0.0.1:0", "--vocab-dir", "misnamed"]).contains("named for a digest its content does not have"));
+    // The same in upper-case hex (found in review).
+    std::fs::create_dir_all(dir.join("misnamed-upper")).unwrap();
+    std::fs::copy(dir.join("other.kvf"), dir.join("misnamed-upper").join(name(&signed).to_uppercase().replace(".KVF", ".kvf"))).unwrap();
+    assert!(fails(&dir, &["serve", "--listen", "127.0.0.1:0", "--vocab-dir", "misnamed-upper"]).contains("named for a digest its content does not have"));
 
     // A file under a digest's name that is not that vocabulary is left alone, and the run fails.
     std::fs::copy(dir.join("other.kvf"), dir.join("copy").join(name(&signed))).unwrap();

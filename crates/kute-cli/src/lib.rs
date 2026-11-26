@@ -1427,9 +1427,11 @@ fn load_vocab_dir(dir: &std::path::Path) -> kute::Result<Vec<kute::Vocabulary>> 
         // says what it holds. One that holds something else was put
         // there by mistake or by someone.
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        if stem.len() == 64 && stem.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        // In either case of hex: a file system that ignores case would
+        // give the upper-case name to whoever asked for the lower.
+        if stem.len() == 64 && stem.bytes().all(|b| b.is_ascii_hexdigit()) {
             let digest = vocabulary.compute_digest()?;
-            if digest != format!("sha256:{stem}") {
+            if digest != format!("sha256:{}", stem.to_ascii_lowercase()) {
                 return Err(wrong(format!("{} is named for a digest its content does not have: it holds {digest}", path.display())));
             }
         }
@@ -1851,7 +1853,13 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 // The jobs directory is made further down, once the
                 // address is known to be one that may take jobs. Named
                 // here too and not there yet, it holds nothing.
-                if jobs_dir.as_ref() == Some(dir) && !dir.exists() {
+                // The same directory written two ways (`j`, `./j`) is
+                // the same directory.
+                let same = jobs_dir.as_ref().is_some_and(|jobs| match (std::path::absolute(jobs), std::path::absolute(dir)) {
+                    (Ok(a), Ok(b)) => a.components().eq(b.components()),
+                    _ => jobs == dir,
+                });
+                if same && !dir.exists() {
                     continue;
                 }
                 vocabularies.extend(load_vocab_dir(dir)?);

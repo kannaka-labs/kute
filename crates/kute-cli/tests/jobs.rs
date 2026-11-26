@@ -311,7 +311,8 @@ fn what_a_job_trained_is_served_after_a_restart_and_can_be_mirrored() {
     let dir = scratch("jobs-served");
     std::fs::write(dir.join("text.txt"), TEXT.repeat(30)).unwrap();
     let digest = {
-        let service = Service::start(&dir, &["--jobs-dir", "made", "--vocab-dir", "made"]);
+        // Written two ways, it is still the one directory (found in review).
+        let service = Service::start(&dir, &["--jobs-dir", "made", "--vocab-dir", "./made"]);
         assert_eq!(service.get("/v1/capabilities").1["vocabularies"].as_array().unwrap().len(), 0, "an empty directory is not a mistake");
         let (ok, report, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served", "--vocab-size", "300", "--output", "mine.kvf"]);
         assert!(ok, "{said}");
