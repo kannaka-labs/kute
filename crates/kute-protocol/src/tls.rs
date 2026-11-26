@@ -29,7 +29,7 @@ use std::net::TcpStream;
 use std::ops::DerefMut;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 fn tls_error(what: &str, e: impl std::fmt::Display) -> KuteError {
     KuteError::Backend(format!("tls: {what}: {e}"))
@@ -232,7 +232,38 @@ fn handshake<C: DerefMut<Target = ConnectionCommon<S>>, S: SideData>(connection:
             // Say why, if there is time; the other side may be honest
             // and misconfigured.
             let _ = connection.write_tls(tcp);
+            said_why(tcp, deadline);
             return Err(tls_error("handshake", e));
+        }
+    }
+}
+
+/// How long, at most, a refused side is read off so that the reason
+/// reaches it.
+const LINGER: Duration = Duration::from_millis(250);
+/// And how much of what it sent is read off in that time.
+const LINGER_BYTES: usize = 64 * 1024;
+
+/// After the alert that says why: end this side's sending, and read off
+/// a little of what the other side already sent. A connection closed
+/// with bytes unread is reset, and a reset can throw away the alert
+/// before the other side has read it (in TLS 1.3 a client sends its
+/// request before it knows its certificate was refused). Bounded by
+/// time, by bytes and by the handshake's own deadline, so a refused
+/// side holds this one no longer than a silent one could.
+fn said_why(tcp: &mut TcpStream, deadline: Instant) {
+    let _ = tcp.shutdown(std::net::Shutdown::Write);
+    let until = deadline.min(Instant::now() + LINGER);
+    let mut scratch = [0u8; 4096];
+    let mut seen = 0usize;
+    while seen < LINGER_BYTES {
+        let Some(left) = until.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()) else { return };
+        if tcp.set_read_timeout(Some(left)).is_err() {
+            return;
+        }
+        match tcp.read(&mut scratch) {
+            Ok(0) | Err(_) => return,
+            Ok(n) => seen += n,
         }
     }
 }

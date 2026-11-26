@@ -74,10 +74,12 @@ it, and an address that is not loopback needs no `--insecure-remote`.
   The shorter time for the handshake shortens the waits and does not
   change the kind. What limits who can reach the port is a firewall,
   not this program.
-* A caller whose certificate is not accepted is usually told the
-  service's reason (the TLS alert). Not always: the alert can be lost
-  when the connection is reset, and the caller then sees a reset, with
-  a sentence saying a refused certificate can look like that.
+* A caller whose certificate is not accepted is told the service's
+  reason (the TLS alert). For that to arrive, the service reads off
+  what the caller already sent before it closes: at most 64 KiB, for
+  at most a quarter of a second, and never past the handshake's time.
+  A caller that had sent more than that can still see a reset, with a
+  sentence saying a refused certificate can look like that.
 * When every worker is busy and the line is full, a new connection is
   closed without the `503` a plain service sends: there is nothing to
   say it in before a handshake.
