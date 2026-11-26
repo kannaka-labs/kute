@@ -96,6 +96,8 @@ not covered.
 - Rust, `kute-cli` as a library: `http::Options` has a new field,
   `jobs` (`None` is the service as it was). `kute serve --jobs-dir` is
   new and off unless given.
+- Studio has a ninth view, Jobs, between Peer and Reports. Anything
+  that picks a view by its position needs the new order.
 - **Python `kute.signals_unpack` reads at most 16,777,216 values by
   default, not 134,217,728.** This is the command line's default. A
   container with more needs `max_values=`. The old default let a small

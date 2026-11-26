@@ -215,7 +215,8 @@ Added in v0.8 (each has a doc under `docs/` and a record in
 * After 0.9.2, on `next`: `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
-  what it trained, and a job cannot be stopped. The Python package
+  what it trained, and a job cannot be stopped. Studio lists the
+  jobs and what the directory holds. The Python package
   gains wire containers and `translate`, and `discover` takes times
   and held-out records. `docs/http.md`.
 * Since 0.9.2, Studio shows a running peer. `kute peer serve

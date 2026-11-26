@@ -48,7 +48,7 @@ async function call(operation, body) {
 function provenance(result, extra) {
   const software = state.capabilities ? state.capabilities.software : "unknown";
   return el("div", {},
-    el("div", { class: "prov" }, `${result.operation === "capabilities" || result.operation === "peer" ? "GET" : "POST"} /v1/${result.operation} · ${software} · asked ${result.at.toLocaleTimeString()} · answered in ${fmt(Math.round(result.ms))} ms${extra ? " · " + extra : ""}`),
+    el("div", { class: "prov" }, `${result.operation === "capabilities" || result.operation === "peer" || result.operation === "jobs" ? "GET" : "POST"} /v1/${result.operation} · ${software} · asked ${result.at.toLocaleTimeString()} · answered in ${fmt(Math.round(result.ms))} ms${extra ? " · " + extra : ""}`),
     el("details", {}, el("summary", {}, "The answer as the service gave it"), el("pre", {}, JSON.stringify(result.data, null, 1))));
 }
 
@@ -465,6 +465,61 @@ views["Peer"] = async (root) => {
   }, 2000);
 };
 
+// Training jobs the service was given over HTTP. This page gives none:
+// it reads the list every two seconds while the view is open.
+function jobsList(result) {
+  const d = result.data;
+  const jobs = d.jobs.slice().reverse();
+  const count = (state) => d.jobs.filter((j) => j.state === state).length;
+  const dir = d.directory || {};
+  const full = typeof dir.bytes === "number" && dir.bytes >= dir.max_bytes;
+  const headline = d.jobs.length === 0
+    ? "No job has been given to this service since it started."
+    : `${fmt(d.jobs.length)} job(s) remembered: ${fmt(count("running"))} running, ${fmt(count("waiting"))} waiting, ${fmt(count("done"))} done, ${fmt(count("failed"))} failed.`;
+  const outcome = (j) => {
+    if (j.state === "done") return el("span", {}, `${j.result.digest} · ${fmt(j.result.file_bytes)} bytes · trained in ${fmt(j.result.train_seconds)} s · `, el("a", { href: `/v1/jobs/${encodeURIComponent(j.id)}/vocabulary`, download: j.result.file }, "the file"));
+    if (j.state === "failed") return String(j.error);
+    return j.state === "running" ? `since ${clock(j.started_unix)}` : "in the line";
+  };
+  return [
+    el("p", { class: "note", id: "jobs-headline" }, headline),
+    dir.error
+      ? el("p", { class: "limit", id: "jobs-directory" }, String(dir.error))
+      : el("p", { class: full ? "limit" : "note", id: "jobs-directory" }, `The directory holds ${fmt(dir.files)} file(s), ${fmt(dir.bytes)} of ${fmt(dir.max_bytes)} bytes allowed.${full ? " It is full: no job is taken until its operator makes room." : ""}`),
+    jobs.length ? el("div", { class: "panel" }, table(
+      [{ name: "job" }, { name: "state" }, { name: "given" }, { name: "vocabulary" }, { name: "size asked", n: true }, { name: "algorithm" }, { name: "documents", n: true }, { name: "corpus bytes", n: true }, { name: "outcome" }],
+      jobs.map((j) => [j.id, j.state, clock(j.submitted_unix), `${j.asked.vocabulary_id} ${j.asked.version}`, fmt(j.asked.vocab_size), `${j.asked.algorithm} over ${j.asked.adapter}`, fmt(j.asked.documents), fmt(j.asked.corpus_bytes), outcome(j)]))) : null,
+    el("h3", {}, "What a job may cost"),
+    el("div", { class: "panel" }, pairs(d.limits)),
+    provenance(result),
+  ].filter(Boolean);
+}
+
+views["Jobs"] = async (root) => {
+  root.append(el("h2", {}, "Training jobs"));
+  const about = el("p", { class: "note" }, "A job is given with POST /v1/jobs by a program on this machine; this page gives none and cannot stop one. The service does not use a vocabulary it trained: the file stays in the directory until its operator takes it. Jobs are forgotten when the service restarts, and the oldest finished ones after enough later ones; the files are not.");
+  if (!state.capabilities.jobs) {
+    return root.append(
+      el("p", { class: "limit" }, "This service takes no jobs, so there is nothing to show."),
+      el("pre", {}, "kute serve --studio --vocab ... --jobs-dir trained"),
+      about);
+  }
+  const output = el("div", { id: "jobs-list" });
+  const draw = async () => {
+    try {
+      output.replaceChildren(...jobsList(await call("jobs")));
+    } catch (error) {
+      output.replaceChildren(failure(error));
+    }
+  };
+  root.append(output, about);
+  await draw();
+  const timer = setInterval(() => {
+    if (state.view !== "Jobs" || !output.isConnected) clearInterval(timer);
+    else draw();
+  }, 2000);
+};
+
 views["Reports"] = async (root) => {
   const file = el("input", { type: "file", id: "report-file", accept: ".json,.jsonl" });
   const output = el("div", {});
@@ -507,7 +562,7 @@ views["Not here"] = async (root) => {
     el("div", { class: "panel" }, table([{ name: "view" }, { name: "why not" }, { name: "where it is today" }], [
       ["Running a benchmark again", "The service is read-only and runs nothing but its five operations.", "The scripts in benchmarks/; open their reports under Reports."],
       ["Representation experiments", "The service has no operation for them. One measurement exists, and its result is negative.", "docs/representations.md; its report opens under Reports as plain JSON."],
-      ["Training and evolving", "This page starts no training and changes no vocabulary.", "kute train, kute evolve, kute shadow; training jobs over HTTP with kute serve --jobs-dir."],
+      ["Training and evolving", "This page starts no training and changes no vocabulary.", "kute train, kute evolve, kute shadow; training jobs given over HTTP are listed under Jobs."],
     ])));
 };
 
