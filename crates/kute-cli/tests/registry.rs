@@ -267,6 +267,29 @@ fn a_mirror_takes_everything_listed_checks_each_file_and_deletes_nothing() {
     assert!(report["registries"][0]["error"].is_string() && report["registries"][1]["listed"] == json!(2), "{report}");
     assert_eq!(report["written"].as_array().unwrap().len(), 2, "{report}");
 
+    // Two registries that hold the same content, one without its signature.
+    // Asked first, the unsigned one is passed over when a key is required.
+    let unsigned = Service::start(&dir, &["--vocab", "plain.kvf", "--registry-only"]);
+    let out = kute(&dir, &["fetch", "--from", &unsigned.url(), "--from", &url, "--mirror", "pick", "--trusted-key", &ours, "--max-files", "1"]);
+    let both: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(both["written"][0]["registry"], json!(url), "{both}");
+    // A copy with the right content and no trusted signature is fetched again when a key is required, and only then.
+    let plain = ok(&dir, &["fetch", "--from", &unsigned.url(), "--mirror", "resign"]);
+    assert_eq!(plain["written"].as_array().unwrap().len(), 1, "{plain}");
+    let copy = format!("resign/{}", name(&signed));
+    fails(&dir, &["verify", "--vocab", &copy, "--trusted-key", &ours]);
+    let kept = ok(&dir, &["fetch", "--from", &unsigned.url(), "--from", &url, "--mirror", "resign", "--max-files", "1"]);
+    assert_eq!((kept["already_there"].clone(), kept["written"].as_array().unwrap().len()), (json!(1), 1), "without a key the unsigned copy is good enough: {kept}");
+    let out = kute(&dir, &["fetch", "--from", &unsigned.url(), "--from", &url, "--mirror", "resign", "--trusted-key", &ours]);
+    let again: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(again["written"].as_array().unwrap().iter().any(|w| w["digest"] == json!(signed) && w["registry"] == json!(url)), "{again}");
+    assert_eq!(ok(&dir, &["verify", "--vocab", &copy, "--trusted-key", &ours])["verified"], true);
+    // When no registry has a signed copy, the unsigned one that is there stays.
+    ok(&dir, &["fetch", "--from", &unsigned.url(), "--mirror", "stays"]);
+    let out = kute(&dir, &["fetch", "--from", &unsigned.url(), "--mirror", "stays", "--trusted-key", &ours]);
+    assert!(!out.status.success());
+    assert_eq!(ok(&dir, &["inspect", &format!("stays/{}", name(&signed))])["summary"]["digest"], json!(signed), "still there");
+
     // A listing is the other side's: names that are not digests are counted and never asked for or written.
     let listing = json!({ "vocabularies": [{ "digest": "../../outside" }, { "digest": format!("sha256:{}", "A".repeat(64)) }, { "id": "no digest" }, "text"] }).to_string();
     let liar = impostor(with_length(listing.as_bytes()), 1);
