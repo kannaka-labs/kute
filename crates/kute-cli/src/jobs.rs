@@ -87,6 +87,30 @@ struct State {
     /// While less room than this is left, no job is taken: it would
     /// train in full and then fail at the write.
     did_not_fit: u64,
+    /// What jobs made since the start: digest, listing entry, file. Kept
+    /// apart from `jobs`, which forgets. At most [`MAX_MADE`], the oldest
+    /// going first.
+    made: VecDeque<(String, Value, PathBuf)>,
+}
+
+/// Most vocabularies made by jobs that a running service goes on giving
+/// as a registry. The number a `--vocab-dir` reads. Past it the oldest is
+/// no longer given until a restart with `--vocab-dir`.
+const MAX_MADE: usize = 4096;
+
+/// Remember what a job made, for the registry. Two jobs that made the
+/// same vocabulary are one entry, the first job's.
+fn remember(state: &mut State, job: &str, result: &Value, path: &std::path::Path) {
+    let Some(digest) = result["digest"].as_str() else { return };
+    if state.made.iter().any(|(held, _, _)| held == digest) {
+        return;
+    }
+    let summary = &result["summary"];
+    let entry = json!({ "id": summary["id"], "version": summary["version"], "digest": digest, "algorithm": summary["algorithm"], "tokens": summary["tokens"], "signed_by": [], "trained_by": job });
+    if state.made.len() >= MAX_MADE {
+        state.made.pop_front();
+    }
+    state.made.push_back((digest.to_string(), entry, path.to_path_buf()));
 }
 
 impl std::fmt::Debug for Jobs {
@@ -336,34 +360,24 @@ impl Jobs {
         Some(std::fs::read(&path).map_err(|_| "the file is no longer in the jobs directory".to_string()))
     }
 
-    /// What finished jobs made, one entry a digest, in the form of a
-    /// registry's listing. Only jobs this process remembers: after a
-    /// restart the files are still in the directory and the jobs are not.
+    /// What jobs made since this process started, one entry a digest,
+    /// in the form of a registry's listing. It does not go by the jobs
+    /// that are remembered: those are forgotten 64 later, and a registry
+    /// that stopped giving a file while it ran would break whoever had
+    /// just been shown it. After a restart nothing is here; the files
+    /// are still in the directory. The listing does not look at the
+    /// files: one removed or changed since is still listed, and asking
+    /// for it is answered as not held.
     pub fn trained(&self) -> Vec<Value> {
-        let state = self.lock();
-        let mut seen = std::collections::BTreeSet::new();
-        state
-            .jobs
-            .iter()
-            .filter(|job| job.file.is_some())
-            .filter_map(|job| {
-                let result = job.result.as_ref()?;
-                let digest = result["digest"].as_str()?;
-                let summary = &result["summary"];
-                seen.insert(digest.to_string()).then(|| json!({ "id": summary["id"], "version": summary["version"], "digest": digest, "algorithm": summary["algorithm"], "tokens": summary["tokens"], "signed_by": [], "trained_by": job.id }))
-            })
-            .collect()
+        self.lock().made.iter().map(|(_, entry, _)| entry.clone()).collect()
     }
 
-    /// The file a finished job made whose content has this digest. The
-    /// file is read and its digest computed each time: the directory is
-    /// the operator's, and a file changed there since the job wrote it
-    /// is not given under the name of what it was.
+    /// The file a job made since the start whose content has this
+    /// digest. The file is read and its digest computed each time: the
+    /// directory is the operator's, and a file changed there since the
+    /// job wrote it is not given under the name of what it was.
     pub fn file_by_digest(&self, digest: &str) -> Option<Vec<u8>> {
-        let path = {
-            let state = self.lock();
-            state.jobs.iter().find(|job| job.file.is_some() && job.result.as_ref().is_some_and(|r| r["digest"] == digest))?.file.clone()?
-        };
+        let path = self.lock().made.iter().find(|(held, _, _)| held == digest)?.2.clone();
         let bytes = std::fs::read(path).ok()?;
         let vocabulary = vocab::from_slice(&bytes).ok()?;
         (vocabulary.compute_digest().ok()? == digest).then_some(bytes)
@@ -391,6 +405,11 @@ impl Jobs {
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.train(&engine, work)));
             let seconds = started.elapsed().as_secs_f64();
             let mut state = self.lock();
+            // What was made is remembered for the registry whether or
+            // not the job itself still is.
+            if let Ok(Ok((result, path))) = &outcome {
+                remember(&mut state, &id, result, path);
+            }
             let Some(job) = state.jobs.iter_mut().find(|j| j.id == id) else { continue };
             job.finished = Some(now());
             match outcome {
@@ -457,6 +476,41 @@ mod tests {
         let engine = Engine::new();
         let jobs = Jobs { dir: dir.canonicalize().unwrap(), limits: Limits { queue: 2, ..Limits::default() }, algorithms: engine.registry().algorithm_names(), adapters: engine.registry().adapter_names(), state: Mutex::new(State::default()), wake: Condvar::new() };
         (jobs, dir)
+    }
+
+    #[test]
+    fn what_jobs_made_is_given_after_the_jobs_are_forgotten() {
+        // Found in review: the registry went by the jobs remembered, so a
+        // vocabulary left it 64 jobs later while the service ran.
+        let (jobs, dir) = idle("made");
+        let digest = |i: usize| format!("sha256:{i:064x}");
+        {
+            let mut state = jobs.lock();
+            for i in 0..70 {
+                let result = json!({ "digest": digest(i), "summary": { "id": format!("test:{i}"), "version": "0.1.0", "algorithm": "bpe", "tokens": 260 } });
+                remember(&mut state, &format!("job-{i}"), &result, &dir.join(format!("{i}.kvf")));
+            }
+            // The same vocabulary from a later job is the one entry.
+            remember(&mut state, "job-99", &json!({ "digest": digest(3), "summary": {} }), &dir.join("again.kvf"));
+            assert!(state.jobs.is_empty(), "no job is remembered here at all");
+        }
+        let listed = jobs.trained();
+        assert_eq!(listed.len(), 70);
+        assert_eq!((listed[0]["digest"].clone(), listed[3]["trained_by"].clone()), (json!(digest(0)), json!("job-3")));
+        // A file that is not there, or is not that vocabulary, is not given.
+        assert!(jobs.file_by_digest(&digest(0)).is_none());
+        std::fs::write(dir.join("0.kvf"), b"{}").unwrap();
+        assert!(jobs.file_by_digest(&digest(0)).is_none());
+        // Past the limit the oldest goes.
+        {
+            let mut state = jobs.lock();
+            for i in 70..MAX_MADE + 2 {
+                remember(&mut state, "job-x", &json!({ "digest": digest(i), "summary": {} }), &dir.join("x.kvf"));
+            }
+        }
+        let listed = jobs.trained();
+        assert_eq!((listed.len(), listed[0]["digest"].clone()), (MAX_MADE, json!(digest(2))));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

@@ -390,12 +390,18 @@ What it does not do:
 * Jobs are not kept across a restart. The files are.
 * With `--registry`, a vocabulary a job made is listed under
   `/v1/vocabularies` and given by its digest as soon as the job is done
-  (after 0.9.4), with `trained_by` naming the job. This adds no reader:
-  whoever can ask the registry could already read the file under the
-  job. The file is read from the directory and its digest computed each
-  time, so a file changed there since is answered `404`, not given
-  under the old name. After a restart the service has forgotten its
-  jobs, and gives those files only if started with `--vocab-dir`.
+  (after 0.9.4), with `trained_by` naming the job, and for as long as
+  the service runs: not only while the job is among the 64 remembered.
+  (Up to 4,096 such vocabularies; past that the oldest is no longer
+  given.) At this service that adds no reader: whoever can ask the
+  registry could already read the file under the job, though now for
+  longer. **Further on it does:** a registry that names this one as an
+  `--upstream` gives the trained file to its own callers. The listing
+  does not look at the files, so one removed or changed in the
+  directory is still listed; asked for, it is read and its digest
+  computed, and the answer is `404`, never other content under the old
+  name. After a restart the service has forgotten what its jobs made,
+  and gives those files only if started with `--vocab-dir`.
 * The operations are another matter: `/v1/encode` and the rest know
   only the vocabularies the service was started with. A trained
   vocabulary is used by a service after a restart with `--vocab-dir`,

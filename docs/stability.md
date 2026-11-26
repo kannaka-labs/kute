@@ -97,8 +97,10 @@ not covered.
   address that is not loopback.
 - A service with both `--registry` and `--jobs-dir` lists and gives
   what its jobs trained, without a restart; it listed only what it was
-  started with. Entries from jobs carry `trained_by`. Rust:
-  `jobs::Jobs::trained`, `jobs::Jobs::file_by_digest`.
+  started with, for as long as it runs. Entries from jobs carry
+  `trained_by`. A registry downstream that names it as an upstream
+  passes those files on. Rust: `jobs::Jobs::trained`,
+  `jobs::Jobs::file_by_digest`.
 - `GET /v1/capabilities` has a new field, `tls`. What `kute serve`
   prints at start has `tls` and `callers_answered`.
 - Rust, `kute-cli` as a library: `registry::parse_url` returns a
