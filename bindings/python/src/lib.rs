@@ -419,7 +419,8 @@ fn signals_pack(py: Python<'_>, values: Vec<f64>, max_error: Option<f64>, codec:
 /// container that would give other values than its header promises is
 /// refused.
 #[pyfunction]
-#[pyo3(signature = (container, *, max_values=1 << 27))]
+// The same default as `kute signals unpack`: about 740 MB at the most.
+#[pyo3(signature = (container, *, max_values=1 << 24))]
 fn signals_unpack(py: Python<'_>, container: &[u8], max_values: u64) -> PyResult<Vec<f64>> {
     py.detach(|| kute_signals::unpack(container, max_values)).map_err(err)
 }

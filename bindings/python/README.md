@@ -49,7 +49,7 @@ kute.events_inspect(container)                   # the header alone
 
 # Numbers, exactly or within a bound that is checked on every value.
 container, report = kute.signals_pack(values, max_error=0.01)
-values_back = kute.signals_unpack(container)
+values_back = kute.signals_unpack(container)     # up to 16,777,216 values; max_values= for more
 report["header"]["max_error_observed"]
 
 # The next version of an event vocabulary; every existing id is kept.

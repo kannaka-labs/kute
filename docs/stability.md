@@ -88,6 +88,13 @@ All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
 
+## Changes since v0.9.2 that need action
+
+- **Python `kute.signals_unpack` reads at most 16,777,216 values by
+  default, not 134,217,728.** This is the command line's default. A
+  container with more needs `max_values=`. The old default let a small
+  container of compressed zeros ask a caller for several gigabytes.
+
 ## Changes since v0.9.1 that need action
 
 None for the command line: `--status-file` and `--peer-status` are new
