@@ -204,10 +204,10 @@ What it does not do:
   announced: a registry learns of a vocabulary only by being asked for
   its digest. There is no discovery of registries and no agreement
   between registries about anything. A registry does not mirror
-  another; a client can, after 0.9.3 (below).
+  another; a client can, since 0.9.4 (below).
 * Upstream connections are plain HTTP, as every other connection here.
 
-### A copy of everything a registry lists (after 0.9.3)
+### A copy of everything a registry lists (0.9.4)
 
 ```
 kute fetch --from http://registry:8787 --mirror DIR [--trusted-key BASE64]
@@ -240,7 +240,7 @@ is counted.
 * It is a copy made once, by hand or by a scheduler. Nothing watches
   the registry.
 
-`kute serve --vocab-dir DIR` (after 0.9.3) holds every `.kvf` and
+`kute serve --vocab-dir DIR` (0.9.4) holds every `.kvf` and
 `.kvfb` file in a directory, as if each had been named with `--vocab`,
 so `--vocab-dir DIR --registry-only` gives a mirror on. The same serves
 what `--jobs-dir` trained. The directory is read once, at start, and
@@ -278,8 +278,8 @@ other field is refused. The answer is `202` and the job:
 | request | answer |
 |---|---|
 | `GET /v1/jobs` | every job remembered, and the limits |
-| `GET /v1/jobs/job-1` | that job; `state` is `waiting`, `running`, `done`, `failed` or, after 0.9.3, `withdrawn` |
-| `DELETE /v1/jobs/job-1` | after 0.9.3: the job, withdrawn, if it was waiting; `409 not_waiting` otherwise |
+| `GET /v1/jobs/job-1` | that job; `state` is `waiting`, `running`, `done`, `failed` or, since 0.9.4, `withdrawn` |
+| `DELETE /v1/jobs/job-1` | since 0.9.4: the job, withdrawn, if it was waiting; `409 not_waiting` otherwise |
 | `GET /v1/jobs/job-1/vocabulary` | the vocabulary file of a job that is done; `409 not_ready` otherwise |
 
 A job that is done has `result`: the `digest`, the `file` name, its
@@ -287,7 +287,7 @@ size, the summary `kute inspect` gives, and the seconds training took.
 The file is `DIR/<64 hex digits of the digest>.kvf`. The same corpus and
 settings give the vocabulary `kute train` gives, with the same digest.
 
-From the command line, after 0.9.3:
+From the command line, since 0.9.4:
 
 ```
 kute job --at http://127.0.0.1:8080 --input corpus.txt     --id example:text --vocab-size 8192 --output example.kvf
@@ -319,7 +319,7 @@ What it does not do:
   service with it, or does not.
 * **A job that has started cannot be stopped, and none can be
   changed.** What a job may cost is bounded when it is taken, not while
-  it runs. A job that is still waiting can be withdrawn, after 0.9.3:
+  it runs. A job that is still waiting can be withdrawn, since 0.9.4:
   `DELETE /v1/jobs/{id}` takes it out of the line, lets its corpus go
   and answers with the job, whose state is now `withdrawn`. It stays in
   the list as what happened. For a job that is running, done, failed or

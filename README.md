@@ -212,7 +212,7 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
-* After 0.9.3, on `next`: a training job that is still waiting can be
+* Since 0.9.4, a training job that is still waiting can be
   withdrawn (`DELETE /v1/jobs/{id}`), and `kute job` gives a job from
   the command line, waits, and keeps the file only if its content is
   what the service named. `kute fetch --mirror DIR` copies everything a

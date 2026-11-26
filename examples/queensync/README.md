@@ -49,7 +49,7 @@ connection is plain loopback so the count is the protocol alone.
 
 ## What was measured
 
-`report-kute-0.9.3.json`, one run, seed fixed in the script. Sizes
+`report-kute-0.9.4.json`, one run, seed fixed in the script. Sizes
 are reproducible; times are not. Apart from the signed steps, which
 are new, every size in it equals the run recorded on 0.7.0. Each signed
 offer carries one batch of 100 tasks, about 67 kB when delivered; a

@@ -129,7 +129,7 @@ produces the same ids as KUTE on a set of inputs including non-Latin text and
 unseen words. Export is refused for vocabularies tiktoken cannot represent
 (symbol vocabularies, or two tokens with the same bytes).
 
-## 6. A vocabulary service on one machine (after 0.9.3)
+## 6. A vocabulary service on one machine (0.9.4)
 
 One process trains vocabularies when asked, another machine keeps a
 checked copy of them. Nothing here has authentication or encryption:

@@ -1239,7 +1239,7 @@ repeats another's listing.
   the registry passes on what came and the client's own check is the
   only one, which was already true of a single registry.
 
-(After 0.9.3 a client can copy what a registry lists, `kute fetch
+(Since 0.9.4 a client can copy what a registry lists, `kute fetch
 --mirror`: the client's own checks on each file, so no registry is
 trusted more for it, and it never deletes, so a registry that stops
 listing a file cannot make a mirror lose it.)
@@ -1339,7 +1339,7 @@ Considered and not chosen:
 * Stopping a running job. Training has no point at which it checks for
   a request to stop, and killing a thread is not available. So cost is
   bounded at the door, and the documentation says a job cannot be
-  stopped. (After 0.9.3 a job that has not started can be withdrawn
+  stopped. (Since 0.9.4 a job that has not started can be withdrawn
   with `DELETE`: that needs nothing from training, and frees a place in
   the line and the corpus held for it. Anything on the machine that can
   give a job can withdraw any job, its own or not; there are no callers
