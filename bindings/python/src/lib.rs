@@ -322,12 +322,13 @@ impl Engine {
 
     /// What a wire container says about itself, without a vocabulary:
     /// the vocabulary it names, how many tokens and escaped symbols.
-    /// The ids are read to check the container is whole: about 6 bytes
-    /// of memory for each token up to `max_tokens`.
+    /// The ids are read to check the container is whole and are not
+    /// kept, so memory does not grow with the count; `max_tokens` bounds
+    /// the time spent.
     #[staticmethod]
     #[pyo3(signature = (container, *, max_tokens=1 << 24))]
     fn inspect_container(py: Python<'_>, container: &[u8], max_tokens: u64) -> PyResult<Py<PyAny>> {
-        let s = kute::TokenSequence::from_bytes_bounded(container, max_tokens).map_err(err)?;
+        let (s, tokens) = py.detach(|| kute::TokenSequence::describe_bytes(container, max_tokens)).map_err(err)?;
         to_python(
             py,
             &serde_json::json!({
@@ -336,7 +337,7 @@ impl Engine {
                 "vocabulary_digest": s.vocabulary_digest,
                 "modality": s.modality,
                 "adapter": s.adapter,
-                "tokens": s.ids.len(),
+                "tokens": tokens,
                 "escaped_symbols": s.escapes.len(),
                 "bytes": container.len(),
             }),
