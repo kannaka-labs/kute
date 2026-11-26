@@ -168,7 +168,7 @@ fn a_vocabulary_is_fetched_by_digest_and_kept_only_if_it_is_that_one() {
     ok(&dir, &["fetch", "--from", &url, "--digest", &signed, "--output", "got.kvf", "--force"]);
     // Refused before anything is asked for.
     assert!(fails(&dir, &["fetch", "--from", &url, "--digest", "latest", "--output", "no4.kvf"]).contains("not a digest"));
-    assert!(fails(&dir, &["fetch", "--from", "https://example.invalid", "--digest", &signed, "--output", "no5.kvf"]).contains("https is not built"));
+    assert!(fails(&dir, &["fetch", "--from", "https://example.invalid", "--digest", &signed, "--output", "no5.kvf"]).contains("https needs this side's certificate"));
     // A name that is not there is an error, and one within the time given.
     let started = std::time::Instant::now();
     fails(&dir, &["fetch", "--from", "http://registry.invalid:8787", "--digest", &signed, "--output", "no5.kvf", "--timeout", "5"]);

@@ -1366,6 +1366,83 @@ one file; refusals for every field out of bounds and for fields that
 name files; other methods; a burst past the line is turned away and
 every job taken finishes; off by default; refused off loopback.
 
+## ADR-0058: The HTTP service does TLS itself, with a certificate on both sides, and still nothing else
+
+Status: accepted. Revises one sentence of ADR-0037, which said that if
+TLS were wanted "the answer is a proxy in front or a real library, not
+more code here".
+
+That sentence had two reasons, and one still stands. Its fear was the
+transport growing into a framework; HTTP/2, keep-alive and streaming
+are still not here and the sentence still holds for them. But for TLS
+the "real library" is already in the build: `kute peer` has done TLS
+1.3 with a certificate on both sides through `rustls` since v0.7, with
+its own tests. And "a proxy in front" left the two things added since
+unusable across machines without work nobody had described: a registry
+on a network was `--insecure-remote`, which gives every file to anyone,
+and jobs were loopback only because there was nobody to tell callers
+apart. The person at the keyboard asked for it to be built.
+
+What was built is the peer's transport under the same one-request
+transport, and no new dependency:
+
+* `--tls-cert`, `--tls-key`, `--tls-client-ca` on `kute serve` make
+  every connection TLS 1.3 with a certificate on both sides. There is
+  no TLS with a certificate on one side only. A service whose callers
+  are anonymous is what `--insecure-remote` already is, with the
+  network unable to read it; that is a different thing to want, and it
+  would make "over TLS" stop meaning "callers are known", which is what
+  lets jobs leave loopback.
+* Who is answered: any certificate from the authority, or with
+  `--allow`, the listed fingerprints only. The peer requires the list;
+  the service does not, because a registry that gives files by digest
+  to a whole organization is a reasonable thing and a peer that accepts
+  vocabularies from one is not. The cost is that without `--allow`
+  everything the service does, training included, is open to everyone
+  the authority ever issued a certificate to. The documentation says
+  so.
+* No roles. A caller that is answered can do all the service does. Two
+  services with two lists is the way to give some callers less.
+* A caller that fails the handshake is told nothing in HTTP. A caller
+  that passes it and is not on the list is told `403`: it proved it
+  holds a certificate from the authority, and an operator who forgot a
+  fingerprint needs to see why.
+* The client side is one certificate for the process, given on the
+  command line, and never the system's list of authorities: the
+  operator names who is believed. An `https` address without it is an
+  error before any connection, as `https` was before.
+* The handshake is driven here against one deadline, the request's.
+  `rustls` with blocking sockets will wait on each read for as long as
+  the socket allows, and a socket timeout is per read: a caller sending
+  a byte now and then would hold a worker without end. A test does
+  exactly that and is dropped at the deadline.
+* When the line is full a plain service says `503` from the accepting
+  thread, without reading. Over TLS that would mean a handshake on the
+  accepting thread, which is the thread that must never wait; the
+  connection is closed with nothing said.
+* Studio is refused with TLS. A browser has no certificate to show
+  unless one is installed in it, and a page for the person at the
+  machine does not need a network.
+
+What it costs: the service now reads certificates and keys at start
+and is one more place a private key lives. A handshake is the most
+expensive thing an unknown caller can ask for, and it is asked for
+before the service knows who is calling: the bound on it is workers
+times the timeout, the same as for slow requests, and nothing better.
+Certificates are read once; renewing one is a restart. Revocation is a
+shorter `--allow` list or a new authority, and a restart.
+
+Checked by tests against real processes with certificates made for the
+run: fetch, list, a job and a registry's upstream over TLS; refused
+with no certificate, with one from another authority, with a service
+certificate from another authority, with the right certificate under
+another name for the same machine, and when not on the list; plain HTTP
+to the port gets no HTTP back; silent and dripping connections on
+every worker delay a real caller by the timeout and no more; an address
+that is not loopback starts, with jobs, without `--insecure-remote`.
+Not checked: anything about `rustls` itself, certificate chains longer
+than one, load, and any system but the three the tests run on.
+
 ## Deferred
 
 Import from other tokenizer formats,

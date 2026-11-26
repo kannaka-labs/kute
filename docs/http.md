@@ -22,11 +22,54 @@ Nothing is trained, evolved, stored between requests or published; those
 operations are not offered. There is no `/v1/train`. The one exception
 is asked for by the operator and off otherwise: training jobs, below.
 
-**There is no TLS and no authentication.** For that reason it listens on
-the loopback interface, and refuses to start on any other address unless
-`--insecure-remote` is given. With that flag, anyone who can reach the
-address can use it. To put it on a network, put something that does TLS
-and authentication in front of it.
+**Unless it is given certificates, there is no TLS and no
+authentication.** For that reason it listens on the loopback interface,
+and refuses to start on any other address unless `--insecure-remote` is
+given. With that flag, anyone who can reach the address can use it. To
+put it on a network, give it certificates, as below.
+
+### Over TLS (after 0.9.4)
+
+```
+kute serve --vocab file.kvf --listen 0.0.0.0:8787 \
+    --tls-cert service.pem --tls-key service.key --tls-client-ca callers-ca.pem
+kute fetch --from https://service.example:8787 --digest sha256:... --output file.kvf \
+    --tls-cert me.pem --tls-key me.key --tls-ca services-ca.pem
+```
+
+With `--tls-cert`, `--tls-key` and `--tls-client-ca`, every connection
+is TLS 1.3 with a certificate on both sides, the way `kute peer` does
+it, and an address that is not loopback needs no `--insecure-remote`.
+
+* A caller is answered only if it shows a certificate issued by an
+  authority in `--tls-client-ca`. Anyone else gets no HTTP at all: the
+  connection is closed in the handshake.
+* `--allow sha256:...` (repeatable, the fingerprint `kute peer
+  fingerprint` prints) narrows that to the certificates listed. A
+  caller with a certificate from the authority that is not listed is
+  answered `403` `not_allowed`, whatever it asked. Without `--allow`,
+  the authority is the whole list: everyone it issued a certificate to
+  can do everything the service does.
+* Every caller that is answered may do the same things. There are no
+  roles: one that can fetch can also give a job, if jobs are on.
+* The callers are `kute fetch`, `kute job` and a registry's
+  `--upstream`, each with `--tls-cert`, `--tls-key` and `--tls-ca`. An
+  `https://` address without them is refused before any connection.
+  The service's certificate must be issued by an authority in
+  `--tls-ca` and carry the host that is in the address, name or IP.
+  The system's own list of authorities is never used.
+* The handshake has the time a request has (`--timeout`), all of it
+  counted, so a connection that will not finish one costs a worker that
+  long. When every worker is busy and the line is full, a new
+  connection is closed without the `503` a plain service sends: there
+  is nothing to say it in before a handshake.
+* What is not there: revocation other than taking a fingerprint off
+  `--allow` or changing the authority, and restarting; reloading
+  certificates without a restart; a browser. Studio is not served over
+  TLS, since a browser has no certificate to show; `--studio` with the
+  TLS options stops the start. `--peer-status` stays loopback only.
+* What TLS does not change: a fetched file is still believed because of
+  its digest and its signatures, not because of who sent it.
 
 On loopback it also guards against web pages, which can reach a local
 port from a browser: it answers only requests whose `Host` is a loopback
@@ -105,7 +148,8 @@ What this is and is not:
   way, gets nothing written. They are trusted with nothing else either,
   and that is all the protection there is: the connection is plain
   HTTP, so both can see what was asked for and what was sent, and can
-  refuse or stall. `https://` addresses are refused, not built.
+  refuse or stall. That is plain `http://`; for `https://` see "Over
+  TLS" above.
 * The file is written with whatever signatures arrived in it. A
   signature is outside what the digest covers, so a registry can add
   one, and a file with the right digest can carry a signature nobody
@@ -119,10 +163,10 @@ What this is and is not:
   without `--trusted-key` proves only that the registry sent what it
   said it would.
 * To be reached from another machine the service must listen on an
-  address that is not loopback, which needs `--insecure-remote` and
-  means what that option says: no TLS and no authentication, and anyone
-  who can reach it can take every file it holds. Use `--registry-only`
-  there.
+  address that is not loopback. That needs the TLS options, or
+  `--insecure-remote`, which means what it says: no TLS and no
+  authentication, and anyone who can reach it can take every file it
+  holds. Use `--registry-only` there.
 * No uploads, no accounts, no search, no expiry or revocation. The
   registry holds the files named when it started and, if it was given
   upstreams, copies of what it has fetched from them (below).
@@ -257,8 +301,10 @@ directory, each held whole in memory.
 ## Training jobs (0.9.3)
 
 `kute serve --jobs-dir DIR` takes training jobs. It is off unless the
-directory is named, and refused on any address but loopback: the service
-has no authentication, so whoever can reach it could make it train.
+directory is named, and refused on any address but loopback unless the
+service is over TLS: without it the service has no authentication, so
+whoever can reach it could make it train. Over TLS, whoever is answered
+can.
 
 ```
 POST /v1/jobs

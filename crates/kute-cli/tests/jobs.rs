@@ -299,7 +299,7 @@ fn the_command_line_gives_a_job_and_keeps_only_a_file_that_is_what_it_was_told()
     let (ok, _, said) = kute(&dir, &["job", "--at", &format!("http://{}", plain.address), "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "plain.kvf"]);
     assert!(!ok && said.contains("takes no jobs"), "{said}");
     let (ok, _, said) = kute(&dir, &["job", "--at", "https://127.0.0.1:1", "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "tls.kvf"]);
-    assert!(!ok && said.contains("service address") && said.contains("https is not built"), "{said}");
+    assert!(!ok && said.contains("service address") && said.contains("https needs this side's certificate"), "{said}");
     // Nobody there.
     drop(service);
     let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "nobody.kvf"]);
@@ -583,7 +583,7 @@ fn jobs_are_off_unless_asked_for_and_never_on_an_address_others_can_reach() {
         assert!(!out.status.success(), "{args:?} was accepted");
         String::from_utf8_lossy(&out.stderr).into_owned()
     };
-    assert!(refused(&["--listen", "0.0.0.0:0", "--insecure-remote", "--jobs-dir", "made"]).contains("loopback address only"));
+    assert!(refused(&["--listen", "0.0.0.0:0", "--insecure-remote", "--jobs-dir", "made"]).contains("loopback address, or over TLS"));
     refused(&["--listen", "127.0.0.1:0", "--registry-only", "--jobs-dir", "made"]);
     refused(&["--listen", "127.0.0.1:0", "--jobs-queue", "2"]);
     assert!(!dir.join("made").exists() || std::fs::read_dir(dir.join("made")).unwrap().next().is_none());

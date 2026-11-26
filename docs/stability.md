@@ -88,6 +88,25 @@ All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
 
+## Changes since v0.9.4 that need action
+
+- `kute serve --tls-cert --tls-key --tls-client-ca` (and `--allow`,
+  `--tls-ca`) and `--tls-cert --tls-key --tls-ca` on `kute fetch` and
+  `kute job` are new; without them everything is as it was, except the
+  words of two refusals: an `https://` address, and a start on an
+  address that is not loopback.
+- `GET /v1/capabilities` has a new field, `tls`. What `kute serve`
+  prints at start has `tls` and `callers_answered`.
+- Rust, `kute-cli` as a library: `registry::parse_url` returns a
+  `registry::Target` and not a pair, and `registry::request` takes one
+  in place of an authority, with a path that is under the target's own.
+  `http::Options` has a new field, `tls` (`None` is the service as it
+  was). New: `registry::client_identity`, `http::Tls`.
+- Rust, `kute-protocol`: `tls::accept_by` and `tls::connect_by` (a
+  handshake with a deadline), `Secured::socket`, `Secured::close`, and
+  `tls::ServerConfig` and `tls::ClientConfig` by name. Nothing changed
+  for `accept` and `connect`.
+
 ## Changes since v0.9.3 that need action
 
 - `DELETE /v1/jobs/{id}` withdraws a waiting job; it was answered `405`.

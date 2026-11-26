@@ -20,7 +20,8 @@ use kute::{KuteError, Result};
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::server::WebPkiClientVerifier;
-use rustls::{ClientConfig, ClientConnection, ConnectionCommon, RootCertStore, ServerConfig, ServerConnection, SideData, StreamOwned};
+pub use rustls::{ClientConfig, ServerConfig};
+use rustls::{ClientConnection, ConnectionCommon, RootCertStore, ServerConnection, SideData, StreamOwned};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -28,6 +29,7 @@ use std::net::TcpStream;
 use std::ops::DerefMut;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 fn tls_error(what: &str, e: impl std::fmt::Display) -> KuteError {
     KuteError::Backend(format!("tls: {what}: {e}"))
@@ -165,6 +167,23 @@ pub type ServerStream = Secured<ServerConnection, rustls::server::ServerConnecti
 /// The connecting side's connection.
 pub type ClientStream = Secured<ClientConnection, rustls::client::ClientConnectionData>;
 
+impl<C: DerefMut<Target = ConnectionCommon<S>>, S: SideData> Secured<C, S> {
+    /// The socket under the encryption, for setting how long a read or a
+    /// write may take. Reading or writing it directly would break the
+    /// connection.
+    pub fn socket(&self) -> &TcpStream {
+        &self.0.sock
+    }
+
+    /// Tell the other side that nothing more will be sent, and send what
+    /// is waiting. Dropping does the same; this is for a side that wants
+    /// to go on reading afterwards.
+    pub fn close(&mut self) {
+        self.0.conn.send_close_notify();
+        let _ = self.0.flush();
+    }
+}
+
 impl<C: DerefMut<Target = ConnectionCommon<S>>, S: SideData> Read for Secured<C, S> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.0.read(buf)
@@ -185,6 +204,54 @@ impl<C: DerefMut<Target = ConnectionCommon<S>>, S: SideData> Drop for Secured<C,
         self.0.conn.send_close_notify();
         let _ = self.0.flush();
     }
+}
+
+/// The handshake, with one deadline for all of it. Each read and write
+/// is given what is left of the time, and the time is looked at again
+/// after each: a side that sends a byte now and then cannot hold the
+/// other past the deadline.
+fn handshake<C: DerefMut<Target = ConnectionCommon<S>>, S: SideData>(connection: &mut C, tcp: &mut TcpStream, deadline: Instant) -> Result<()> {
+    let late = || tls_error("handshake", "it did not finish in the time allowed");
+    loop {
+        let left = deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(late)?;
+        tcp.set_read_timeout(Some(left)).map_err(|e| tls_error("handshake", e))?;
+        tcp.set_write_timeout(Some(left)).map_err(|e| tls_error("handshake", e))?;
+        if connection.wants_write() {
+            connection.write_tls(tcp).map_err(|e| tls_error("handshake", e))?;
+            continue;
+        }
+        if !connection.is_handshaking() {
+            return Ok(());
+        }
+        match connection.read_tls(tcp) {
+            Ok(0) => return Err(tls_error("handshake", "the connection closed before it finished")),
+            Ok(_) => {}
+            Err(e) => return Err(tls_error("handshake", e)),
+        }
+        if let Err(e) = connection.process_new_packets() {
+            // Say why, if there is time; the other side may be honest
+            // and misconfigured.
+            let _ = connection.write_tls(tcp);
+            return Err(tls_error("handshake", e));
+        }
+    }
+}
+
+/// As [`accept`], and the handshake must finish by `deadline`.
+pub fn accept_by(config: &Arc<ServerConfig>, mut tcp: TcpStream, deadline: Instant) -> Result<(ServerStream, PeerIdentity)> {
+    let mut connection = ServerConnection::new(config.clone()).map_err(|e| tls_error("starting the handshake", e))?;
+    handshake(&mut connection, &mut tcp, deadline)?;
+    let who = identity(connection.peer_certificates())?;
+    Ok((Secured(StreamOwned::new(connection, tcp)), who))
+}
+
+/// As [`connect`], and the handshake must finish by `deadline`.
+pub fn connect_by(config: &Arc<ClientConfig>, server_name: &str, mut tcp: TcpStream, deadline: Instant) -> Result<(ClientStream, PeerIdentity)> {
+    let name = ServerName::try_from(server_name.to_string()).map_err(|e| tls_error(&format!("server name {server_name:?}"), e))?;
+    let mut connection = ClientConnection::new(config.clone(), name).map_err(|e| tls_error("starting the handshake", e))?;
+    handshake(&mut connection, &mut tcp, deadline)?;
+    let who = identity(connection.peer_certificates())?;
+    Ok((Secured(StreamOwned::new(connection, tcp)), who))
 }
 
 fn identity(certificates: Option<&[CertificateDer<'_>]>) -> Result<PeerIdentity> {
