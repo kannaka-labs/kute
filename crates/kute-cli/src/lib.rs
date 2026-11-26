@@ -4,6 +4,7 @@
 //! stderr. Exit status is 0 on success and 1 on any error.
 
 pub mod http;
+pub mod jobs;
 pub mod live;
 pub mod peer_status;
 pub mod registry;
@@ -377,6 +378,26 @@ enum Command {
         /// only: the file names who connected to the peer.
         #[arg(long, value_name = "FILE", conflicts_with = "registry_only")]
         peer_status: Option<PathBuf>,
+        /// Take training jobs, and write the vocabularies they give into
+        /// this directory, each in a file named by its digest. A caller
+        /// sends the corpus in the request; the service reads no file a
+        /// caller names. One job runs at a time and cannot be stopped.
+        /// Loopback only: anyone who can reach the service can make it
+        /// train. Off unless given.
+        #[arg(long, value_name = "DIR", conflicts_with = "registry_only")]
+        jobs_dir: Option<PathBuf>,
+        /// Jobs that may wait behind the one running. Each holds its
+        /// corpus in memory, up to the request size limit.
+        #[arg(long, default_value_t = 4, requires = "jobs_dir")]
+        jobs_queue: usize,
+        /// Largest vocabulary a job may ask for.
+        #[arg(long, default_value_t = 65_536, requires = "jobs_dir")]
+        jobs_max_vocab_size: u32,
+        /// Bytes of files the jobs directory may hold. At or past it no
+        /// job is taken, and a job that would write past it fails. Nothing
+        /// is removed: the operator makes room.
+        #[arg(long, default_value_t = 1 << 30, requires = "jobs_dir")]
+        jobs_max_dir_bytes: u64,
         /// Another registry (http://host:port) to ask for a vocabulary
         /// this one does not hold. What comes back is checked as `kute
         /// fetch` checks it, kept in memory, and given on. Repeatable;
@@ -1607,7 +1628,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 _ => Err(KuteError::InvalidConfig("give --digest and --output, or --list".into())),
             }
         }
-        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, peer_status, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, peer_status, jobs_dir, jobs_queue, jobs_max_vocab_size, jobs_max_dir_bytes, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
             let registry = registry || registry_only;
             if !upstream.is_empty() && !registry {
                 return Err(KuteError::InvalidConfig("--upstream is for a registry: add --registry or --registry-only".into()));
@@ -1640,8 +1661,15 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             if peer_status.is_some() && !http::is_loopback(&address) {
                 return Err(KuteError::InvalidConfig("--peer-status is given on a loopback address only: the status names who connected to the peer".into()));
             }
-            print(&json!({ "listening": address.to_string(), "api": "v1", "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "upstreams": upstream, "upstream_files_need_a_trusted_signature": !upstream_trusted_key.is_empty(), "operations": !registry_only }))?;
-            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, federation, peer_status, ..Default::default() };
+            if jobs_dir.is_some() && !http::is_loopback(&address) {
+                return Err(KuteError::InvalidConfig("--jobs-dir is given on a loopback address only: the service has no authentication, and whoever reaches it could make it train".into()));
+            }
+            let jobs = match jobs_dir {
+                Some(dir) => Some(jobs::Jobs::start(dir, jobs::Limits { queue: jobs_queue, max_vocab_size: jobs_max_vocab_size, max_dir_bytes: jobs_max_dir_bytes, ..Default::default() })?),
+                None => None,
+            };
+            print(&json!({ "listening": address.to_string(), "api": "v1", "jobs": jobs.is_some(), "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "upstreams": upstream, "upstream_files_need_a_trusted_signature": !upstream_trusted_key.is_empty(), "operations": !registry_only }))?;
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, federation, peer_status, jobs, ..Default::default() };
             http::serve(server, listener, options)
         }
         Command::Capabilities => {

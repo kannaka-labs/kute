@@ -141,7 +141,7 @@ async function run() {
 
   // The frame, and the first view.
   const tabs = await page('[...document.querySelectorAll("#tabs button")].map((b) => b.textContent)');
-  must(JSON.stringify(tabs) === JSON.stringify(["Runtime", "Vocabulary", "Encode", "Compare", "Patterns", "Peer", "Reports", "Not here"]), "the eight views are offered: " + tabs.join(", "));
+  must(JSON.stringify(tabs) === JSON.stringify(["Runtime", "Vocabulary", "Encode", "Compare", "Patterns", "Peer", "Jobs", "Reports", "Not here"]), "the nine views are offered: " + tabs.join(", "));
   const line = await page('document.getElementById("runtime-line").textContent');
   must(/^kute \d+\.\d+\.\d+ · interface v1 · 2 vocabularies/.test(line), "the header names the software and what it holds: " + line);
   const runtime = await page("window.__t.text()");
@@ -213,6 +213,32 @@ async function run() {
   await page('window.__t.set("time-field", ""); window.__t.press("Look for recurring sequences")');
   await until('window.__t.text().includes("POST /v1/discover") && !window.__t.asking()', "patterns without times");
   must((await page('window.__t.rowsAfter("How long each took")')) === null, "no time field, no timing table");
+
+  // Jobs: none yet; then one is given by another program, and the page
+  // follows it to its end without being asked.
+  await open("Jobs");
+  await until('document.getElementById("jobs-headline") !== null', "the list of jobs");
+  must((await page('document.getElementById("jobs-headline").textContent')).startsWith("No job has been given"), "Jobs says that none was given");
+  must((await page('document.getElementById("jobs-directory").textContent')).startsWith("The directory holds 0 file(s), 0 of 1,073,741,824 bytes"), "and what the directory holds");
+  must((await page("window.__t.text()")).includes("GET /v1/jobs"), "and names the request it came from");
+  must((await page('[...document.querySelectorAll("#view button, #view input, #view textarea")].length')) === 0, "Jobs offers nothing to press: it gives no job");
+  const given = await fetch(new URL("/v1/jobs", studioUrl), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texts: ["the engine reads the event log and writes the event log ".repeat(40)], vocabulary_id: "test:studio:job", vocab_size: 300 }) });
+  must(given.status === 202, "a job given by another program is taken");
+  await until('document.getElementById("jobs-headline").textContent.includes("1 done")', "the page to show the job done without being asked");
+  const row = await page('document.querySelector("#jobs-list tbody tr").textContent');
+  must(row.includes("job-1") && row.includes("test:studio:job 0.1.0") && row.includes("sha256:") && row.includes("the file"), "Jobs shows the job, its digest and its file: " + row.slice(0, 80));
+  const link = await page('document.querySelector("#jobs-list tbody a").getAttribute("href")');
+  must(link === "/v1/jobs/job-1/vocabulary", "the file is the service's own answer: " + link);
+  must((await page('document.getElementById("jobs-directory").textContent')).startsWith("The directory holds 1 file(s)"), "and the directory holds it");
+  const refused = await fetch(new URL("/v1/jobs", studioUrl), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texts: ["x"], vocabulary_id: "test:studio:bad", vocab_size: 300, adapter: "jsonl-events" }) });
+  must(refused.status === 202, "a job that will fail when run is taken");
+  // Nothing changed, so the list is left as it is: the same row, not a new one like it.
+  await page('window.__row = document.querySelector("#jobs-list tbody tr")');
+  await until('document.getElementById("jobs-headline").textContent.includes("1 failed")', "the page to show the failure");
+  must((await page('document.querySelector("#jobs-list tbody tr").textContent')).includes("job-2"), "newest first, with why it failed");
+  await page('window.__row = document.querySelector("#jobs-list tbody tr")');
+  await new Promise((resolve) => setTimeout(resolve, 4500));
+  must((await page('window.__row === document.querySelector("#jobs-list tbody tr") && window.__row.isConnected')) === true, "an answer that did not change is not drawn again, so a selection survives");
 
   // Peer: a real `kute peer serve` is waiting, and says so in its status
   // file. The page follows it by itself: someone connects, then leaves.

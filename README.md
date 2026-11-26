@@ -212,6 +212,13 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
+* Since 0.9.3, `kute serve --jobs-dir DIR` takes training
+  jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
+  each ending as a file named by its digest. The service does not use
+  what it trained, and a job cannot be stopped. Studio lists the
+  jobs and what the directory holds. The Python package
+  gains wire containers and `translate`, and `discover` takes times
+  and held-out records. `docs/http.md`.
 * Since 0.9.2, Studio shows a running peer. `kute peer serve
   --status-file` keeps a file saying what it is doing, and `kute serve
   --studio --peer-status` shows it, a second or two old. It is the
@@ -302,6 +309,13 @@ system's own data: it reads the bus's memory events, read-only, keeps
 compressor on the same bytes, and finds the timed loops of one or two
 agents. No Kannaka service uses KUTE yet; its README says what that run
 does and does not show.
+
+`examples/fema-disasters` (0.9.3) runs `kute.discover` on a public
+event log, FEMA's 70,607 disaster declarations since 1953: 99 recurring
+sequences by county against 56 when the disasters trade places in
+time, 25 of them still there after 2010, the two strongest being one
+storm declared twice. Its README says why a weaker control (24) was
+the wrong bar, and what a second reading by state finds.
 
 `examples/log-archive` is a separate application built on the published
 Python package: it archives a public 70 MB server log with an exact round

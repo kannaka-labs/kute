@@ -54,6 +54,8 @@ pub struct Options {
     pub federation: Option<Arc<Federation>>,
     /// The status file of a peer on this machine, read for `GET /v1/peer`.
     pub peer_status: Option<std::path::PathBuf>,
+    /// Training jobs, under `/v1/jobs`. `None`, those paths do not exist.
+    pub jobs: Option<Arc<crate::jobs::Jobs>>,
 }
 
 /// Asking other registries, and what that may cost this one.
@@ -208,7 +210,7 @@ const STUDIO_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 's
 
 impl Default for Options {
     fn default() -> Self {
-        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true, federation: None, peer_status: None }
+        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true, federation: None, peer_status: None, jobs: None }
     }
 }
 
@@ -377,6 +379,7 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         held["operations"] = if options.operations { json!(OPERATIONS) } else { json!([]) };
         held["registry"] = json!(options.registry);
         held["peer_status"] = json!(options.peer_status.is_some());
+        held["jobs"] = json!(options.jobs.as_ref().map(|j| j.limits()));
         held["limits"]["max_body_bytes"] = json!(options.max_body_bytes);
         return ok(held);
     }
@@ -388,6 +391,38 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
             return Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "the peer's status is read with GET; nothing can be sent to the peer from here") };
         }
         return ok(crate::peer_status::read(path));
+    }
+    if operation == "jobs" || operation.starts_with("jobs/") {
+        let Some(jobs) = &options.jobs else {
+            return problem(404, "Not Found", "not_found", "this service takes no jobs: start it with --jobs-dir DIR");
+        };
+        let no_job = || problem(404, "Not Found", "not_found", "there is no such job; a finished job is forgotten after enough later ones");
+        return match (request.method.as_str(), operation.strip_prefix("jobs/")) {
+            ("GET", None) => ok(jobs.list()),
+            ("POST", None) => {
+                let arguments = match json_body(request) {
+                    Ok(v) => v,
+                    Err(reply) => return reply,
+                };
+                match jobs.submit(&arguments) {
+                    Ok(job) => Reply { status: 202, reason: "Accepted", ..ok(job) },
+                    Err(crate::jobs::Refusal::Bad(why)) => problem(422, "Unprocessable Content", "refused", why),
+                    Err(crate::jobs::Refusal::Full(why)) => problem(503, "Service Unavailable", "busy", why),
+                    Err(crate::jobs::Refusal::NoRoom(why)) => problem(507, "Insufficient Storage", "no_room", why),
+                }
+            }
+            (_, None) => Reply { allow: Some("GET, POST"), ..problem(405, "Method Not Allowed", "method_not_allowed", "jobs are listed with GET and given with POST") },
+            ("GET", Some(rest)) => match rest.split_once('/') {
+                None => jobs.get(rest).map_or_else(no_job, ok),
+                Some((id, "vocabulary")) => match jobs.file(id) {
+                    None => no_job(),
+                    Some(Ok(file)) => Reply { file: Some(file.into_boxed_slice()), ..ok(Value::Null) },
+                    Some(Err(why)) => problem(409, "Conflict", "not_ready", why),
+                },
+                Some(_) => no_job(),
+            },
+            (_, Some(_)) => Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "a job is read with GET; it cannot be changed or stopped") },
+        };
     }
     if operation == "vocabularies" || operation.starts_with("vocabularies/") {
         // Without the option the paths do not exist, and the answer does
@@ -434,14 +469,9 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
     if request.method != "POST" {
         return Reply { allow: Some("POST"), ..problem(405, "Method Not Allowed", "method_not_allowed", "operations are called with POST") };
     }
-    // A JSON content type cannot be sent across origins by a web page
-    // without the browser asking first, and this service never agrees.
-    if !request.content_type.as_deref().is_some_and(|t| t == "application/json" || t.starts_with("application/json;")) {
-        return problem(415, "Unsupported Media Type", "unsupported_media_type", "send Content-Type: application/json");
-    }
-    let arguments: Value = match serde_json::from_slice(&request.body) {
+    let arguments = match json_body(request) {
         Ok(v) => v,
-        Err(e) => return problem(400, "Bad Request", "bad_json", format!("the body is not JSON: {e}")),
+        Err(reply) => return reply,
     };
     // A panic in an operation must not end the worker: with every worker
     // gone the service would accept connections and answer none. No input
@@ -451,6 +481,16 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         Ok(Err(message)) => problem(422, "Unprocessable Content", "refused", message),
         Err(_) => problem(500, "Internal Server Error", "internal", "the operation failed unexpectedly"),
     }
+}
+
+/// The body of a POST, as JSON.
+fn json_body(request: &Request) -> Result<Value, Reply> {
+    // A JSON content type cannot be sent across origins by a web page
+    // without the browser asking first, and this service never agrees.
+    if !request.content_type.as_deref().is_some_and(|t| t == "application/json" || t.starts_with("application/json;")) {
+        return Err(problem(415, "Unsupported Media Type", "unsupported_media_type", "send Content-Type: application/json"));
+    }
+    serde_json::from_slice(&request.body).map_err(|e| problem(400, "Bad Request", "bad_json", format!("the body is not JSON: {e}")))
 }
 
 fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {

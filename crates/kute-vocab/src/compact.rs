@@ -261,7 +261,11 @@ pub fn from_slice(bytes: &[u8], max_bytes: u64) -> Result<Vocabulary> {
     if count > (body.len() - cursor.pos) / 2 {
         return Err(bad("declared token count exceeds the data present"));
     }
-    let mut tokens: Vec<TokenEntry> = Vec::with_capacity(count);
+    // Room is set aside for a modest table and grows as tokens are
+    // actually read: a few kilobytes of compressed filler claiming four
+    // million tokens otherwise commits over 200 MB before the first token
+    // is refused.
+    let mut tokens: Vec<TokenEntry> = Vec::with_capacity(count.min(1 << 16));
     let mut merges: Vec<MergeRule> = Vec::new();
     let mut budget = max_bytes;
     let mut spend = |n: usize| -> Result<()> {

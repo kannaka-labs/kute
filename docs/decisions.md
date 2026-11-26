@@ -1302,6 +1302,61 @@ printed report), an end in error, a killed peer (reported stale, not
 running), files that are not a status (none of their content is passed
 on), and the page in a browser following a peer through its states.
 
+## ADR-0057: Training over HTTP is a job the operator allowed, and its result is a file
+
+Status: accepted.
+
+The specification's E1 lists "train/jobs" for REST, and its MCP line
+says training needs "explicit permission and quotas". ADR-0037 left it
+out until there was a permission model. The service still has no
+identities, so the permission cannot be a caller's.
+
+Chosen: the permission is the operator's, given by naming a directory
+(`kute serve --jobs-dir DIR`), and only on loopback. A caller posts a
+corpus and settings to `/v1/jobs`; the job waits, runs on one thread,
+and ends as a vocabulary file in that directory named by its digest.
+The quotas are fixed when a job is taken: one running, a short line, the
+corpus within one request body, a largest vocabulary.
+
+Considered and not chosen:
+
+* `POST /v1/train` that answers when training ends. A request would
+  hold a worker for minutes and the caller's connection with it; the
+  timeout that protects the service from slow callers would have to be
+  given up for this one path.
+* Letting a caller name the corpus by path, or the output. Either makes
+  every caller able to read or write the operator's files. The corpus
+  is in the body and the name is a hash.
+* Holding the trained vocabulary so that `encode` can use it at once.
+  It would make the set of vocabularies a service answers for depend on
+  who called it before. What a service holds stays what its operator
+  named at start. The cost is a restart to use a result.
+* Stopping a running job. Training has no point at which it checks for
+  a request to stop, and killing a thread is not available. So cost is
+  bounded at the door, and the documentation says a job cannot be
+  stopped.
+* Jobs for `evolve` or `shadow`. Nothing asked for them yet, and each
+  needs a held vocabulary as input, which raises the question above.
+* Offering jobs through the MCP tool. The same code would serve it; it
+  is left until someone needs it, because a model that can start
+  training is a larger grant than a person with `curl`.
+
+What it costs: the service can now be made to work for minutes and to
+write files, by anything on the machine that can open the port, with no
+record of who asked. A web page cannot post a job (the body must be
+declared JSON, which a browser asks permission for, and the service
+never grants it), but any local program can. Memory is the running
+corpus plus the waiting ones. Files accumulate until the operator
+removes them, up to a size the operator sets (1 GiB unless told), past
+which jobs are refused: a review put 224 MB there in 30 seconds from
+one client before that limit existed.
+
+Checked by tests against a real process: a job gives the digest `kute
+train` gives for the same corpus; the file is the one answer and the
+one file; refusals for every field out of bounds and for fields that
+name files; other methods; a burst past the line is turned away and
+every job taken finishes; off by default; refused off loopback.
+
 ## Deferred
 
 Import from other tokenizer formats,

@@ -28,7 +28,7 @@ def vocab(engine):
 
 
 def test_module_surface(engine):
-    assert kute.__version__ == "0.9.2"
+    assert kute.__version__ == "0.9.3"
     assert kute.KVF_VERSION == "0.1"
     assert {"bpe", "bytes", "char", "dictionary", "sequence-bpe"} <= set(engine.algorithms())
     assert {"binary", "text", "json", "jsonl", "jsonl-events"} <= set(engine.adapters())
@@ -169,6 +169,61 @@ def test_discover_finds_a_planted_pattern():
     assert any(p["symbols"] == ["START", "HEAT", "HOLD", "DONE"] for p in found["patterns"]), found["patterns"][:3]
 
 
+def test_discover_times_patterns_and_counts_them_on_records_it_did_not_search():
+    records = [["START", "HEAT", "HOLD", "DONE"] + [f"noise{i % 7}"] for i in range(40)]
+    # START to DONE takes 30 ticks in every record.
+    times = [[100 * i, 100 * i + 10, 100 * i + 20, 100 * i + 30, 100 * i + 31] for i in range(40)]
+    plain = kute.discover(records, min_support=10)
+    found = kute.discover(records, min_support=10, times=times, held_out=records[:8], held_out_times=times[:8])
+    assert found["patterns"] == plain["patterns"]
+    assert "timing" not in plain and "held_out" not in plain
+    at = next(i for i, p in enumerate(found["patterns"]) if p["symbols"] == ["START", "HEAT", "HOLD", "DONE"])
+    took = next(t for t in found["timing"] if t["pattern"] == at)["duration"]
+    assert (took["occurrences"], took["min"], took["median"], took["max"]) == (40, 30, 30, 30)
+    later = next(p for p in found["held_out"]["patterns"] if p["pattern"] == at)
+    assert later["support"] == 8 and later["confirmed"]
+    assert next(t for t in found["held_out_timing"] if t["pattern"] == at)["duration"]["occurrences"] == 8
+
+    with pytest.raises(Exception, match="lists of times"):
+        kute.discover(records, min_support=10, times=times[:-1])
+    backwards = [list(reversed(t)) for t in times]
+    with pytest.raises(Exception):
+        kute.discover(records, min_support=10, times=backwards)
+    with pytest.raises(Exception, match="needs held_out"):
+        kute.discover(records, min_support=10, held_out_times=times)
+
+
+def test_wire_containers_carry_their_vocabulary_and_translate_without_loss(engine, vocab):
+    text = "The engine reads the event log. zyzzyva 混合 🙂"
+    container = engine.pack(text, vocab)
+    about = Engine.inspect_container(container)
+    assert about["vocabulary_digest"] == vocab.digest and about["tokens"] == len(engine.encode(text, vocabulary=vocab))
+    assert engine.unpack(container, vocab).decode("utf-8") == text
+    assert engine.unpack(engine.pack(text, vocab, compact=False), vocab).decode("utf-8") == text
+
+    # Another vocabulary over the same kind of data: the container says
+    # which it was made with, and the wrong one is refused.
+    other = engine.train(texts=["a different corpus of words entirely"] * 20, vocabulary_id="test:other", vocab_size=300)
+    assert other.digest != vocab.digest
+    with pytest.raises(Exception, match="was made with"):
+        engine.unpack(container, other)
+    with pytest.raises(Exception, match="was made with"):
+        engine.translate(container, other, vocab)
+    moved = engine.translate(container, vocab, other)
+    assert Engine.inspect_container(moved)["vocabulary_digest"] == other.digest
+    assert engine.unpack(moved, other).decode("utf-8") == text
+
+    # Limits are applied before anything is decoded.
+    with pytest.raises(Exception):
+        engine.unpack(container, vocab, max_units=3)
+    with pytest.raises(Exception):
+        engine.unpack(container, vocab, max_bytes=3)
+    with pytest.raises(Exception):
+        engine.unpack(container[:-2], vocab)
+    with pytest.raises(Exception, match="strict or escape"):
+        engine.pack(text, vocab, unknown="drop")
+
+
 def test_one_vocabulary_object_is_a_persistent_session(engine, vocab, tmp_path):
     """A Vocabulary compiles its tokenizer once and cannot be changed, so many
     short messages through one object give what a fresh load gives for each."""
@@ -274,6 +329,19 @@ def test_evolve_appends_and_keeps_every_id(engine):
     assert [json.loads(line)["tag"] for line in back.splitlines()] == ["OPEN", "FLOW", "ALARM", "PURGE", "CLOSE"]
     # The added sequence is one token under the child.
     assert len(ids) < 5
+    # A symbol the parent lacks: refused by default, carried literally
+    # when asked, and translating from child to parent loses nothing.
+    tags = lambda raw: [json.loads(line)["tag"] for line in raw.decode().splitlines()]
+    with pytest.raises(ValueError):
+        engine.pack(new, parent)
+    escaped = engine.pack(new, parent, unknown="escape")
+    assert Engine.inspect_container(escaped)["escaped_symbols"] == 1
+    assert tags(engine.unpack(escaped, parent)) == ["OPEN", "FLOW", "ALARM", "PURGE", "CLOSE"]
+    under_child = engine.pack(new, child)
+    assert Engine.inspect_container(under_child)["escaped_symbols"] == 0
+    back_to_parent = engine.translate(under_child, child, parent)
+    assert Engine.inspect_container(back_to_parent)["vocabulary_digest"] == parent.digest
+    assert tags(engine.unpack(back_to_parent, parent)) == ["OPEN", "FLOW", "ALARM", "PURGE", "CLOSE"]
     # The version must go up, and only event vocabularies evolve.
     with pytest.raises(ValueError):
         parent.evolve([["PURGE"]], version="0.1.0")

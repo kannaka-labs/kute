@@ -278,6 +278,92 @@ impl Engine {
         Ok(PyBytes::new(py, &self.decode_raw(py, tokens, vocabulary)?))
     }
 
+    /// Encode into a wire container: `bytes` that name the vocabulary by
+    /// its digest and can be given to another process or kept in a file.
+    ///
+    /// `unknown="escape"` carries a symbol the vocabulary lacks literally
+    /// in the container, so nothing is lost; the default, `"strict"`,
+    /// refuses the input. `compact=False` writes the plain form.
+    #[pyo3(signature = (data, vocabulary, *, unknown="strict", compact=true))]
+    fn pack<'py>(&self, py: Python<'py>, data: &Bound<'py, PyAny>, vocabulary: &Vocabulary, unknown: &str, compact: bool) -> PyResult<Bound<'py, PyBytes>> {
+        let raw = raw_bytes(data)?;
+        let policy = kute::UnknownPolicy::parse(unknown).map_err(err)?;
+        let tokenizer = vocabulary.tokenizer(&self.inner)?;
+        let bytes = py
+            .detach(|| {
+                let sequence = self.inner.encode_raw_open(tokenizer.as_ref().as_ref(), &raw, policy)?;
+                if compact { sequence.to_bytes_compressed() } else { sequence.to_bytes() }
+            })
+            .map_err(err)?;
+        Ok(PyBytes::new(py, &bytes))
+    }
+
+    /// Decode a wire container to `bytes`. The container must name this
+    /// vocabulary. It is refused before decoding when it holds more than
+    /// `max_units` tokens, or would come to more than `max_units` bytes
+    /// or symbols or more than `max_bytes`.
+    ///
+    /// A container can be a thousand times smaller than what it claims,
+    /// so the limits are what bound memory: about 8 bytes for each unit
+    /// allowed (measured: 139 MB at the default of 16,777,216). Raise
+    /// `max_units` for containers you made yourself.
+    #[pyo3(signature = (container, vocabulary, *, max_units=1 << 24, max_bytes=1 << 30))]
+    fn unpack<'py>(&self, py: Python<'py>, container: &[u8], vocabulary: &Vocabulary, max_units: u64, max_bytes: u64) -> PyResult<Bound<'py, PyBytes>> {
+        let tokenizer = vocabulary.tokenizer(&self.inner)?;
+        let bytes = py
+            .detach(|| {
+                let sequence = kute::TokenSequence::from_bytes_bounded(container, max_units)?;
+                made_with(&sequence, &vocabulary.inner)?;
+                self.inner.decode_raw_within(tokenizer.as_ref().as_ref(), &sequence, max_units, max_bytes)
+            })
+            .map_err(err)?;
+        Ok(PyBytes::new(py, &bytes))
+    }
+
+    /// What a wire container says about itself, without a vocabulary:
+    /// the vocabulary it names, how many tokens and escaped symbols.
+    /// The ids are read to check the container is whole and are not
+    /// kept, so memory does not grow with the count; `max_tokens` bounds
+    /// the time spent.
+    #[staticmethod]
+    #[pyo3(signature = (container, *, max_tokens=1 << 24))]
+    fn inspect_container(py: Python<'_>, container: &[u8], max_tokens: u64) -> PyResult<Py<PyAny>> {
+        let (s, tokens) = py.detach(|| kute::TokenSequence::describe_bytes(container, max_tokens)).map_err(err)?;
+        to_python(
+            py,
+            &serde_json::json!({
+                "vocabulary_id": s.vocabulary_id,
+                "vocabulary_version": s.vocabulary_version,
+                "vocabulary_digest": s.vocabulary_digest,
+                "modality": s.modality,
+                "adapter": s.adapter,
+                "tokens": tokens,
+                "escaped_symbols": s.escapes.len(),
+                "bytes": container.len(),
+            }),
+        )
+    }
+
+    /// Re-encode a wire container under another vocabulary. Symbols the
+    /// target lacks are escaped, so the result decodes to what the
+    /// original decodes to. The same limits as `unpack`; it decodes and
+    /// encodes again, so it takes about 20 bytes of memory for each unit
+    /// allowed (measured: 348 MB at the default).
+    #[pyo3(signature = (container, source, target, *, max_units=1 << 24, max_bytes=1 << 30))]
+    fn translate<'py>(&self, py: Python<'py>, container: &[u8], source: &Vocabulary, target: &Vocabulary, max_units: u64, max_bytes: u64) -> PyResult<Bound<'py, PyBytes>> {
+        let from = source.tokenizer(&self.inner)?;
+        let to = target.tokenizer(&self.inner)?;
+        let bytes = py
+            .detach(|| {
+                let sequence = kute::TokenSequence::from_bytes_bounded(container, max_units)?;
+                made_with(&sequence, &source.inner)?;
+                let raw = self.inner.decode_raw_within(from.as_ref().as_ref(), &sequence, max_units, max_bytes)?;
+                self.inner.encode_raw_open(to.as_ref().as_ref(), &raw, kute::UnknownPolicy::Escape)?.to_bytes_compressed()
+            })
+            .map_err(err)?;
+        Ok(PyBytes::new(py, &bytes))
+    }
+
     /// Measure a vocabulary on a dataset (file or directory). Returns a dict.
     #[pyo3(signature = (vocabulary, dataset, iterations=3))]
     fn evaluate(&self, py: Python<'_>, vocabulary: &Vocabulary, dataset: PathBuf, iterations: usize) -> PyResult<Py<PyAny>> {
@@ -329,8 +415,16 @@ impl Engine {
 /// adjacent symbols and gapped pairs, strongest first, each with its
 /// support and evidence), `observation` and the `params` used. Patterns are
 /// statistical regularities in order; nothing is said about what they mean.
+///
+/// `times`, a list of lists of int aligned with `records` and never going
+/// back within a record, adds `timing`: for each pattern, how long its
+/// occurrences take, in the ticks given. `held_out`, more records that
+/// were not searched, adds `held_out`: how often each pattern occurs
+/// there and whether it is confirmed. `held_out_times` adds
+/// `held_out_timing`.
 #[pyfunction]
-#[pyo3(signature = (records, *, min_support=None, max_length=None, window=None, max_patterns=None))]
+#[pyo3(signature = (records, *, min_support=None, max_length=None, window=None, max_patterns=None, times=None, held_out=None, held_out_times=None))]
+#[allow(clippy::too_many_arguments)]
 fn discover(
     py: Python<'_>,
     records: Vec<Vec<String>>,
@@ -338,6 +432,9 @@ fn discover(
     max_length: Option<usize>,
     window: Option<usize>,
     max_patterns: Option<usize>,
+    times: Option<Vec<Vec<i64>>>,
+    held_out: Option<Vec<Vec<String>>>,
+    held_out_times: Option<Vec<Vec<i64>>>,
 ) -> PyResult<Py<PyAny>> {
     let mut params = kute_discover::Params::default();
     if let Some(v) = min_support {
@@ -352,8 +449,70 @@ fn discover(
     if let Some(v) = max_patterns {
         params.max_patterns = v;
     }
-    let found = py.detach(|| kute_discover::discover(&records, &params)).map_err(err)?;
-    to_python(py, &found)
+    if held_out_times.is_some() && held_out.is_none() {
+        return Err(PyValueError::new_err("held_out_times needs held_out"));
+    }
+    let answer = py
+        .detach(|| -> kute::Result<serde_json::Value> {
+            let found = kute_discover::discover(&records, &params)?;
+            let mut answer = serde_json::to_value(&found).map_err(|e| kute::KuteError::InvalidInput(e.to_string()))?;
+            let json = |v: &dyn erased::Json| v.json();
+            if let Some(held) = &held_out {
+                answer["held_out"] = json(&kute_discover::evaluate(&found, held)?)?;
+            }
+            if let Some(times) = times {
+                answer["timing"] = json(&kute_discover::timing(&found, &timed(records, times, "times")?)?)?;
+            }
+            if let (Some(held), Some(times)) = (held_out, held_out_times) {
+                answer["held_out_timing"] = json(&kute_discover::timing(&found, &timed(held, times, "held_out_times")?)?)?;
+            }
+            Ok(answer)
+        })
+        .map_err(err)?;
+    to_python(py, &answer)
+}
+
+/// A container given the wrong vocabulary is told so, before any id in
+/// it is looked up under a vocabulary it was not made with.
+fn made_with(sequence: &kute::TokenSequence, vocabulary: &kute::Vocabulary) -> kute::Result<()> {
+    let digest = vocabulary.digest()?;
+    if sequence.vocabulary_digest != digest {
+        return Err(kute::KuteError::VocabularyMismatch(format!("the container was made with {}; the vocabulary given is {digest}", sequence.vocabulary_digest)));
+    }
+    Ok(())
+}
+
+mod erased {
+    /// Anything serializable, to a JSON value, with KUTE's error.
+    pub trait Json {
+        fn json(&self) -> kute::Result<serde_json::Value>;
+    }
+    impl<T: serde::Serialize> Json for T {
+        fn json(&self) -> kute::Result<serde_json::Value> {
+            serde_json::to_value(self).map_err(|e| kute::KuteError::InvalidInput(e.to_string()))
+        }
+    }
+}
+
+/// Records and their times as a timed event stream. The unit is the
+/// caller's: durations come back in the ticks that were given. Times not
+/// aligned with their symbols, or going back, are refused.
+fn timed(records: Vec<Vec<String>>, times: Vec<Vec<i64>>, name: &str) -> kute::Result<kute::EventStream> {
+    if times.len() != records.len() {
+        return Err(kute::KuteError::InvalidInput(format!("{name}: {} lists of times for {} records", times.len(), records.len())));
+    }
+    let schema = kute::EventSchema {
+        id: "call".into(),
+        version: 1,
+        symbol_field: "symbol".into(),
+        time_field: Some("time".into()),
+        time_unit: Some(kute::TimeUnit::Milliseconds),
+        group_field: None,
+    };
+    let mut stream = kute::EventStream::new(schema)?;
+    stream.records = records.into_iter().zip(times).map(|(symbols, times)| kute::EventRecord { key: None, symbols, times }).collect();
+    stream.validate()?;
+    Ok(stream)
 }
 
 fn events_codec(name: Option<&str>) -> PyResult<kute_events::Codec> {
@@ -419,7 +578,8 @@ fn signals_pack(py: Python<'_>, values: Vec<f64>, max_error: Option<f64>, codec:
 /// container that would give other values than its header promises is
 /// refused.
 #[pyfunction]
-#[pyo3(signature = (container, *, max_values=1 << 27))]
+// The same default as `kute signals unpack`: about 740 MB at the most.
+#[pyo3(signature = (container, *, max_values=1 << 24))]
 fn signals_unpack(py: Python<'_>, container: &[u8], max_values: u64) -> PyResult<Vec<f64>> {
     py.detach(|| kute_signals::unpack(container, max_values)).map_err(err)
 }

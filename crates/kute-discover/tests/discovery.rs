@@ -105,6 +105,9 @@ fn patterns_hold_on_data_they_were_not_found_in() {
     assert_eq!(report.patterns.len(), found.patterns.len());
     let motif = &report.patterns[0];
     assert!(motif.confirmed && motif.support > 50);
+    let evidence = motif.evidence_bits.expect("a pattern that occurs has evidence");
+    assert!((evidence - motif.support as f64 * motif.cohesion_bits.unwrap()).abs() < 1e-9);
+    assert!(report.patterns.iter().filter(|p| p.support == 0).all(|p| p.evidence_bits.is_none()));
     let direct = tail[0].windows(4).filter(|w| w.iter().map(String::as_str).eq(MOTIF)).count() as u64;
     assert_eq!(motif.support, direct);
     assert!(report.coverage > 0.05);

@@ -35,12 +35,21 @@ large = engine.train("corpus/", vocabulary_id="example:text", vocab_size=32768, 
 # large is the vocabulary one run to 32768 would give (bpe, sequence-bpe)
 
 found = kute.discover([["START", "HEAT", "DONE"], ...], min_support=5)
+# With times=[[...], ...] aligned with the records: found["timing"], how long
+# each pattern takes. With held_out=more_records: found["held_out"], how often
+# each occurs in records that were not searched.
 found["patterns"]   # recurring runs and gapped pairs, strongest first
 ```
 
 Added in 0.9:
 
 ```python
+# Wire containers: bytes that name their vocabulary by digest.
+container = engine.pack(text, vocabulary)                    # unknown="escape" keeps symbols it lacks
+engine.unpack(container, vocabulary)                         # bytes; refused under another vocabulary
+Engine.inspect_container(container)                          # which vocabulary, how many tokens
+moved = engine.translate(container, vocabulary, another)     # same content under another vocabulary
+
 # Whole event records, by column. Every field comes back.
 container, report = kute.events_pack(open("events.jsonl", "rb").read(),
                                      symbol_field="event", time_field="t", group_field="unit")
@@ -49,7 +58,7 @@ kute.events_inspect(container)                   # the header alone
 
 # Numbers, exactly or within a bound that is checked on every value.
 container, report = kute.signals_pack(values, max_error=0.01)
-values_back = kute.signals_unpack(container)
+values_back = kute.signals_unpack(container)     # up to 16,777,216 values; max_values= for more
 report["header"]["max_error_observed"]
 
 # The next version of an event vocabulary; every existing id is kept.

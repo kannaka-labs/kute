@@ -24,6 +24,7 @@ the service gave it.
 | Compare | tokens shared and not shared by two held vocabularies | `POST /v1/compare` |
 | Patterns | a corpus you paste or pick, read as one event a line or as JSON Lines with an event field and optional entity and time fields; recurring sequences with support, cohesion and evidence | `POST /v1/discover` |
 | Peer | what a running `kute peer serve` says it is doing, refreshed every two seconds; needs `--peer-status` | `GET /v1/peer`, which reads the status file the peer keeps |
+| Jobs | training jobs the service was given over HTTP: state, what was asked, digest and file of each one done, why each one failed, what the directory holds; refreshed every two seconds; needs `--jobs-dir`. The page gives no job and cannot stop one | `GET /v1/jobs` |
 | Reports | a report written by `kute shadow`, `kute predict`, `kute live`, `kute peer serve` or `kute peer send` (one, or several appended to one file), or a benchmark script, shown as it is | a file you choose; nothing is sent |
 | Not here | what the specification lists for Studio that has no backend | nothing |
 

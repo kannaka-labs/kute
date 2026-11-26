@@ -231,6 +231,19 @@ impl TokenSequence {
     /// decompressed, so the caller decides how much memory a container may
     /// claim.
     pub fn from_bytes_bounded(bytes: &[u8], max_tokens: u64) -> Result<Self> {
+        Ok(Self::parse(bytes, max_tokens, true)?.0)
+    }
+
+    /// What a container says about itself, and how many ids it holds,
+    /// without keeping the ids: the sequence comes back with `ids` empty,
+    /// beside the count. Every check `from_bytes_bounded` makes is made,
+    /// so a container this accepts is one that reads; memory does not
+    /// grow with the count.
+    pub fn describe_bytes(bytes: &[u8], max_tokens: u64) -> Result<(Self, u64)> {
+        Self::parse(bytes, max_tokens, false)
+    }
+
+    fn parse(bytes: &[u8], max_tokens: u64, keep: bool) -> Result<(Self, u64)> {
         let bad = |why: &str| KuteError::InvalidInput(format!("not a valid .kute token sequence: {why}"));
         if bytes.len() < MAGIC.len() + 4 {
             return Err(bad("missing KUTE magic"));
@@ -266,6 +279,27 @@ impl TokenSequence {
                 return Err(bad("declared token count exceeds what the data can hold"));
             }
             let mut decoder = flate2::read::ZlibDecoder::new(&bytes[pos..]);
+            if !keep {
+                // The same stream, read through a small buffer and counted.
+                let mut limited = (&mut decoder).take(expected + 1);
+                let mut buffer = [0u8; 1 << 16];
+                let mut seen = 0u64;
+                loop {
+                    match limited.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(n) => seen += n as u64,
+                        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                        Err(e) => return Err(bad(&format!("compressed ids: {e}"))),
+                    }
+                }
+                if seen != expected {
+                    return Err(bad("token count does not match the header"));
+                }
+                if decoder.total_in() != remaining as u64 {
+                    return Err(bad("data after the compressed ids"));
+                }
+                return Ok((Self::from_header(header, Vec::new()), expected / width as u64));
+            }
             // The count comes from the file, so it only sizes the buffer up to a
             // fixed bound. Past that the buffer grows as real data arrives; a
             // header that claims gigabytes over a short or corrupt stream costs
@@ -292,9 +326,14 @@ impl TokenSequence {
             if header.id_bytes.is_some() {
                 return Err(bad("id_bytes belongs to the compressed format only"));
             }
-            Self::read_varints(&bytes[pos..], header.count).map_err(bad)?
+            Self::read_varints(&bytes[pos..], header.count, keep).map_err(bad)?
         };
-        Ok(Self {
+        let count = header.count;
+        Ok((Self::from_header(header, ids), count))
+    }
+
+    fn from_header(header: ContainerHeader, ids: Vec<u32>) -> Self {
+        Self {
             vocabulary_id: header.vocabulary_id,
             vocabulary_version: header.vocabulary_version,
             vocabulary_digest: header.vocabulary_digest,
@@ -302,16 +341,19 @@ impl TokenSequence {
             adapter: header.adapter,
             ids,
             escapes: header.escapes,
-        })
+        }
     }
 
-    fn read_varints(bytes: &[u8], count: u64) -> std::result::Result<Vec<u32>, &'static str> {
+    /// The ids, or none of them when `keep` is false; checked the same
+    /// either way.
+    fn read_varints(bytes: &[u8], count: u64, keep: bool) -> std::result::Result<Vec<u32>, &'static str> {
         let bad = |why: &'static str| why;
         let mut pos = 0;
         if count > bytes.len() as u64 {
             return Err(bad("declared token count exceeds the data present"));
         }
-        let mut ids = Vec::with_capacity(count as usize);
+        let mut ids = Vec::with_capacity(if keep { count as usize } else { 0 });
+        let mut seen = 0u64;
         while pos < bytes.len() {
             let mut value: u32 = 0;
             let mut shift = 0u32;
@@ -336,9 +378,12 @@ impl TokenSequence {
                     return Err(bad("token id overflows 32 bits"));
                 }
             }
-            ids.push(value);
+            seen += 1;
+            if keep {
+                ids.push(value);
+            }
         }
-        if ids.len() as u64 != count {
+        if seen != count {
             return Err(bad("token count does not match the header"));
         }
         Ok(ids)
@@ -348,6 +393,31 @@ impl TokenSequence {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn describing_a_container_agrees_with_reading_it() {
+        let whole = seq((0..5000u32).map(|i| i * 7919 % 70_000).collect());
+        for bytes in [whole.to_bytes().unwrap(), whole.to_bytes_compressed().unwrap()] {
+            let (described, count) = TokenSequence::describe_bytes(&bytes, 5000).unwrap();
+            assert_eq!(count, 5000);
+            assert!(described.ids.is_empty());
+            assert_eq!(described.vocabulary_digest, whole.vocabulary_digest);
+            assert!(matches!(TokenSequence::describe_bytes(&bytes, 4999), Err(KuteError::LimitExceeded(_))));
+            // Whatever damage reading refuses, describing refuses, in the
+            // same words: a byte dropped, a byte added, each byte flipped.
+            let mut damaged = vec![bytes[..bytes.len() - 1].to_vec(), [bytes.as_slice(), &[0]].concat()];
+            for at in (0..bytes.len()).step_by(bytes.len() / 97 + 1) {
+                let mut flipped = bytes.clone();
+                flipped[at] ^= 0x40;
+                damaged.push(flipped);
+            }
+            for d in &damaged {
+                let read = TokenSequence::from_bytes_bounded(d, 5000).map(|s| s.ids.len() as u64).map_err(|e| e.to_string());
+                let told = TokenSequence::describe_bytes(d, 5000).map(|(_, n)| n).map_err(|e| e.to_string());
+                assert_eq!(read, told);
+            }
+        }
+    }
 
     fn seq(ids: Vec<u32>) -> TokenSequence {
         TokenSequence {

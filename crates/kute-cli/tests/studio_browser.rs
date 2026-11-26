@@ -146,7 +146,7 @@ fn studio_works_in_a_browser() {
     let mut service = Killed(
         Command::new(env!("CARGO_BIN_EXE_kute"))
             .current_dir(&dir)
-            .args(["serve", "--listen", "127.0.0.1:0", "--vocab", "events.kvf", "--vocab", "text.kvf", "--studio", "--peer-status", "peer.json"])
+            .args(["serve", "--listen", "127.0.0.1:0", "--vocab", "events.kvf", "--vocab", "text.kvf", "--studio", "--peer-status", "peer.json", "--jobs-dir", "trained"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
