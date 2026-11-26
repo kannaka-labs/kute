@@ -50,8 +50,9 @@ order. Shuffling each county by itself throws that duplication away, so
 it sets too low a bar: 24. Shuffling the disasters as a whole (every
 disaster keeps its counties and its kind, and takes another disaster's
 place in time) keeps it, and gives 56. So by county the finding is 99
-patterns against about 56, not against 24: more than half of what was
-found is what duplication alone produces. The first version of this
+patterns against about 56, not against 24: duplication alone gives
+about as many patterns as 56 of the 99. The control does not say which
+of the 99 those are, and they need not be the same ones. The first version of this
 example reported only the weaker control and said it shared the data's
 weakness; a review showed it does the opposite, and supplied the second
 control. By state, where a disaster counts once, the two controls agree.
