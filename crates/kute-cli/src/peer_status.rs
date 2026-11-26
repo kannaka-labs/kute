@@ -130,21 +130,27 @@ pub fn read(path: &Path) -> Value {
         return absent("the file could not be read as a peer status of the kind this version reads");
     };
     let read_at = now();
-    let age = read_at.saturating_sub(status["written"].as_u64().unwrap_or(0));
+    let written = status["written"].as_u64().unwrap_or(0);
+    let age = read_at.saturating_sub(written);
     let beat = status["heartbeat_seconds"].as_u64().unwrap_or(1).clamp(1, 60);
     let ended = status["state"] == ENDED;
-    let stale = !ended && age > 3 * beat;
+    // Writer and reader share a clock. A time of writing later than now
+    // by more than a beat is not a fresh file but one whose time cannot
+    // be believed, and it is not taken as proof of a running peer.
+    let from_the_future = written > read_at + beat;
+    let stale = !ended && (age > 3 * beat || from_the_future);
     json!({
         "present": true,
         "file": path,
         "read_at": read_at,
         "age_seconds": age,
+        "written_later_than_now": from_the_future,
         "stale": stale,
         "status": status,
         "means": if ended {
             "the peer wrote that it had ended. kute peer serve answers one connection and ends; nothing is running."
         } else if stale {
-            "the file says a peer is running, but it has not been written for longer than three of its beats. The peer has stopped without saying so, or cannot write. Nothing here shows a running peer."
+            "the file says a peer is running, but it has not been written for longer than three of its beats, or says it was written later than now. The peer has stopped without saying so, or cannot write, or the file is not a peer's. Nothing here shows a running peer."
         } else {
             "a process wrote this within the last few seconds. It is that process's own account; this service did not connect to it."
         },

@@ -87,6 +87,7 @@ What this is, and its limits:
   every second, so a file that says "waiting" or "in an exchange" and
   has not been written for more than three seconds is shown as not
   running. A peer that was killed is seen that way, a few seconds late.
+  So is a file that says it was written later than now.
 * A peer answers one connection and ends. The view then shows "ended"
   until another peer is started with the same file.
 * One file, one peer. Two peers given the same file overwrite each

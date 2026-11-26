@@ -413,7 +413,9 @@ function peerStatus(result) {
     const how = s.ended && s.ended.ok === false ? `with an error: ${s.ended.error}` : "normally";
     headline = `Ended ${how}, at ${clock(s.since)}.` + (x ? ` It had handled ${fmt(x.messages_handled)} protocol message(s) from ${x.from} and been delivered ${fmt(x.delivered)}.` : " Nobody had connected.");
   } else if (d.stale) {
-    headline = `Not shown as running: the file says "${state}" but was last written ${fmt(d.age_seconds)} s ago, and a running peer writes every ${fmt(s.heartbeat_seconds)} s.`;
+    headline = d.written_later_than_now
+      ? `Not shown as running: the file says "${state}" and that it was written later than now, which a running peer on this machine's clock cannot say.`
+      : `Not shown as running: the file says "${state}" but was last written ${fmt(d.age_seconds)} s ago, and a running peer writes every ${fmt(s.heartbeat_seconds)} s.`;
   } else if (x) {
     headline = `In an exchange with ${x.from}${x.peer_identity ? `, certificate ${x.peer_identity}` : ", no certificate (plain connection)"}, since ${clock(s.since)}: ${fmt(x.messages_handled)} protocol message(s) handled, ${fmt(x.delivered)} delivered so far.`;
   } else {

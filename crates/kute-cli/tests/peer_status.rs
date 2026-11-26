@@ -277,6 +277,14 @@ fn the_service_reads_only_a_status_file_and_only_when_told_of_one() {
     assert_eq!(service.peer()["stale"], true);
     std::fs::write(dir.join("status.json"), "{\"kute_peer_status\": 1, \"state\": \"waiting for a connection\", \"written\": 1000, \"heartbeat_seconds\": 4000000000}").unwrap();
     assert_eq!(service.peer()["stale"], true, "a file cannot excuse itself with a long beat");
+    // Nor with a time of writing that has not come yet: an hour ahead, or the largest number there is.
+    let hour_ahead = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3600;
+    for written in [hour_ahead, u64::MAX] {
+        std::fs::write(dir.join("status.json"), format!("{{\"kute_peer_status\": 1, \"state\": \"in an exchange\", \"written\": {written}}}")).unwrap();
+        let answer = service.peer();
+        assert_eq!(answer["stale"], true, "{answer}");
+        assert_eq!(answer["written_later_than_now"], true, "{answer}");
+    }
 
     // Where the option is refused.
     for bad in [
