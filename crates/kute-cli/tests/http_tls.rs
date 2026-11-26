@@ -159,6 +159,13 @@ fn a_service_over_tls_answers_a_caller_with_a_certificate_and_nobody_else() {
     let said = nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "b.kvf", "--tls-cert", "outsider.pem", "--tls-key", "outsider.key", "--tls-ca", "ours.pem"], "b.kvf");
     // The alert can be lost to a reset (seen in CI on Windows); the caller is then told that much.
     assert!(said.contains("this side's that was not accepted") || said.contains("does not accept this side's certificate"), "{said}");
+    // The service reads off what a refused caller already sent before it
+    // closes, so a request this small hears the reason every time. Without
+    // that, on Windows, about one in six of these saw a reset.
+    for turn in 0..25 {
+        let said = nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "b.kvf", "--tls-cert", "outsider.pem", "--tls-key", "outsider.key", "--tls-ca", "ours.pem"], "b.kvf");
+        assert!(said.contains("this side's that was not accepted"), "turn {turn}: {said}");
+    }
     // A caller that believes another authority does not believe this service.
     assert!(nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "c.kvf", "--tls-cert", "caller.pem", "--tls-key", "caller.key", "--tls-ca", "theirs.pem"], "c.kvf").contains("tls"));
     // The certificate is for 127.0.0.1, and not for any other name of the same machine.
