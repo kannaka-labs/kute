@@ -257,6 +257,15 @@ fn the_directory_holds_no_more_than_its_operator_allowed() {
     let failed = service.finished(taken["id"].as_str().unwrap());
     assert_eq!(failed["state"], "failed", "{failed}");
     assert!(failed["error"].as_str().unwrap().contains("may hold"), "{failed}");
+    // Having seen one not fit, the service takes no more while that
+    // little room is left, so nothing trains only to fail.
+    let (status, answer) = service.post("/v1/jobs", &job("test:room:a"));
+    assert_eq!((status, answer["error"]["code"].as_str()), (507, Some("no_room")), "{answer}");
+    assert!(answer["error"]["message"].as_str().unwrap().contains("did not fit"), "{answer}");
+    drop(service);
+    // A service that has not seen that takes the job, and the vocabulary
+    // already there is given again without a second file.
+    let service = Service::start(&dir, &["--jobs-dir", "made", "--jobs-max-dir-bytes", &(size + 10).to_string()]);
     let (status, taken) = service.post("/v1/jobs", &job("test:room:a"));
     assert_eq!(status, 202, "{taken}");
     assert_eq!(service.finished(taken["id"].as_str().unwrap())["state"], "done");

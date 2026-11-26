@@ -83,6 +83,10 @@ struct State {
     next: u64,
     jobs: Vec<Job>,
     waiting: VecDeque<(String, Work)>,
+    /// The size of the last vocabulary there was no room to write, or 0.
+    /// While less room than this is left, no job is taken: it would
+    /// train in full and then fail at the write.
+    did_not_fit: u64,
 }
 
 impl std::fmt::Debug for Jobs {
@@ -244,7 +248,12 @@ impl Jobs {
             Ok((_, bytes)) if bytes >= self.limits.max_dir_bytes => {
                 return Err(Refusal::NoRoom(format!("the jobs directory holds {bytes} bytes and may hold {}; no job is taken until its operator makes room", self.limits.max_dir_bytes)));
             }
-            Ok(_) => {}
+            Ok((_, bytes)) => {
+                let did_not_fit = self.lock().did_not_fit;
+                if self.limits.max_dir_bytes - bytes < did_not_fit {
+                    return Err(Refusal::NoRoom(format!("the jobs directory holds {bytes} bytes and may hold {}; the last vocabulary trained was {did_not_fit} bytes and did not fit, so no job is taken until its operator makes room", self.limits.max_dir_bytes)));
+                }
+            }
             Err(e) => return Err(Refusal::NoRoom(format!("the jobs directory cannot be read: {e}"))),
         }
         let mut state = self.lock();
@@ -349,6 +358,7 @@ impl Jobs {
         if !path.exists() {
             let (_, held) = self.held()?;
             if held.saturating_add(bytes.len() as u64) > self.limits.max_dir_bytes {
+                self.lock().did_not_fit = bytes.len() as u64;
                 return Err(KuteError::LimitExceeded(format!("the vocabulary is {} bytes; the jobs directory holds {held} and may hold {}", bytes.len(), self.limits.max_dir_bytes)));
             }
         }

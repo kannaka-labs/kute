@@ -260,8 +260,9 @@ remembered. Nothing bounds how long one job runs except those sizes.
 `--jobs-max-dir-bytes` (1,073,741,824) bounds the directory: every file
 in it counts, whoever put it there. At or past the limit a job is
 answered `507 no_room`, and a job taken earlier that would write past it
-fails instead of writing. Nothing removes files; the operator makes
-room. `GET /v1/jobs` gives `directory`: the files, their bytes and the
+fails instead of writing; after that, jobs are answered `507` while
+less room is left than that vocabulary needed, so none trains only to
+fail. Nothing removes files; the operator makes room. `GET /v1/jobs` gives `directory`: the files, their bytes and the
 limit. Two services sharing one directory each check it and can pass
 the limit together by one file each.
 
