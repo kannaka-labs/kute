@@ -1,4 +1,4 @@
-# Six use cases
+# Seven use cases
 
 Each case stands alone. All of them start from the seeded example data:
 
@@ -8,8 +8,11 @@ kute sample-data --output data
 
 That data is synthetic, generated from small templates, so the token counts
 you see here are better than real data will give. The commands are exercised
-by `crates/kute-cli/tests/cli.rs`, and those of the sixth case by
-`crates/kute-cli/tests/jobs.rs`.
+by `crates/kute-cli/tests/cli.rs`, those of the sixth case by
+`crates/kute-cli/tests/jobs.rs`, and the `kute` commands of the seventh
+by `crates/kute-cli/tests/http_tls.rs` with certificates the test makes.
+The `openssl` lines of the seventh are not run by any test; they were
+run by hand, once, with OpenSSL 1.1.1 on Windows.
 
 ## 1. A text vocabulary
 
@@ -154,8 +157,8 @@ digest the service named. That the service trained it on the corpus it
 was sent is the service's word; `kute train` on the same input gives the
 digest to compare.
 
-Started with `--registry` as well, the service gives the file by its
-digest as soon as the job is done (after 0.9.4). Its own operations do
+Being a registry too, the service gives the file by its digest as
+soon as the job is done (after 0.9.4). Its own operations do
 not use what it trained until it is started again: what a service
 encodes with is what its operator started it with. After a
 restart with the same command, `example:service` can be named to
@@ -170,3 +173,56 @@ Each file in `copy` is named by its digest and was checked as it
 arrived. The mirror never deletes, so a file the first service stops
 listing stays in the copy. `docs/http.md` has the limits of each step
 and what none of them does.
+
+## 7. The same service for other machines, over TLS (after 0.9.4)
+
+The sixth case is for one machine. To let named callers on other
+machines use it, the service and each caller get a certificate from an
+authority you make, and every connection is TLS 1.3 with a certificate
+on both sides. KUTE makes no certificates; these lines do, with
+OpenSSL. The authority's key (`ca.key`) signs for everyone: keep it off
+the service.
+
+```
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 365 -subj "/CN=example authority" -keyout ca.key -out ca.pem
+
+printf 'subjectAltName=DNS:service.example,IP:192.0.2.10\nextendedKeyUsage=serverAuth\n' > service.ext
+openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -subj "/CN=service" -keyout service.key -out service.csr
+openssl x509 -req -in service.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 365 -extfile service.ext -out service.pem
+
+printf 'extendedKeyUsage=clientAuth\n' > caller.ext
+openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -subj "/CN=caller" -keyout caller.key -out caller.csr
+openssl x509 -req -in caller.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 365 -extfile caller.ext -out caller.pem
+```
+
+The service's certificate must carry the name or address callers will
+put in the URL (`subjectAltName`); a certificate for one is refused
+under the other. Both `-extfile` lines matter: without one, OpenSSL
+1.1.1 writes an old-format (version 1) certificate, and that is
+refused before any connection.
+
+On the service's machine, with the caller's certificate named:
+
+```
+kute peer fingerprint --cert caller.pem
+kute serve --listen 0.0.0.0:8787 --jobs-dir trained --vocab-dir trained --registry \
+    --tls-cert service.pem --tls-key service.key --tls-client-ca ca.pem --allow sha256:...
+```
+
+On the caller's machine, with `caller.pem`, `caller.key` and `ca.pem`:
+
+```
+kute job --at https://service.example:8787 --input data/words-train.txt --id example:service --vocab-size 1000 --output mine.kvf \
+    --tls-cert caller.pem --tls-key caller.key --tls-ca ca.pem
+kute fetch --from https://service.example:8787 --mirror copy \
+    --tls-cert caller.pem --tls-key caller.key --tls-ca ca.pem
+```
+
+What this gives: the network between cannot read or change what is
+sent, a caller without a certificate from your authority gets no answer
+at all, and one not on the `--allow` list gets `403`. What it does not:
+every caller that is answered can do everything the service does, and
+**whoever can reach the port can keep the service from answering**, with
+no certificate, by holding connections open. Put a firewall in front of
+it. `docs/http.md`, "Over TLS", has the measurements and the rest of
+the limits.
