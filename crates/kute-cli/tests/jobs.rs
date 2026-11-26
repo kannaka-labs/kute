@@ -306,6 +306,39 @@ fn the_command_line_gives_a_job_and_keeps_only_a_file_that_is_what_it_was_told()
     assert!(!ok && said.contains("service:"), "{said}");
 }
 
+#[test]
+fn what_a_job_trained_is_served_after_a_restart_and_can_be_mirrored() {
+    let dir = scratch("jobs-served");
+    std::fs::write(dir.join("text.txt"), TEXT.repeat(30)).unwrap();
+    let digest = {
+        let service = Service::start(&dir, &["--jobs-dir", "made", "--vocab-dir", "made"]);
+        assert_eq!(service.get("/v1/capabilities").1["vocabularies"].as_array().unwrap().len(), 0, "an empty directory is not a mistake");
+        let (ok, report, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served", "--vocab-size", "300", "--output", "mine.kvf"]);
+        assert!(ok, "{said}");
+        // Not while it runs: what a service holds is what it was started with.
+        assert_eq!(service.post("/v1/encode", &json!({ "vocabulary": "test:served", "text": "The engine" })).0, 422);
+        report["digest"].as_str().unwrap().to_string()
+    };
+    // Started again over the same directory, it holds what was trained, and takes more.
+    let service = Service::start(&dir, &["--jobs-dir", "made", "--vocab-dir", "made", "--registry"]);
+    let (_, capabilities) = service.get("/v1/capabilities");
+    assert_eq!(capabilities["vocabularies"].as_array().unwrap().len(), 1, "{capabilities}");
+    let (status, encoded) = service.post("/v1/encode", &json!({ "vocabulary": "test:served", "text": "The engine reads the event log." }));
+    assert_eq!(status, 200, "{encoded}");
+    assert_eq!(encoded["vocabulary"]["digest"], json!(digest), "{encoded}");
+    let (status, decoded) = service.post("/v1/decode", &json!({ "container_base64": encoded["container_base64"] }));
+    assert_eq!((status, decoded["text"].as_str()), (200, Some("The engine reads the event log.")), "{decoded}");
+    let (ok, _, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served:second", "--vocab-size", "290", "--output", "second.kvf"]);
+    assert!(ok, "{said}");
+    // And it gives what it holds to a mirror, which holds the same file the job's caller got.
+    let (ok, mirrored, said) = kute(&dir, &["fetch", "--from", &format!("http://{}", service.address), "--mirror", "copy"]);
+    assert!(ok, "{said}");
+    assert_eq!((mirrored["listed"].clone(), mirrored["written"][0]["digest"].clone()), (json!(1), json!(digest)), "only what it was started with: {mirrored}");
+    let (_, copy, _) = kute(&dir, &["inspect", &format!("copy/{}.kvf", &digest["sha256:".len()..])]);
+    let (_, mine, _) = kute(&dir, &["inspect", "mine.kvf"]);
+    assert_eq!(copy["summary"], mine["summary"]);
+}
+
 /// Something that is not a jobs service: it gives these answers, one a
 /// connection, in this order, whatever is asked. Returns its address.
 fn scripted(answers: Vec<(u16, Vec<u8>)>) -> String {

@@ -249,7 +249,9 @@ restart. It is read strictly, because the operator named it: a file
 with one of those endings that is not a vocabulary stops the start, and
 so does a file named for a digest that its content does not have. Other
 files are not looked at, and a directory with no vocabulary in it is
-not a mistake: the service starts and holds none from it. At most 4,096 files are read from one
+not a mistake: the service starts and holds none from it. Nor is a
+directory that does not exist yet when it is also the `--jobs-dir`,
+which the service makes. At most 4,096 files are read from one
 directory, each held whole in memory.
 
 ## Training jobs (0.9.3)

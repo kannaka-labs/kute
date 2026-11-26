@@ -1765,6 +1765,12 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             };
             let mut vocabularies = paths.iter().map(vocab::load).collect::<kute::Result<Vec<_>>>()?;
             for dir in &vocab_dir {
+                // The jobs directory is made further down, once the
+                // address is known to be one that may take jobs. Named
+                // here too and not there yet, it holds nothing.
+                if jobs_dir.as_ref() == Some(dir) && !dir.exists() {
+                    continue;
+                }
                 vocabularies.extend(load_vocab_dir(dir)?);
             }
             let max_body_bytes = max_input_bytes.saturating_mul(2).saturating_add(1 << 20);

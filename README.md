@@ -308,7 +308,7 @@ tokens = engine.encode('{"from": "kannaka", "intent": "accept"}', vocabulary=voc
 original = engine.decode(tokens, vocabulary=vocab)
 ```
 
-Five worked use cases, each independent of the others, are in
+Six worked use cases, each independent of the others, are in
 `docs/use-cases.md`.
 
 `examples/kannaka-bus` (0.9.2) is the first use on a Kannaka
