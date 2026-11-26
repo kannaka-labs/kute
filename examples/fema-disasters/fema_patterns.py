@@ -56,15 +56,27 @@ def read(path):
 
 
 def halves(entities):
-    searched, held = ([], []), ([], [])
+    searched, held = ([], [], []), ([], [], [])
     for name in sorted(entities):
         events = sorted(entities[name].values())
-        for early, (records, times) in ((True, searched), (False, held)):
+        for early, (records, times, disasters) in ((True, searched), (False, held)):
             part = [e for e in events if (e[0] < SPLIT.toordinal()) == early]
             if len(part) >= 2:
                 records.append([e[2] for e in part])
                 times.append([e[0] for e in part])
+                disasters.append([e[1] for e in part])
     return searched, held
+
+
+def distinct(symbols, records, disasters):
+    """How many different runs of disasters make an adjacent pattern's
+    occurrences: 776 counties with the same two storms are one."""
+    n, seen = len(symbols), set()
+    for record, numbers in zip(records, disasters):
+        for i in range(len(record) - n + 1):
+            if record[i:i + n] == symbols:
+                seen.add(tuple(numbers[i:i + n]))
+    return len(seen)
 
 
 def disasters_shuffled(entities, params, seed):
@@ -84,7 +96,7 @@ def disasters_shuffled(entities, params, seed):
 
 
 def reading(entities, params):
-    (searched, searched_t), (held, held_t) = halves(entities)
+    (searched, searched_t, searched_d), (held, held_t, held_d) = halves(entities)
     found = kute.discover(searched, times=searched_t, held_out=held, held_out_times=held_t, **params)
     control = []
     for seed in range(SEEDS):
@@ -97,6 +109,8 @@ def reading(entities, params):
         "symbols": p["symbols"], "kind": p["kind"], "support": p["support"], "records": p["records"],
         "cohesion_bits": round(p["cohesion_bits"], 3), "evidence_bits": round(p["evidence_bits"], 1),
         "median_days": days(found["timing"], i),
+        "distinct_disaster_runs": distinct(p["symbols"], searched, searched_d) if p["kind"] == "contiguous" else None,
+        "held_out_distinct_disaster_runs": distinct(p["symbols"], held, held_d) if p["kind"] == "contiguous" else None,
         "held_out_support": after[i]["support"], "held_out_confirmed": after[i]["confirmed"],
         "held_out_evidence_bits": None if after[i].get("evidence_bits") is None else round(after[i]["evidence_bits"], 1),
         "held_out_median_days": days(found["held_out_timing"], i),

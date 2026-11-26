@@ -59,19 +59,24 @@ control. By state, where a disaster counts once, the two controls agree.
 **By county** is one record a county. The strongest patterns after 2010,
 by evidence there:
 
-| sequence | before 2010 | median days | 2010 on | median days |
-|---|---|---|---|---|
-| `EM:Hurricane` then `DR:Hurricane` | 776 | 3 | 1,986 | 5 |
-| `EM:Severe Ice Storm` then `DR:Severe Ice Storm` | 275 | 8 | 474 | 5 |
-| `DR:Hurricane` then `EM:Hurricane` | 996 | 360 | 1,071 | 354 |
-| `FM:Fire` then `FM:Fire` | 202 | 105 | 403 | 67 |
+| sequence | before 2010 | distinct | median days | 2010 on | distinct | median days |
+|---|---|---|---|---|---|---|
+| `EM:Hurricane` then `DR:Hurricane` | 776 | 28 | 3 | 1,986 | 87 | 5 |
+| `EM:Severe Ice Storm` then `DR:Severe Ice Storm` | 275 | 6 | 8 | 474 | 6 | 5 |
+| `DR:Hurricane` then `EM:Hurricane` | 996 | 49 | 360 | 1,071 | 66 | 354 |
+| `FM:Fire` then `FM:Fire` | 202 | 190 | 105 | 403 | 392 | 67 |
+
+The first count is occurrences in counties. "Distinct" is how many
+different pairs of disasters those occurrences are: 776 counties that
+saw the same two storms in the same order are one. Fire management
+declarations name one county each, so there the two counts nearly
+agree. Over the 78 adjacent patterns by county, 13,056 occurrences are
+2,357 distinct runs of disasters.
 
 The first two are one storm declared twice: an emergency, then a major
 disaster a few days later. They are the only two of that kind among the
 25 confirmed; six of the 25 have a median under 30 days, and the rest
-run from 51 days to 3,967. The counts are occurrences in counties, not
-separate storms: the 776 come from 28 distinct pairs of disasters and
-the 1,986 from 87; the ice storm's 275 and 474 from 6 pairs each. Three
+run from 51 days to 3,967. Three
 quarters of the patterns found before 2010 were not confirmed after it,
 and several of the strongest never occurred again (`EM:Snowstorm` then
 `DR:Snowstorm`, 388 times before 2010 and 0 after, which is more likely
