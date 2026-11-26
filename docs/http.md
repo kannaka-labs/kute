@@ -264,8 +264,9 @@ fails instead of writing; after that, jobs are answered `507` while
 less room is left than that vocabulary needed, so none trains only to
 fail. That can refuse a smaller job that would have fit. A vocabulary
 larger than the whole limit is not remembered: it fails, and the jobs
-after it are taken. A restart forgets what did not fit. Nothing removes files; the operator makes room. `GET /v1/jobs` gives `directory`: the files, their bytes and the
-limit. Two services sharing one directory each check it and can pass
+after it are taken. A restart forgets what did not fit. Nothing removes files; the operator makes room. `GET /v1/jobs` gives `directory`: the files, their bytes, the
+limit, `did_not_fit_bytes` (0 when nothing has failed to fit) and
+`taking_jobs`, which is false whenever a job given now would be `507`. Two services sharing one directory each check it and can pass
 the limit together by one file each.
 
 A job the trainer would refuse for certain is refused when given, with

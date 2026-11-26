@@ -9,9 +9,17 @@ Two readings of the same file, both with `kute.discover`:
   named two hundred counties counts once.
 
 In each, the declarations before SPLIT are searched and the ones from
-SPLIT on are held out. The control is the searched records with the
-order of events shuffled inside each record, ten seeds: what the same
-counts of the same events give when order means nothing.
+SPLIT on are held out. There are two controls, ten seeds each:
+
+* each record shuffled by itself: what the same counts of the same
+  events give when order means nothing. By county this is too weak a
+  bar: three hundred counties that shared two storms get three hundred
+  different orders, so the control loses the duplication the data has.
+* the disasters shuffled as a whole: every disaster keeps its counties
+  and its symbol and takes another disaster's place in time, so counties
+  that shared a storm still share it. This is the fair bar by county.
+  (A review of this example found the first control wanting and gave
+  the second.)
 
 The county reading and its thresholds were fixed before any result was
 seen. The state reading was added after, because one disaster names many
@@ -59,6 +67,22 @@ def halves(entities):
     return searched, held
 
 
+def disasters_shuffled(entities, params, seed):
+    """Patterns found when the searched disasters trade places in time."""
+    rng = random.Random(seed)
+    split = SPLIT.toordinal()
+    early = sorted({(e[0], e[1]) for events in entities.values() for e in events.values() if e[0] < split})
+    slots = early[:]
+    rng.shuffle(slots)
+    where = {disaster[1]: slot for disaster, slot in zip(early, slots)}
+    records = []
+    for name in sorted(entities):
+        part = [e for e in entities[name].values() if e[0] < split]
+        if len(part) >= 2:
+            records.append([e[2] for e in sorted(part, key=lambda e: where[e[1]])])
+    return len(kute.discover(records, **params)["patterns"])
+
+
 def reading(entities, params):
     (searched, searched_t), (held, held_t) = halves(entities)
     found = kute.discover(searched, times=searched_t, held_out=held, held_out_times=held_t, **params)
@@ -66,6 +90,7 @@ def reading(entities, params):
     for seed in range(SEEDS):
         rng = random.Random(seed)
         control.append(len(kute.discover([rng.sample(r, len(r)) for r in searched], **params)["patterns"]))
+    whole = [disasters_shuffled(entities, params, seed) for seed in range(SEEDS)]
     after = {p["pattern"]: p for p in found["held_out"]["patterns"]}
     days = lambda timing, i: (timing[i]["duration"] or {}).get("median")
     patterns = [{
@@ -83,8 +108,12 @@ def reading(entities, params):
         "held_out_records": len(held), "held_out_events": sum(map(len, held)),
         "distinct_symbols_searched": found["observation"]["alphabet"],
         "patterns_found": len(patterns),
-        "patterns_in_shuffled_control": control,
-        "patterns_in_shuffled_control_mean": sum(control) / len(control),
+        "patterns_with_each_record_shuffled": control,
+        "patterns_with_each_record_shuffled_mean": sum(control) / len(control),
+        "patterns_with_disasters_shuffled": whole,
+        "patterns_with_disasters_shuffled_mean": sum(whole) / len(whole),
+        "found_that_are_runs_of_one_symbol": sum(1 for p in patterns if len(set(p["symbols"])) == 1),
+        "confirmed_that_are_runs_of_one_symbol": sum(1 for p in patterns if p["held_out_confirmed"] and len(set(p["symbols"])) == 1),
         "held_out_confirmed": found["held_out"]["confirmed"],
         "coverage_searched": round(found["coverage"], 4), "coverage_held_out": round(found["held_out"]["coverage"], 4),
         "patterns": patterns,
@@ -106,7 +135,7 @@ def main():
     for name in READINGS:
         r = report[name]
         print(f"{name}: {r['searched_events']} events searched in {r['searched_records']} records; {r['patterns_found']} patterns, "
-              f"{r['patterns_in_shuffled_control_mean']:.1f} when shuffled; {r['held_out_confirmed']} confirmed on {r['held_out_events']} later events")
+              f"{r['patterns_with_each_record_shuffled_mean']:.1f} with each record shuffled, {r['patterns_with_disasters_shuffled_mean']:.1f} with the disasters shuffled; {r['held_out_confirmed']} confirmed on {r['held_out_events']} later events")
 
 
 if __name__ == "__main__":

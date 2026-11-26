@@ -3,12 +3,12 @@
 A public event log read with `kute.discover`: every disaster FEMA has
 declared since 1953, by county and date. The question is the one
 `examples/kannaka-bus` asks of a private log: do events of some kinds
-follow each other more often than their counts alone would give, and do
-the sequences found in the early years still occur in the later ones?
+follow each other more often than chance would give, and do the
+sequences found in the early years still occur in the later ones?
 
 Nothing here says why a sequence recurs. The patterns are regularities
-in order, and most of what is found is administrative: the same storm
-declared twice.
+in order. The two strongest are administrative: one storm declared
+twice.
 
 ## Run it
 
@@ -32,20 +32,32 @@ declarations are left out: they named every county in the country.
 An event is the declaration type and the incident type together
 (`DR:Hurricane`, a major disaster; `EM:Hurricane`, an emergency;
 `FM:Fire`, fire management). Declarations before 2010-01-01 were
-searched; those from 2010 on were held out. Discovery takes 0.13 s.
+searched; those from 2010 on were held out.
 
 | | by county | by state |
 |---|---|---|
 | records searched | 3,223 counties | 58 states and territories |
-| events searched | 36,654 | 3,008 |
+| events searched (before 2010) | 36,654 | 3,008 |
 | patterns found | 99 | 28 |
-| patterns in the same records with order shuffled, 10 seeds | 22 to 26, mean 23.6 | 7 to 11, mean 8.8 |
+| with the disasters shuffled as a whole, 10 seeds | 50 to 67, mean 55.9 | 7 to 11, mean 9.1 |
+| with each record shuffled by itself, 10 seeds | 22 to 26, mean 23.6 | 7 to 11, mean 8.8 |
 | events held out (2010 on) | 24,808 | 2,112 |
 | patterns confirmed there | 25 | 18 |
 
-**By county** is one record a county. Its thresholds and the split were
-fixed before any result was seen. The strongest patterns that held up
-after 2010:
+**Two controls, and by county only one of them is fair.** One hurricane
+names hundreds of counties, and each gets the same events in the same
+order. Shuffling each county by itself throws that duplication away, so
+it sets too low a bar: 24. Shuffling the disasters as a whole (every
+disaster keeps its counties and its kind, and takes another disaster's
+place in time) keeps it, and gives 56. So by county the finding is 99
+patterns against about 56, not against 24: more than half of what was
+found is what duplication alone produces. The first version of this
+example reported only the weaker control and said it shared the data's
+weakness; a review showed it does the opposite, and supplied the second
+control. By state, where a disaster counts once, the two controls agree.
+
+**By county** is one record a county. The strongest patterns after 2010,
+by evidence there:
 
 | sequence | before 2010 | median days | 2010 on | median days |
 |---|---|---|---|---|
@@ -55,43 +67,44 @@ after 2010:
 | `FM:Fire` then `FM:Fire` | 202 | 105 | 403 | 67 |
 
 The first two are one storm declared twice: an emergency, then a major
-disaster a few days later. The third is one hurricane season and the
-next. Three quarters of the patterns found before 2010 were not
-confirmed after it; several of the strongest never occurred again at
-all (`EM:Snowstorm` then `DR:Snowstorm`, 388 times before 2010 and 0
-after, which is more likely a change in how FEMA declares snow than a
-change in snow).
-
-**The county counts are not independent.** One hurricane names hundreds
-of counties, and each of them gets the same two events in the same
-order, so 776 is nearer to "a few dozen storms" than to 776 separate
-observations. The shuffled control has the same weakness. That is why
-there is a second reading.
+disaster a few days later. They are the only two of that kind among the
+25 confirmed; six of the 25 have a median under 30 days, and the rest
+run from 51 days to 3,967. The counts are occurrences in counties, not
+separate storms: the 776 come from 28 distinct pairs of disasters and
+the 1,986 from 87; the ice storm's 275 and 474 from 6 pairs each. Three
+quarters of the patterns found before 2010 were not confirmed after it,
+and several of the strongest never occurred again (`EM:Snowstorm` then
+`DR:Snowstorm`, 388 times before 2010 and 0 after, which is more likely
+a change in how FEMA declares snow than a change in snow). A pair of
+symbols can be listed twice in the report, once adjacent and once with
+a gap; the table uses the adjacent ones.
 
 **By state** is one record a state and one event a disaster, however
 many counties it named. It was added after the county result was seen,
 with a lower threshold (20) because there are a twelfth as many events.
-What it finds is plainer: runs of the same kind. `FM:Fire` after
-`FM:Fire` 639 times in 26 states, a median of 4 days apart, and 646
-times after 2010; floods after floods a year apart; severe storms after
-severe storms. 18 of 28 held up. Shuffling still leaves about 9,
-because a state whose declarations are mostly fires has fire after fire
-in any order: the control measures order, and a run of one symbol is
-partly a count.
+What it finds is plainer: 17 of the 28, and 14 of the 18 confirmed, are
+runs of one kind. `FM:Fire` after `FM:Fire` 639 times in 26 states, a
+median of 4 days apart, and 646 times after 2010; floods after floods a
+year apart; severe storms after severe storms. Either control still
+leaves about 9, because a state whose declarations are mostly fires has
+fire after fire in any order: a run of one symbol is partly a count.
 
 ## What this does and does not show
 
-* On a real public log of 61,698 events, the order carries structure
-  that counts alone do not give (99 patterns against 24, and 28 against
-  9), and the held-out years separate what lasted from what did not.
-* It is one dataset and one run of each reading. The control was run
+* In 36,654 real events, the order carries structure beyond what
+  chance arrangements give: 99 patterns against 56 by county, 28
+  against 9 by state. The held-out years separate what lasted from what
+  did not.
+* It is one dataset and one run of each reading. Each control was run
   with ten seeds; nothing else was repeated, and nothing was compared
   with another sequence miner.
 * "Confirmed" is `kute.discover`'s own test on the held-out records, and
-  it passes a pattern seen twice (`DR:Typhoon` then `DR:Typhoon` by
-  state, held-out evidence 11 bits, against 4,404 bits for the hurricane
-  pair by county). Read the held-out counts and `held_out_evidence_bits`
-  in the report, not the word.
+  twice is enough to pass it. The weakest confirmed pattern here is
+  `DR:Fire` then `EM:Fire` by county: seen twice after 2010, 3.4 bits of
+  evidence, against 4,404 bits for the hurricane pair. Read the held-out
+  counts and `held_out_evidence_bits` in the report, not the word.
+* The county thresholds and the split were chosen before any result
+  was seen; nothing in the repository can show that.
 * No claim is made about disasters. Declarations are decisions by an
   agency, and their rules changed over seventy years.
 

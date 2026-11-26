@@ -473,6 +473,9 @@ function jobsList(result) {
   const count = (state) => d.jobs.filter((j) => j.state === state).length;
   const dir = d.directory || {};
   const full = typeof dir.bytes === "number" && dir.bytes >= dir.max_bytes;
+  const refusing = dir.taking_jobs === false;
+  const why = full ? " It is full: no job is taken until its operator makes room."
+    : refusing ? ` No job is taken until its operator makes room: the last vocabulary trained was ${fmt(dir.did_not_fit_bytes)} bytes and did not fit.` : "";
   const headline = d.jobs.length === 0
     ? "No job has been given to this service since it started."
     : `${fmt(d.jobs.length)} job(s) remembered: ${fmt(count("running"))} running, ${fmt(count("waiting"))} waiting, ${fmt(count("done"))} done, ${fmt(count("failed"))} failed.`;
@@ -485,7 +488,7 @@ function jobsList(result) {
     el("p", { class: "note", id: "jobs-headline" }, headline),
     dir.error
       ? el("p", { class: "limit", id: "jobs-directory" }, String(dir.error))
-      : el("p", { class: full ? "limit" : "note", id: "jobs-directory" }, `The directory holds ${fmt(dir.files)} file(s), ${fmt(dir.bytes)} of ${fmt(dir.max_bytes)} bytes allowed.${full ? " It is full: no job is taken until its operator makes room." : ""}`),
+      : el("p", { class: full || refusing ? "limit" : "note", id: "jobs-directory" }, `The directory holds ${fmt(dir.files)} file(s), ${fmt(dir.bytes)} of ${fmt(dir.max_bytes)} bytes allowed.${why}`),
     jobs.length ? el("div", { class: "panel" }, table(
       [{ name: "job" }, { name: "state" }, { name: "given" }, { name: "vocabulary" }, { name: "size asked", n: true }, { name: "algorithm" }, { name: "documents", n: true }, { name: "corpus bytes", n: true }, { name: "outcome" }],
       jobs.map((j) => [j.id, j.state, clock(j.submitted_unix), `${j.asked.vocabulary_id} ${j.asked.version}`, fmt(j.asked.vocab_size), `${j.asked.algorithm} over ${j.asked.adapter}`, fmt(j.asked.documents), fmt(j.asked.corpus_bytes), outcome(j)]))) : null,
@@ -505,12 +508,27 @@ views["Jobs"] = async (root) => {
       about);
   }
   const output = el("div", { id: "jobs-list" });
+  // The list is drawn again only when the answer changed, so a digest
+  // being copied or a link being pressed is not replaced under the
+  // reader; and one request at a time, so an older answer is never
+  // drawn over a newer one.
+  let shown = null;
+  let asking = false;
   const draw = async () => {
+    if (asking) return;
+    asking = true;
     try {
-      output.replaceChildren(...jobsList(await call("jobs")));
+      const result = await call("jobs");
+      const answer = JSON.stringify(result.data);
+      if (answer !== shown) {
+        shown = answer;
+        output.replaceChildren(...jobsList(result));
+      }
     } catch (error) {
+      shown = null;
       output.replaceChildren(failure(error));
     }
+    asking = false;
   };
   root.append(output, about);
   await draw();

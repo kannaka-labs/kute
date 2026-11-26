@@ -158,7 +158,13 @@ impl Jobs {
 
     fn directory(&self) -> Value {
         match self.held() {
-            Ok((files, bytes)) => json!({ "files": files, "bytes": bytes, "max_bytes": self.limits.max_dir_bytes }),
+            Ok((files, bytes)) => {
+                // What a caller needs to see why a job is refused while
+                // the directory is under its limit.
+                let did_not_fit = self.lock().did_not_fit;
+                let taking = bytes < self.limits.max_dir_bytes && self.limits.max_dir_bytes - bytes >= did_not_fit;
+                json!({ "files": files, "bytes": bytes, "max_bytes": self.limits.max_dir_bytes, "did_not_fit_bytes": did_not_fit, "taking_jobs": taking })
+            }
             Err(e) => json!({ "error": format!("the jobs directory cannot be read: {e}"), "max_bytes": self.limits.max_dir_bytes }),
         }
     }
@@ -278,8 +284,10 @@ impl Jobs {
     }
 
     pub fn list(&self) -> Value {
+        // Before the lock is taken: reading the directory takes it too.
+        let directory = self.directory();
         let state = self.lock();
-        json!({ "jobs": state.jobs.iter().map(Job::describe).collect::<Vec<_>>(), "limits": self.limits(), "directory": self.directory() })
+        json!({ "jobs": state.jobs.iter().map(Job::describe).collect::<Vec<_>>(), "limits": self.limits(), "directory": directory })
     }
 
     pub fn get(&self, id: &str) -> Option<Value> {

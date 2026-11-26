@@ -260,7 +260,7 @@ fn the_directory_holds_no_more_than_its_operator_allowed() {
     let size = {
         let service = Service::start(&dir, &["--jobs-dir", "made"]);
         let (_, list) = service.get("/v1/jobs");
-        assert_eq!(list["directory"], json!({ "files": 0, "bytes": 0, "max_bytes": 1u64 << 30 }));
+        assert_eq!(list["directory"], json!({ "files": 0, "bytes": 0, "max_bytes": 1u64 << 30, "did_not_fit_bytes": 0, "taking_jobs": true }));
         let (status, taken) = service.post("/v1/jobs", &job("test:room:a"));
         assert_eq!(status, 202, "{taken}");
         let done = service.finished(taken["id"].as_str().unwrap());
@@ -291,6 +291,11 @@ fn the_directory_holds_no_more_than_its_operator_allowed() {
     let (status, answer) = service.post("/v1/jobs", &job("test:room:a"));
     assert_eq!((status, answer["error"]["code"].as_str()), (507, Some("no_room")), "{answer}");
     assert!(answer["error"]["message"].as_str().unwrap().contains("did not fit"), "{answer}");
+    // The list says so too: under the limit, and taking none.
+    let directory = service.get("/v1/jobs").1["directory"].clone();
+    assert!(directory["bytes"].as_u64().unwrap() < directory["max_bytes"].as_u64().unwrap(), "{directory}");
+    assert!(directory["did_not_fit_bytes"].as_u64().unwrap() > 10, "{directory}");
+    assert_eq!(directory["taking_jobs"], false, "{directory}");
     drop(service);
     // A service that has not seen that takes the job, and the vocabulary
     // already there is given again without a second file.

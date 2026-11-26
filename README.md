@@ -312,10 +312,10 @@ does and does not show.
 
 `examples/fema-disasters` (after 0.9.2) runs `kute.discover` on a public
 event log, FEMA's 70,607 disaster declarations since 1953: 99 recurring
-sequences by county against 24 with order shuffled, 25 of them still
-there after 2010, most of them one storm declared twice. Its README
-says why the county counts are not independent and what a second
-reading by state finds.
+sequences by county against 56 when the disasters trade places in
+time, 25 of them still there after 2010, the two strongest being one
+storm declared twice. Its README says why a weaker control (24) was
+the wrong bar, and what a second reading by state finds.
 
 `examples/log-archive` is a separate application built on the published
 Python package: it archives a public 70 MB server log with an exact round

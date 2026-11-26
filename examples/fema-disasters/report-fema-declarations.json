@@ -24,7 +24,7 @@
   "held_out_events": 24808,
   "distinct_symbols_searched": 33,
   "patterns_found": 99,
-  "patterns_in_shuffled_control": [
+  "patterns_with_each_record_shuffled": [
    24,
    25,
    22,
@@ -36,7 +36,22 @@
    26,
    24
   ],
-  "patterns_in_shuffled_control_mean": 23.6,
+  "patterns_with_each_record_shuffled_mean": 23.6,
+  "patterns_with_disasters_shuffled": [
+   52,
+   54,
+   50,
+   53,
+   57,
+   52,
+   60,
+   67,
+   54,
+   60
+  ],
+  "patterns_with_disasters_shuffled_mean": 55.9,
+  "found_that_are_runs_of_one_symbol": 12,
+  "confirmed_that_are_runs_of_one_symbol": 5,
   "held_out_confirmed": 25,
   "coverage_searched": 0.4267,
   "coverage_held_out": 0.3432,
@@ -1727,7 +1742,7 @@
   "held_out_events": 2112,
   "distinct_symbols_searched": 34,
   "patterns_found": 28,
-  "patterns_in_shuffled_control": [
+  "patterns_with_each_record_shuffled": [
    9,
    8,
    9,
@@ -1739,7 +1754,22 @@
    8,
    10
   ],
-  "patterns_in_shuffled_control_mean": 8.8,
+  "patterns_with_each_record_shuffled_mean": 8.8,
+  "patterns_with_disasters_shuffled": [
+   7,
+   8,
+   10,
+   9,
+   11,
+   10,
+   8,
+   9,
+   11,
+   8
+  ],
+  "patterns_with_disasters_shuffled_mean": 9.1,
+  "found_that_are_runs_of_one_symbol": 17,
+  "confirmed_that_are_runs_of_one_symbol": 14,
   "held_out_confirmed": 18,
   "coverage_searched": 0.6453,
   "coverage_held_out": 0.6283,

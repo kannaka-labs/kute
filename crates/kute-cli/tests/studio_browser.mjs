@@ -232,8 +232,13 @@ async function run() {
   must((await page('document.getElementById("jobs-directory").textContent')).startsWith("The directory holds 1 file(s)"), "and the directory holds it");
   const refused = await fetch(new URL("/v1/jobs", studioUrl), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texts: ["x"], vocabulary_id: "test:studio:bad", vocab_size: 300, adapter: "jsonl-events" }) });
   must(refused.status === 202, "a job that will fail when run is taken");
+  // Nothing changed, so the list is left as it is: the same row, not a new one like it.
+  await page('window.__row = document.querySelector("#jobs-list tbody tr")');
   await until('document.getElementById("jobs-headline").textContent.includes("1 failed")', "the page to show the failure");
   must((await page('document.querySelector("#jobs-list tbody tr").textContent')).includes("job-2"), "newest first, with why it failed");
+  await page('window.__row = document.querySelector("#jobs-list tbody tr")');
+  await new Promise((resolve) => setTimeout(resolve, 4500));
+  must((await page('window.__row === document.querySelector("#jobs-list tbody tr") && window.__row.isConnected')) === true, "an answer that did not change is not drawn again, so a selection survives");
 
   // Peer: a real `kute peer serve` is waiting, and says so in its status
   // file. The page follows it by itself: someone connects, then leaves.
