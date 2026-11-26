@@ -169,6 +169,30 @@ def test_discover_finds_a_planted_pattern():
     assert any(p["symbols"] == ["START", "HEAT", "HOLD", "DONE"] for p in found["patterns"]), found["patterns"][:3]
 
 
+def test_discover_times_patterns_and_counts_them_on_records_it_did_not_search():
+    records = [["START", "HEAT", "HOLD", "DONE"] + [f"noise{i % 7}"] for i in range(40)]
+    # START to DONE takes 30 ticks in every record.
+    times = [[100 * i, 100 * i + 10, 100 * i + 20, 100 * i + 30, 100 * i + 31] for i in range(40)]
+    plain = kute.discover(records, min_support=10)
+    found = kute.discover(records, min_support=10, times=times, held_out=records[:8], held_out_times=times[:8])
+    assert found["patterns"] == plain["patterns"]
+    assert "timing" not in plain and "held_out" not in plain
+    at = next(i for i, p in enumerate(found["patterns"]) if p["symbols"] == ["START", "HEAT", "HOLD", "DONE"])
+    took = next(t for t in found["timing"] if t["pattern"] == at)["duration"]
+    assert (took["occurrences"], took["min"], took["median"], took["max"]) == (40, 30, 30, 30)
+    later = next(p for p in found["held_out"]["patterns"] if p["pattern"] == at)
+    assert later["support"] == 8 and later["confirmed"]
+    assert next(t for t in found["held_out_timing"] if t["pattern"] == at)["duration"]["occurrences"] == 8
+
+    with pytest.raises(Exception, match="lists of times"):
+        kute.discover(records, min_support=10, times=times[:-1])
+    backwards = [list(reversed(t)) for t in times]
+    with pytest.raises(Exception):
+        kute.discover(records, min_support=10, times=backwards)
+    with pytest.raises(Exception, match="needs held_out"):
+        kute.discover(records, min_support=10, held_out_times=times)
+
+
 def test_one_vocabulary_object_is_a_persistent_session(engine, vocab, tmp_path):
     """A Vocabulary compiles its tokenizer once and cannot be changed, so many
     short messages through one object give what a fresh load gives for each."""

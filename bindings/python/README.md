@@ -35,6 +35,9 @@ large = engine.train("corpus/", vocabulary_id="example:text", vocab_size=32768, 
 # large is the vocabulary one run to 32768 would give (bpe, sequence-bpe)
 
 found = kute.discover([["START", "HEAT", "DONE"], ...], min_support=5)
+# With times=[[...], ...] aligned with the records: found["timing"], how long
+# each pattern takes. With held_out=more_records: found["held_out"], how often
+# each occurs in records that were not searched.
 found["patterns"]   # recurring runs and gapped pairs, strongest first
 ```
 

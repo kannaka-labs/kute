@@ -329,8 +329,16 @@ impl Engine {
 /// adjacent symbols and gapped pairs, strongest first, each with its
 /// support and evidence), `observation` and the `params` used. Patterns are
 /// statistical regularities in order; nothing is said about what they mean.
+///
+/// `times`, a list of lists of int aligned with `records` and never going
+/// back within a record, adds `timing`: for each pattern, how long its
+/// occurrences take, in the ticks given. `held_out`, more records that
+/// were not searched, adds `held_out`: how often each pattern occurs
+/// there and whether it is confirmed. `held_out_times` adds
+/// `held_out_timing`.
 #[pyfunction]
-#[pyo3(signature = (records, *, min_support=None, max_length=None, window=None, max_patterns=None))]
+#[pyo3(signature = (records, *, min_support=None, max_length=None, window=None, max_patterns=None, times=None, held_out=None, held_out_times=None))]
+#[allow(clippy::too_many_arguments)]
 fn discover(
     py: Python<'_>,
     records: Vec<Vec<String>>,
@@ -338,6 +346,9 @@ fn discover(
     max_length: Option<usize>,
     window: Option<usize>,
     max_patterns: Option<usize>,
+    times: Option<Vec<Vec<i64>>>,
+    held_out: Option<Vec<Vec<String>>>,
+    held_out_times: Option<Vec<Vec<i64>>>,
 ) -> PyResult<Py<PyAny>> {
     let mut params = kute_discover::Params::default();
     if let Some(v) = min_support {
@@ -352,8 +363,60 @@ fn discover(
     if let Some(v) = max_patterns {
         params.max_patterns = v;
     }
-    let found = py.detach(|| kute_discover::discover(&records, &params)).map_err(err)?;
-    to_python(py, &found)
+    if held_out_times.is_some() && held_out.is_none() {
+        return Err(PyValueError::new_err("held_out_times needs held_out"));
+    }
+    let answer = py
+        .detach(|| -> kute::Result<serde_json::Value> {
+            let found = kute_discover::discover(&records, &params)?;
+            let mut answer = serde_json::to_value(&found).map_err(|e| kute::KuteError::InvalidInput(e.to_string()))?;
+            let json = |v: &dyn erased::Json| v.json();
+            if let Some(held) = &held_out {
+                answer["held_out"] = json(&kute_discover::evaluate(&found, held)?)?;
+            }
+            if let Some(times) = times {
+                answer["timing"] = json(&kute_discover::timing(&found, &timed(records, times, "times")?)?)?;
+            }
+            if let (Some(held), Some(times)) = (held_out, held_out_times) {
+                answer["held_out_timing"] = json(&kute_discover::timing(&found, &timed(held, times, "held_out_times")?)?)?;
+            }
+            Ok(answer)
+        })
+        .map_err(err)?;
+    to_python(py, &answer)
+}
+
+mod erased {
+    /// Anything serializable, to a JSON value, with KUTE's error.
+    pub trait Json {
+        fn json(&self) -> kute::Result<serde_json::Value>;
+    }
+    impl<T: serde::Serialize> Json for T {
+        fn json(&self) -> kute::Result<serde_json::Value> {
+            serde_json::to_value(self).map_err(|e| kute::KuteError::InvalidInput(e.to_string()))
+        }
+    }
+}
+
+/// Records and their times as a timed event stream. The unit is the
+/// caller's: durations come back in the ticks that were given. Times not
+/// aligned with their symbols, or going back, are refused.
+fn timed(records: Vec<Vec<String>>, times: Vec<Vec<i64>>, name: &str) -> kute::Result<kute::EventStream> {
+    if times.len() != records.len() {
+        return Err(kute::KuteError::InvalidInput(format!("{name}: {} lists of times for {} records", times.len(), records.len())));
+    }
+    let schema = kute::EventSchema {
+        id: "call".into(),
+        version: 1,
+        symbol_field: "symbol".into(),
+        time_field: Some("time".into()),
+        time_unit: Some(kute::TimeUnit::Milliseconds),
+        group_field: None,
+    };
+    let mut stream = kute::EventStream::new(schema)?;
+    stream.records = records.into_iter().zip(times).map(|(symbols, times)| kute::EventRecord { key: None, symbols, times }).collect();
+    stream.validate()?;
+    Ok(stream)
 }
 
 fn events_codec(name: Option<&str>) -> PyResult<kute_events::Codec> {
