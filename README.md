@@ -125,7 +125,9 @@ Added in v0.3:
   the file. Standard techniques; the contract is the point. See
   `docs/signals.md`.
 * `kute serve --vocab file.kvf`: the same five operations over HTTP under
-  `/v1/`, loopback only unless asked, no TLS or authentication of its own.
+  `/v1/`, loopback only unless asked. Given certificates (0.10)
+  it is TLS 1.3 with a certificate on both sides and answers only
+  callers it was told to; without them it has no TLS or authentication.
   See `docs/http.md`.
 * `kute_discover::live` (library only, a prototype): discovery over a
   stream in state fixed in advance. Past its limits it approximates and
@@ -219,7 +221,9 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   registry lists, each file checked as a single fetch is; nothing in
   the directory is deleted or replaced. `kute serve --vocab-dir DIR`
   holds every vocabulary in a directory, so a mirror, or what jobs
-  trained, can be served after a restart.
+  trained, can be served after a restart. Since 0.10 a registry that
+  takes jobs gives what they trained by digest at once; its own
+  operations still use only what it was started with.
 * Since 0.9.3, `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
@@ -232,8 +236,8 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   --studio --peer-status` shows it, a second or two old. It is the
   peer's own account; a killed peer is shown as not running after a few
   seconds. `docs/studio.md`.
-* Not built: discovery of registries, uploads to one, TLS for
-  the HTTP service, expiry or revocation of keys,
+* Not built: discovery of registries, uploads to one, expiry or
+  revocation of keys,
   learned representations.
 
 Changed in v0.7 (the gates it was built against, with the evidence for

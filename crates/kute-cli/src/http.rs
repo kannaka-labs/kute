@@ -13,6 +13,7 @@
 use crate::mcp::Server;
 use serde_json::{json, Value};
 use std::io::{Read, Write};
+use kute_protocol::tls;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{sync_channel, Receiver, TrySendError};
 use std::sync::{Arc, Mutex};
@@ -56,6 +57,77 @@ pub struct Options {
     pub peer_status: Option<std::path::PathBuf>,
     /// Training jobs, under `/v1/jobs`. `None`, those paths do not exist.
     pub jobs: Option<Arc<crate::jobs::Jobs>>,
+    /// TLS with a certificate on both sides. `None`, plain HTTP.
+    pub tls: Option<Tls>,
+}
+
+/// What makes every connection TLS 1.3 with a certificate on both sides.
+#[derive(Clone)]
+pub struct Tls {
+    /// This side's certificate, and the authorities whose clients are heard.
+    pub config: Arc<tls::ServerConfig>,
+    /// If some, only clients whose own certificate has one of these
+    /// fingerprints are answered; the rest are told so and nothing else.
+    pub allow: Option<Arc<std::collections::BTreeSet<String>>>,
+    /// The handshake must finish within this, or within the time a
+    /// request has if that is shorter. A handshake needs milliseconds
+    /// and a request may need seconds, and before the handshake nobody
+    /// knows who is calling.
+    pub handshake: Duration,
+}
+
+impl std::fmt::Debug for Tls {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tls").field("allow", &self.allow).finish_non_exhaustive()
+    }
+}
+
+/// A connection, plain or not.
+enum Wire {
+    Plain(TcpStream),
+    Secure(Box<tls::ServerStream>),
+}
+
+impl Wire {
+    /// The socket, for setting how long a read or a write may take.
+    fn socket(&self) -> &TcpStream {
+        match self {
+            Wire::Plain(tcp) => tcp,
+            Wire::Secure(stream) => stream.socket(),
+        }
+    }
+
+    /// Nothing more will be sent.
+    fn end(&mut self) {
+        if let Wire::Secure(stream) = self {
+            stream.close();
+        }
+        let _ = self.socket().shutdown(std::net::Shutdown::Write);
+    }
+}
+
+impl Read for Wire {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Wire::Plain(tcp) => tcp.read(buf),
+            Wire::Secure(stream) => stream.read(buf),
+        }
+    }
+}
+
+impl Write for Wire {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Wire::Plain(tcp) => tcp.write(buf),
+            Wire::Secure(stream) => stream.write(buf),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Wire::Plain(tcp) => tcp.flush(),
+            Wire::Secure(stream) => stream.flush(),
+        }
+    }
 }
 
 /// Asking other registries, and what that may cost this one.
@@ -210,7 +282,7 @@ const STUDIO_POLICY: &str = "default-src 'none'; script-src 'self'; style-src 's
 
 impl Default for Options {
     fn default() -> Self {
-        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true, federation: None, peer_status: None, jobs: None }
+        Self { workers: 4, queue: 16, timeout: Duration::from_secs(10), max_body_bytes: 3 << 20, any_host: false, studio: false, registry: false, operations: true, federation: None, peer_status: None, jobs: None, tls: None }
     }
 }
 
@@ -257,7 +329,7 @@ fn loopback_name(host: &str) -> bool {
 }
 
 /// Read one request within the deadline and the size limits.
-fn read_request(stream: &mut TcpStream, options: &Options) -> Result<Request, Reply> {
+fn read_request(stream: &mut Wire, options: &Options) -> Result<Request, Reply> {
     let deadline = Instant::now() + options.timeout;
     let late = || problem(408, "Request Timeout", "timeout", "the request did not arrive in time");
     let mut buffer: Vec<u8> = Vec::with_capacity(1024);
@@ -270,7 +342,7 @@ fn read_request(stream: &mut TcpStream, options: &Options) -> Result<Request, Re
             return Err(problem(431, "Request Header Fields Too Large", "headers_too_large", format!("the request line and headers may take {MAX_HEAD_BYTES} bytes")));
         }
         let left = deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(late)?;
-        stream.set_read_timeout(Some(left)).map_err(|_| late())?;
+        stream.socket().set_read_timeout(Some(left)).map_err(|_| late())?;
         match stream.read(&mut chunk) {
             Ok(0) => return Err(problem(400, "Bad Request", "bad_request", "the connection closed before the request was complete")),
             Ok(n) => buffer.extend_from_slice(&chunk[..n]),
@@ -341,7 +413,7 @@ fn read_request(stream: &mut TcpStream, options: &Options) -> Result<Request, Re
     }
     while body.len() < length {
         let left = deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(late)?;
-        stream.set_read_timeout(Some(left)).map_err(|_| late())?;
+        stream.socket().set_read_timeout(Some(left)).map_err(|_| late())?;
         let want = chunk.len().min(length - body.len());
         match stream.read(&mut chunk[..want]) {
             Ok(0) => return Err(bad("the connection closed before the body was complete")),
@@ -381,6 +453,7 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         held["peer_status"] = json!(options.peer_status.is_some());
         held["jobs"] = json!(options.jobs.as_ref().map(|j| j.limits()));
         held["limits"]["max_body_bytes"] = json!(options.max_body_bytes);
+        held["tls"] = json!(options.tls.is_some());
         return ok(held);
     }
     if operation == "peer" {
@@ -441,6 +514,15 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         }
         let Some(digest) = operation.strip_prefix("vocabularies/") else {
             let mut listing = server.registry_list();
+            // What jobs trained since the start is given too: whoever can
+            // ask this registry could already read it under the job.
+            if let (Some(jobs), Some(held)) = (&options.jobs, listing["vocabularies"].as_array_mut()) {
+                for entry in jobs.trained() {
+                    if !held.iter().any(|h| h["digest"] == entry["digest"]) {
+                        held.push(entry);
+                    }
+                }
+            }
             // Who else this registry asks. What they hold is theirs to say.
             listing["upstreams"] = json!(options.federation.as_ref().map(|f| f.upstreams.clone()).unwrap_or_default());
             listing["upstream_files_need_a_trusted_signature"] = json!(options.federation.as_ref().is_some_and(|f| f.check.is_some()));
@@ -455,6 +537,9 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
             Some(Ok(file)) => Reply { file: Some(file.into_boxed_slice()), ..ok(Value::Null) },
             Some(Err(_)) => problem(500, "Internal Server Error", "internal", "the vocabulary could not be written out"),
             None => {
+                if let Some(file) = options.jobs.as_ref().and_then(|jobs| jobs.file_by_digest(digest)) {
+                    return Reply { file: Some(file.into_boxed_slice()), ..ok(Value::Null) };
+                }
                 // Not held here. A registry asking for another is answered
                 // from what is here and kept, and no further.
                 let found = match &options.federation {
@@ -499,7 +584,7 @@ fn json_body(request: &Request) -> Result<Value, Reply> {
     serde_json::from_slice(&request.body).map_err(|e| problem(400, "Bad Request", "bad_json", format!("the body is not JSON: {e}")))
 }
 
-fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
+fn answer(stream: &mut Wire, reply: &Reply, options: &Options) {
     let (content_type, body) = match (reply.page, &reply.file) {
         (Some((content_type, text)), _) => (content_type, text.as_bytes().to_vec()),
         (None, Some(file)) => ("application/json", file.to_vec()),
@@ -521,11 +606,11 @@ fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
         head.push_str(&format!("Allow: {allow}\r\n"));
     }
     head.push_str("\r\n");
-    let _ = stream.set_write_timeout(Some(options.timeout));
+    let _ = stream.socket().set_write_timeout(Some(options.timeout));
     if stream.write_all(head.as_bytes()).is_ok() && stream.write_all(&body).is_ok() {
         let _ = stream.flush();
     }
-    let _ = stream.shutdown(std::net::Shutdown::Write);
+    stream.end();
     // A request refused before it was read to its end leaves bytes
     // unread, and closing over unread bytes resets the connection on
     // some systems (seen on macOS), which can take the answer with it.
@@ -534,7 +619,7 @@ fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
     // only if all of what was sent is read, so the limit is the largest
     // unread request an answer is guaranteed to survive.
     let started = Instant::now();
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(50)));
+    let _ = stream.socket().set_read_timeout(Some(Duration::from_millis(50)));
     let (mut scrap, mut discarded) = ([0u8; 4096], 0usize);
     while discarded < 1_048_576 && started.elapsed() < Duration::from_millis(500) {
         match stream.read(&mut scrap) {
@@ -544,7 +629,27 @@ fn answer(stream: &mut TcpStream, reply: &Reply, options: &Options) {
     }
 }
 
-fn serve_one(server: &Server, mut stream: TcpStream, options: &Options) {
+fn serve_one(server: &Server, stream: TcpStream, options: &Options) {
+    let mut refused = None;
+    let mut stream = match &options.tls {
+        None => Wire::Plain(stream),
+        // The handshake has a time of its own, all of it counted: a
+        // connection that will not finish one costs a worker that long
+        // and no longer. One that fails it is closed and told nothing
+        // in HTTP: it has not shown who it is.
+        Some(tls) => match tls::accept_by(&tls.config, stream, Instant::now() + tls.handshake.min(options.timeout)) {
+            Ok((secured, who)) => {
+                if tls.allow.as_ref().is_some_and(|allowed| !allowed.contains(&who.fingerprint)) {
+                    refused = Some(problem(403, "Forbidden", "not_allowed", "this certificate is from an authority this service trusts, and is not one of the certificates it answers"));
+                }
+                Wire::Secure(Box::new(secured))
+            }
+            Err(_) => return,
+        },
+    };
+    if let Some(reply) = refused {
+        return answer(&mut stream, &reply, options);
+    }
     let reply = match read_request(&mut stream, options) {
         Ok(request) => route(server, &request, options),
         Err(reply) => reply,
@@ -578,11 +683,15 @@ pub fn serve(server: Server, listener: TcpListener, options: Options) -> kute::R
         };
         match send.try_send(stream) {
             Ok(()) => {}
-            Err(TrySendError::Full(mut stream)) => {
+            Err(TrySendError::Full(stream)) => {
                 // Answered here, without reading: reading is what a worker is for.
-                let busy = Reply { ..problem(503, "Service Unavailable", "busy", "every worker is busy and the queue is full; try again") };
-                let brief = Options { timeout: Duration::from_secs(1), ..options.clone() };
-                answer(&mut stream, &busy, &brief);
+                // Under TLS there is no answer without a handshake, and a
+                // handshake is a worker's too: the connection is closed.
+                if options.tls.is_none() {
+                    let busy = Reply { ..problem(503, "Service Unavailable", "busy", "every worker is busy and the queue is full; try again") };
+                    let brief = Options { timeout: Duration::from_secs(1), ..options.clone() };
+                    answer(&mut Wire::Plain(stream), &busy, &brief);
+                }
             }
             Err(TrySendError::Disconnected(_)) => return Err(kute::KuteError::Backend("the workers stopped".into())),
         }

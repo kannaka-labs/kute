@@ -168,7 +168,7 @@ fn a_vocabulary_is_fetched_by_digest_and_kept_only_if_it_is_that_one() {
     ok(&dir, &["fetch", "--from", &url, "--digest", &signed, "--output", "got.kvf", "--force"]);
     // Refused before anything is asked for.
     assert!(fails(&dir, &["fetch", "--from", &url, "--digest", "latest", "--output", "no4.kvf"]).contains("not a digest"));
-    assert!(fails(&dir, &["fetch", "--from", "https://example.invalid", "--digest", &signed, "--output", "no5.kvf"]).contains("https is not built"));
+    assert!(fails(&dir, &["fetch", "--from", "https://example.invalid", "--digest", &signed, "--output", "no5.kvf"]).contains("https needs this side's certificate"));
     // A name that is not there is an error, and one within the time given.
     let started = std::time::Instant::now();
     fails(&dir, &["fetch", "--from", "http://registry.invalid:8787", "--digest", &signed, "--output", "no5.kvf", "--timeout", "5"]);
@@ -238,6 +238,10 @@ fn a_mirror_takes_everything_listed_checks_each_file_and_deletes_nothing() {
     std::fs::create_dir_all(dir.join("misnamed")).unwrap();
     std::fs::copy(dir.join("other.kvf"), dir.join("misnamed").join(name(&signed))).unwrap();
     assert!(fails(&dir, &["serve", "--listen", "127.0.0.1:0", "--vocab-dir", "misnamed"]).contains("named for a digest its content does not have"));
+    // The same in upper-case hex (found in review).
+    std::fs::create_dir_all(dir.join("misnamed-upper")).unwrap();
+    std::fs::copy(dir.join("other.kvf"), dir.join("misnamed-upper").join(name(&signed).to_uppercase().replace(".KVF", ".kvf"))).unwrap();
+    assert!(fails(&dir, &["serve", "--listen", "127.0.0.1:0", "--vocab-dir", "misnamed-upper"]).contains("named for a digest its content does not have"));
 
     // A file under a digest's name that is not that vocabulary is left alone, and the run fails.
     std::fs::copy(dir.join("other.kvf"), dir.join("copy").join(name(&signed))).unwrap();

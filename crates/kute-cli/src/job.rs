@@ -57,13 +57,12 @@ fn failed(what: impl Into<String>) -> KuteError {
 }
 
 struct Service {
-    authority: String,
-    base: String,
+    at: registry::Target,
 }
 
 impl Service {
     fn ask(&self, method: &str, path: &str, body: Option<&[u8]>, max_bytes: u64) -> kute::Result<(u16, Vec<u8>)> {
-        registry::request(method, &self.authority, &format!("{}{path}", self.base), body, max_bytes, EXCHANGE, false).map_err(ours)
+        registry::request(method, &self.at, path, body, max_bytes, EXCHANGE, false).map_err(ours)
     }
 
     fn job(&self, id: &str) -> kute::Result<Value> {
@@ -82,7 +81,7 @@ fn is_job_id(text: &str) -> bool {
 
 pub fn run(engine: &Engine, ask: Ask) -> kute::Result<Value> {
     // This side's mistakes first, before the service is given work.
-    let (authority, base) = registry::parse_url(&ask.at).map_err(ours)?;
+    let at = registry::parse_url(&ask.at).map_err(ours)?;
     if ask.output.exists() && !ask.force {
         return Err(KuteError::InvalidConfig(format!("{} exists; pass --force to replace it", ask.output.display())));
     }
@@ -115,7 +114,7 @@ pub fn run(engine: &Engine, ask: Ask) -> kute::Result<Value> {
     .to_string();
     drop(texts);
 
-    let service = Service { authority, base };
+    let service = Service { at };
     // What the service says it takes, asked first: a body larger than it
     // reads is refused by a closed connection, which says nothing.
     let (status, answer) = service.ask("GET", "/v1/capabilities", None, MAX_ANSWER_BYTES)?;

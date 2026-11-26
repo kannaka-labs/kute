@@ -364,10 +364,43 @@ enum Command {
         /// use is printed as JSON on standard output.
         #[arg(long, default_value = "127.0.0.1:8787")]
         listen: String,
-        /// Allow an address that is not loopback. Anyone who can reach it
-        /// can use it: there is no TLS and no authentication.
-        #[arg(long)]
+        /// Allow an address that is not loopback without TLS. Anyone who
+        /// can reach it can use it, and the network between sees it all.
+        #[arg(long, conflicts_with = "tls_client_ca")]
         insecure_remote: bool,
+        /// This side's certificate chain (PEM). With --tls-key and
+        /// --tls-client-ca, every connection is TLS 1.3 with a
+        /// certificate on both sides, and an address that is not
+        /// loopback needs no --insecure-remote. With --tls-key and
+        /// --tls-ca, it is what this registry shows an https --upstream.
+        #[arg(long, requires = "tls_key")]
+        tls_cert: Option<PathBuf>,
+        /// This side's private key (PEM).
+        #[arg(long, requires = "tls_cert")]
+        tls_key: Option<PathBuf>,
+        /// Authorities whose client certificates are accepted (PEM).
+        /// Giving it is what turns TLS on. A caller with no certificate
+        /// from one of them gets no answer at all.
+        #[arg(long, requires = "tls_cert")]
+        tls_client_ca: Option<PathBuf>,
+        /// A caller that is answered, by certificate fingerprint as
+        /// printed by `kute peer fingerprint`. Repeatable. With any
+        /// given, a caller not listed is answered 403 whatever it
+        /// asked, even with a certificate from an accepted authority.
+        /// With none, every certificate from an accepted authority is
+        /// answered.
+        #[arg(long, value_name = "SHA256", requires = "tls_client_ca")]
+        allow: Vec<String>,
+        /// Seconds a caller has to finish the TLS handshake, or --timeout
+        /// if that is less. Until it is finished nobody knows who is
+        /// calling, and each caller that will not finish holds a worker
+        /// this long.
+        #[arg(long, default_value_t = 3, requires = "tls_client_ca")]
+        tls_handshake_timeout: u64,
+        /// Authorities whose certificates an https --upstream may show
+        /// (PEM).
+        #[arg(long, requires = "tls_cert")]
+        tls_ca: Option<PathBuf>,
         /// Also serve KUTE Studio, a page for looking at what the service
         /// holds and does, at /studio. Loopback only. The page loads
         /// nothing from outside and calls only this service.
@@ -490,6 +523,8 @@ enum Command {
         /// Seconds the whole exchange may take.
         #[arg(long, default_value_t = 60)]
         timeout: u64,
+        #[command(flatten)]
+        tls: ClientTls,
     },
     /// Give a training job to a `kute serve --jobs-dir`, wait for it,
     /// and write the vocabulary it made, checked against its digest.
@@ -533,6 +568,8 @@ enum Command {
         /// Largest vocabulary file taken.
         #[arg(long, default_value_t = 67_108_864)]
         max_bytes: u64,
+        #[command(flatten)]
+        tls: ClientTls,
     },
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
@@ -542,6 +579,32 @@ enum Command {
         #[arg(long)]
         output: PathBuf,
     },
+}
+
+/// What a command needs to reach an `https` address.
+#[derive(clap::Args)]
+struct ClientTls {
+    /// This side's certificate chain (PEM), shown to an https address.
+    /// With --tls-key and --tls-ca. The service's certificate must come
+    /// from an authority in --tls-ca and carry the host in the address.
+    #[arg(long, requires_all = ["tls_key", "tls_ca"])]
+    tls_cert: Option<PathBuf>,
+    /// This side's private key (PEM).
+    #[arg(long, requires = "tls_cert")]
+    tls_key: Option<PathBuf>,
+    /// Authorities whose service certificates are believed (PEM).
+    #[arg(long, requires = "tls_cert")]
+    tls_ca: Option<PathBuf>,
+}
+
+impl ClientTls {
+    /// Before any address is read.
+    fn set(&self) -> kute::Result<()> {
+        match (&self.tls_cert, &self.tls_key, &self.tls_ca) {
+            (Some(certificate), Some(key), Some(authorities)) => registry::client_identity(certificate, key, authorities),
+            _ => Ok(()),
+        }
+    }
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -1370,9 +1433,11 @@ fn load_vocab_dir(dir: &std::path::Path) -> kute::Result<Vec<kute::Vocabulary>> 
         // says what it holds. One that holds something else was put
         // there by mistake or by someone.
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        if stem.len() == 64 && stem.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        // In either case of hex: a file system that ignores case would
+        // give the upper-case name to whoever asked for the lower.
+        if stem.len() == 64 && stem.bytes().all(|b| b.is_ascii_hexdigit()) {
             let digest = vocabulary.compute_digest()?;
-            if digest != format!("sha256:{stem}") {
+            if digest != format!("sha256:{}", stem.to_ascii_lowercase()) {
                 return Err(wrong(format!("{} is named for a digest its content does not have: it holds {digest}", path.display())));
             }
         }
@@ -1728,10 +1793,12 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
             SignalsAction::Inspect { input } => print(&kute_signals::header(&std::fs::read(&input)?)?),
         },
-        Command::Job { at, input, id, vocab_version, algorithm, adapter, adapter_options, vocab_size, min_frequency, output, force, wait, max_bytes } => {
+        Command::Job { at, input, id, vocab_version, algorithm, adapter, adapter_options, vocab_size, min_frequency, output, force, wait, max_bytes, tls } => {
+            tls.set()?;
             print(&job::run(&engine, job::Ask { at, input, id, vocab_version, algorithm, adapter, adapter_options, vocab_size, min_frequency, output, force, wait: std::time::Duration::from_secs(wait), max_bytes })?)
         }
-        Command::Fetch { from, digest, output, mirror, max_files, max_total_bytes, trusted_keys, force, list, max_bytes, timeout } => {
+        Command::Fetch { from, digest, output, mirror, max_files, max_total_bytes, trusted_keys, force, list, max_bytes, timeout, tls } => {
+            tls.set()?;
             let timeout = std::time::Duration::from_secs(timeout.max(1));
             if let Some(dir) = mirror {
                 if force {
@@ -1747,10 +1814,34 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 _ => Err(KuteError::InvalidConfig("give --digest and --output, or --list".into())),
             }
         }
-        Command::Serve { vocab: paths, vocab_dir, listen, insecure_remote, studio, registry, registry_only, peer_status, jobs_dir, jobs_queue, jobs_max_vocab_size, jobs_max_dir_bytes, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Serve { vocab: paths, vocab_dir, listen, insecure_remote, tls_cert, tls_key, tls_client_ca, allow, tls_handshake_timeout, tls_ca, studio, registry, registry_only, peer_status, jobs_dir, jobs_queue, jobs_max_vocab_size, jobs_max_dir_bytes, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
             let registry = registry || registry_only;
             if !upstream.is_empty() && !registry {
                 return Err(KuteError::InvalidConfig("--upstream is for a registry: add --registry or --registry-only".into()));
+            }
+            use kute_protocol::tls;
+            let secured = match (&tls_cert, &tls_key, &tls_client_ca) {
+                (Some(certificate), Some(key), Some(authorities)) => {
+                    let config = tls::server_config(tls::load_certificates(certificate)?, tls::load_private_key(key)?, tls::load_certificates(authorities)?)?;
+                    // The same check a peer's list gets.
+                    let mut listed = tls::Access::new();
+                    for fingerprint in &allow {
+                        listed.allow(fingerprint, kute_protocol::Policy::default())?;
+                    }
+                    let allow = (!allow.is_empty()).then(|| std::sync::Arc::new(allow.iter().cloned().collect::<std::collections::BTreeSet<_>>()));
+                    Some(http::Tls { config, allow, handshake: std::time::Duration::from_secs(tls_handshake_timeout.max(1)) })
+                }
+                _ => None,
+            };
+            match (&tls_cert, &tls_key, &tls_ca) {
+                (Some(certificate), Some(key), Some(authorities)) => registry::client_identity(certificate, key, authorities)?,
+                (Some(_), _, None) if secured.is_none() => {
+                    return Err(KuteError::InvalidConfig("--tls-cert is used with --tls-client-ca, to serve over TLS, or with --tls-ca, to ask an https --upstream; neither was given".into()));
+                }
+                _ => {}
+            }
+            if secured.is_some() && studio {
+                return Err(KuteError::InvalidConfig("Studio is a page in a browser, and a service over TLS answers only callers with a certificate; serve Studio from a plain service on a loopback address".into()));
             }
             // Read the addresses before listening: one that cannot be read
             // is the operator's mistake, to be told now.
@@ -1768,7 +1859,13 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 // The jobs directory is made further down, once the
                 // address is known to be one that may take jobs. Named
                 // here too and not there yet, it holds nothing.
-                if jobs_dir.as_ref() == Some(dir) && !dir.exists() {
+                // The same directory written two ways (`j`, `./j`) is
+                // the same directory.
+                let same = jobs_dir.as_ref().is_some_and(|jobs| match (std::path::absolute(jobs), std::path::absolute(dir)) {
+                    (Ok(a), Ok(b)) => a.components().eq(b.components()),
+                    _ => jobs == dir,
+                });
+                if same && !dir.exists() {
                     continue;
                 }
                 vocabularies.extend(load_vocab_dir(dir)?);
@@ -1778,9 +1875,9 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             let server = mcp::Server::new(engine, vocabularies, limits)?;
             let listener = std::net::TcpListener::bind(&listen)?;
             let address = listener.local_addr()?;
-            if !http::is_loopback(&address) && !insecure_remote {
+            if !http::is_loopback(&address) && !insecure_remote && secured.is_none() {
                 return Err(KuteError::InvalidConfig(format!(
-                    "{address} is not a loopback address, and this service has no TLS and no authentication; pass --insecure-remote to serve it anyway"
+                    "{address} is not a loopback address, and without TLS this service has no authentication; give --tls-cert, --tls-key and --tls-client-ca, or pass --insecure-remote to serve it anyway"
                 )));
             }
             if studio && !http::is_loopback(&address) {
@@ -1789,15 +1886,23 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             if peer_status.is_some() && !http::is_loopback(&address) {
                 return Err(KuteError::InvalidConfig("--peer-status is given on a loopback address only: the status names who connected to the peer".into()));
             }
-            if jobs_dir.is_some() && !http::is_loopback(&address) {
-                return Err(KuteError::InvalidConfig("--jobs-dir is given on a loopback address only: the service has no authentication, and whoever reaches it could make it train".into()));
+            if jobs_dir.is_some() && !http::is_loopback(&address) && secured.is_none() {
+                return Err(KuteError::InvalidConfig("--jobs-dir is given on a loopback address, or over TLS: without TLS the service has no authentication, and whoever reaches it could make it train".into()));
             }
+            // Reading by digest may be for everyone an authority knows.
+            // Training costs this machine minutes, memory and disk, and
+            // a few waiting jobs shut everyone else out: who may ask
+            // for that is named, as a peer's callers are.
+            if jobs_dir.is_some() && !http::is_loopback(&address) && secured.as_ref().is_some_and(|s| s.allow.is_none()) {
+                return Err(KuteError::InvalidConfig("--jobs-dir on an address that is not loopback needs --allow: name the certificates that may make this service train (`kute peer fingerprint` prints a certificate's)".into()));
+            }
+            let scheme = if secured.is_some() { "https" } else { "http" };
             let jobs = match jobs_dir {
                 Some(dir) => Some(jobs::Jobs::start(dir, jobs::Limits { queue: jobs_queue, max_vocab_size: jobs_max_vocab_size, max_dir_bytes: jobs_max_dir_bytes, ..Default::default() })?),
                 None => None,
             };
-            print(&json!({ "listening": address.to_string(), "api": "v1", "jobs": jobs.is_some(), "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "upstreams": upstream, "upstream_files_need_a_trusted_signature": !upstream_trusted_key.is_empty(), "operations": !registry_only }))?;
-            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, federation, peer_status, jobs, ..Default::default() };
+            print(&json!({ "listening": address.to_string(), "api": "v1", "jobs": jobs.is_some(), "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("{scheme}://{address}")), "tls": secured.is_some(), "callers_answered": secured.as_ref().map(|s| s.allow.as_ref().map_or(json!("any certificate from an accepted authority"), |a| json!(a.as_ref()))), "upstreams": upstream, "upstream_files_need_a_trusted_signature": !upstream_trusted_key.is_empty(), "operations": !registry_only }))?;
+            let options = http::Options { workers, timeout: std::time::Duration::from_secs(timeout.max(1)), max_body_bytes, any_host: !http::is_loopback(&address), studio, registry, operations: !registry_only, federation, peer_status, jobs, tls: secured, ..Default::default() };
             http::serve(server, listener, options)
         }
         Command::Capabilities => {

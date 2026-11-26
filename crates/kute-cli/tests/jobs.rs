@@ -299,7 +299,7 @@ fn the_command_line_gives_a_job_and_keeps_only_a_file_that_is_what_it_was_told()
     let (ok, _, said) = kute(&dir, &["job", "--at", &format!("http://{}", plain.address), "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "plain.kvf"]);
     assert!(!ok && said.contains("takes no jobs"), "{said}");
     let (ok, _, said) = kute(&dir, &["job", "--at", "https://127.0.0.1:1", "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "tls.kvf"]);
-    assert!(!ok && said.contains("service address") && said.contains("https is not built"), "{said}");
+    assert!(!ok && said.contains("service address") && said.contains("https needs this side's certificate"), "{said}");
     // Nobody there.
     drop(service);
     let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "nobody.kvf"]);
@@ -311,7 +311,8 @@ fn what_a_job_trained_is_served_after_a_restart_and_can_be_mirrored() {
     let dir = scratch("jobs-served");
     std::fs::write(dir.join("text.txt"), TEXT.repeat(30)).unwrap();
     let digest = {
-        let service = Service::start(&dir, &["--jobs-dir", "made", "--vocab-dir", "made"]);
+        // Written two ways, it is still the one directory (found in review).
+        let service = Service::start(&dir, &["--jobs-dir", "made", "--vocab-dir", "./made"]);
         assert_eq!(service.get("/v1/capabilities").1["vocabularies"].as_array().unwrap().len(), 0, "an empty directory is not a mistake");
         let (ok, report, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served", "--vocab-size", "300", "--output", "mine.kvf"]);
         assert!(ok, "{said}");
@@ -328,12 +329,29 @@ fn what_a_job_trained_is_served_after_a_restart_and_can_be_mirrored() {
     assert_eq!(encoded["vocabulary"]["digest"], json!(digest), "{encoded}");
     let (status, decoded) = service.post("/v1/decode", &json!({ "container_base64": encoded["container_base64"] }));
     assert_eq!((status, decoded["text"].as_str()), (200, Some("The engine reads the event log.")), "{decoded}");
-    let (ok, _, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served:second", "--vocab-size", "290", "--output", "second.kvf"]);
+    let (ok, second, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served:second", "--vocab-size", "290", "--output", "second.kvf"]);
     assert!(ok, "{said}");
-    // And it gives what it holds to a mirror, which holds the same file the job's caller got.
+    // As a registry it gives what a job made at once, by digest, without a restart;
+    // the operations still know only what the service was started with.
+    let second_digest = second["digest"].as_str().unwrap().to_string();
+    let (_, listing) = service.get("/v1/vocabularies");
+    let listed: Vec<&Value> = listing["vocabularies"].as_array().unwrap().iter().collect();
+    assert_eq!(listed.len(), 2, "{listing}");
+    assert_eq!((listed[1]["digest"].clone(), listed[1]["id"].clone(), listed[1]["trained_by"].clone()), (json!(second_digest), json!("test:served:second"), json!("job-1")), "{listing}");
+    let (ok, _, said) = kute(&dir, &["fetch", "--from", &format!("http://{}", service.address), "--digest", &second_digest, "--output", "second-by-digest.kvf"]);
+    assert!(ok, "{said}");
+    assert_eq!(std::fs::read(dir.join("second-by-digest.kvf")).unwrap(), std::fs::read(dir.join("second.kvf")).unwrap());
+    assert_eq!(service.post("/v1/encode", &json!({ "vocabulary": "test:served:second", "text": "The engine" })).0, 422);
+    // A file changed in the directory since the job wrote it is not given under the old name.
+    let made = dir.join("made").join(format!("{}.kvf", &second_digest["sha256:".len()..]));
+    let kept = std::fs::read(&made).unwrap();
+    std::fs::copy(dir.join("mine.kvf"), &made).unwrap();
+    assert_eq!(service.get(&format!("/v1/vocabularies/{second_digest}")).0, 404);
+    std::fs::write(&made, &kept).unwrap();
+    // And it gives all of it to a mirror, which holds the same file the job's caller got.
     let (ok, mirrored, said) = kute(&dir, &["fetch", "--from", &format!("http://{}", service.address), "--mirror", "copy"]);
     assert!(ok, "{said}");
-    assert_eq!((mirrored["listed"].clone(), mirrored["written"][0]["digest"].clone()), (json!(1), json!(digest)), "only what it was started with: {mirrored}");
+    assert_eq!((mirrored["listed"].clone(), mirrored["written"][0]["digest"].clone()), (json!(2), json!(digest)), "what it was started with, and what it trained since: {mirrored}");
     let (_, copy, _) = kute(&dir, &["inspect", &format!("copy/{}.kvf", &digest["sha256:".len()..])]);
     let (_, mine, _) = kute(&dir, &["inspect", "mine.kvf"]);
     assert_eq!(copy["summary"], mine["summary"]);
@@ -583,7 +601,7 @@ fn jobs_are_off_unless_asked_for_and_never_on_an_address_others_can_reach() {
         assert!(!out.status.success(), "{args:?} was accepted");
         String::from_utf8_lossy(&out.stderr).into_owned()
     };
-    assert!(refused(&["--listen", "0.0.0.0:0", "--insecure-remote", "--jobs-dir", "made"]).contains("loopback address only"));
+    assert!(refused(&["--listen", "0.0.0.0:0", "--insecure-remote", "--jobs-dir", "made"]).contains("loopback address, or over TLS"));
     refused(&["--listen", "127.0.0.1:0", "--registry-only", "--jobs-dir", "made"]);
     refused(&["--listen", "127.0.0.1:0", "--jobs-queue", "2"]);
     assert!(!dir.join("made").exists() || std::fs::read_dir(dir.join("made")).unwrap().next().is_none());

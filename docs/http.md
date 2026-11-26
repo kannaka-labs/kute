@@ -22,11 +22,74 @@ Nothing is trained, evolved, stored between requests or published; those
 operations are not offered. There is no `/v1/train`. The one exception
 is asked for by the operator and off otherwise: training jobs, below.
 
-**There is no TLS and no authentication.** For that reason it listens on
-the loopback interface, and refuses to start on any other address unless
-`--insecure-remote` is given. With that flag, anyone who can reach the
-address can use it. To put it on a network, put something that does TLS
-and authentication in front of it.
+**Unless it is given certificates, there is no TLS and no
+authentication.** For that reason it listens on the loopback interface,
+and refuses to start on any other address unless `--insecure-remote` is
+given. With that flag, anyone who can reach the address can use it. To
+put it on a network, give it certificates, as below.
+
+### Over TLS (0.10)
+
+```
+kute serve --vocab file.kvf --listen 0.0.0.0:8787 \
+    --tls-cert service.pem --tls-key service.key --tls-client-ca callers-ca.pem
+kute fetch --from https://service.example:8787 --digest sha256:... --output file.kvf \
+    --tls-cert me.pem --tls-key me.key --tls-ca services-ca.pem
+```
+
+With `--tls-cert`, `--tls-key` and `--tls-client-ca`, every connection
+is TLS 1.3 with a certificate on both sides, the way `kute peer` does
+it, and an address that is not loopback needs no `--insecure-remote`.
+
+* A caller is answered only if it shows a certificate issued by an
+  authority in `--tls-client-ca`. Anyone else gets no HTTP at all: the
+  connection is closed in the handshake.
+* `--allow sha256:...` (repeatable, the fingerprint `kute peer
+  fingerprint` prints) narrows that to the certificates listed. A
+  caller with a certificate from the authority that is not listed is
+  answered `403` `not_allowed`, whatever it asked. Without `--allow`,
+  the authority is the whole list: everyone it issued a certificate to
+  can do everything the service does.
+* Every caller that is answered may do the same things. There are no
+  roles: one that can fetch can also give a job, if jobs are on.
+* The callers are `kute fetch`, `kute job` and a registry's
+  `--upstream`, each with `--tls-cert`, `--tls-key` and `--tls-ca`. An
+  `https://` address without them is refused before any connection.
+  The service's certificate must be issued by an authority in
+  `--tls-ca` and carry the host that is in the address, name or IP.
+  The system's own list of authorities is never used.
+* `--jobs-dir` on an address that is not loopback needs `--allow`.
+  Reading by digest may be for everyone an authority knows; training
+  costs the machine minutes, memory and disk, and who may ask for it is
+  named.
+* **Whoever can reach the port can stop the service answering, for as
+  long as they like, with no certificate and almost no traffic.** A
+  connection that sends nothing holds a worker until the handshake's
+  time is up (`--tls-handshake-timeout`, 3 seconds, all of it counted),
+  and a caller that opens another whenever one is closed keeps every
+  worker held. A review measured it at a 4 second limit with 4 workers:
+  8 such connections kept open made a real caller wait 4 to 7 seconds,
+  and 24 left it 0 answers of 30. A plain service has the same
+  weakness; TLS is what puts the service where strangers can reach it.
+  The shorter time for the handshake shortens the waits and does not
+  change the kind. What limits who can reach the port is a firewall,
+  not this program.
+* A caller whose certificate is not accepted is told the service's
+  reason (the TLS alert). For that to arrive, the service reads off
+  what the caller already sent before it closes: at most 64 KiB, for
+  at most a quarter of a second, and never past the handshake's time.
+  A caller that had sent more than that can still see a reset, with a
+  sentence saying a refused certificate can look like that.
+* When every worker is busy and the line is full, a new connection is
+  closed without the `503` a plain service sends: there is nothing to
+  say it in before a handshake.
+* What is not there: revocation other than taking a fingerprint off
+  `--allow` or changing the authority, and restarting; reloading
+  certificates without a restart; a browser. Studio is not served over
+  TLS, since a browser has no certificate to show; `--studio` with the
+  TLS options stops the start. `--peer-status` stays loopback only.
+* What TLS does not change: a fetched file is still believed because of
+  its digest and its signatures, not because of who sent it.
 
 On loopback it also guards against web pages, which can reach a local
 port from a browser: it answers only requests whose `Host` is a loopback
@@ -66,7 +129,9 @@ One request per connection: every answer carries `Connection: close`.
 
 Started with `--registry`, the service also gives the files of the
 vocabularies it was started with to whoever asks. It is off unless asked
-for, and without it these paths answer 404.
+for, and without it these paths answer 404. With `--jobs-dir` as well
+(0.10) it gives what its jobs trained too, as soon as a job is
+done: see "Training jobs".
 
 | request | answer |
 |---|---|
@@ -105,7 +170,8 @@ What this is and is not:
   way, gets nothing written. They are trusted with nothing else either,
   and that is all the protection there is: the connection is plain
   HTTP, so both can see what was asked for and what was sent, and can
-  refuse or stall. `https://` addresses are refused, not built.
+  refuse or stall. That is plain `http://`; for `https://` see "Over
+  TLS" above.
 * The file is written with whatever signatures arrived in it. A
   signature is outside what the digest covers, so a registry can add
   one, and a file with the right digest can carry a signature nobody
@@ -119,10 +185,10 @@ What this is and is not:
   without `--trusted-key` proves only that the registry sent what it
   said it would.
 * To be reached from another machine the service must listen on an
-  address that is not loopback, which needs `--insecure-remote` and
-  means what that option says: no TLS and no authentication, and anyone
-  who can reach it can take every file it holds. Use `--registry-only`
-  there.
+  address that is not loopback. That needs the TLS options, or
+  `--insecure-remote`, which means what it says: no TLS and no
+  authentication, and anyone who can reach it can take every file it
+  holds. Use `--registry-only` there.
 * No uploads, no accounts, no search, no expiry or revocation. The
   registry holds the files named when it started and, if it was given
   upstreams, copies of what it has fetched from them (below).
@@ -257,8 +323,10 @@ directory, each held whole in memory.
 ## Training jobs (0.9.3)
 
 `kute serve --jobs-dir DIR` takes training jobs. It is off unless the
-directory is named, and refused on any address but loopback: the service
-has no authentication, so whoever can reach it could make it train.
+directory is named, and refused on any address but loopback unless the
+service is over TLS: without it the service has no authentication, so
+whoever can reach it could make it train. Over TLS, whoever is answered
+can.
 
 ```
 POST /v1/jobs
@@ -326,6 +394,24 @@ What it does not do:
   already withdrawn the answer is `409` (`not_waiting`), and nothing
   changes.
 * Jobs are not kept across a restart. The files are.
+* With `--registry`, a vocabulary a job made is listed under
+  `/v1/vocabularies` and given by its digest as soon as the job is done
+  (0.10), with `trained_by` naming the job, and for as long as
+  the service runs: not only while the job is among the 64 remembered.
+  (Up to 4,096 such vocabularies; past that the oldest is no longer
+  given.) At this service that adds no reader: whoever can ask the
+  registry could already read the file under the job, though now for
+  longer. **Further on it does:** a registry that names this one as an
+  `--upstream` gives the trained file to its own callers. The listing
+  does not look at the files, so one removed or changed in the
+  directory is still listed; asked for, it is read and its digest
+  computed, and the answer is `404`, never other content under the old
+  name. After a restart the service has forgotten what its jobs made,
+  and gives those files only if started with `--vocab-dir`.
+* The operations are another matter: `/v1/encode` and the rest know
+  only the vocabularies the service was started with. A trained
+  vocabulary is used by a service after a restart with `--vocab-dir`,
+  or by fetching the file.
 
 What bounds it: one job runs at a time; `--jobs-queue` (4) may wait, and
 past that a job is answered `503`; each waiting job holds its corpus in

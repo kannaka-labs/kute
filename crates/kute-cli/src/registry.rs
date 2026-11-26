@@ -17,7 +17,9 @@ use crate::sign;
 use kute::{vocab, Engine, KuteError};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
+use kute_protocol::tls;
 use std::net::{TcpStream, ToSocketAddrs};
+use std::sync::{Arc, OnceLock};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -39,16 +41,49 @@ fn failed(what: impl Into<String>) -> KuteError {
     KuteError::Backend(format!("registry: {}", what.into()))
 }
 
-/// Host and port, and the path the registry's routes are under.
-pub fn parse_url(url: &str) -> kute::Result<(String, String)> {
+/// Where a service is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Target {
+    /// Host and port.
+    pub authority: String,
+    /// The path its routes are under, or nothing.
+    pub base: String,
+    /// TLS, with a certificate on both sides.
+    pub secure: bool,
+}
+
+/// This process's certificate and the authorities it trusts, for every
+/// `https` address it connects to. One process is one caller, so there
+/// is one.
+static CLIENT_TLS: OnceLock<Arc<tls::ClientConfig>> = OnceLock::new();
+
+/// Give this process the certificate it shows to an `https` service and
+/// the authorities whose services it believes. Before any address is
+/// read: an `https` address is refused while there is none.
+pub fn client_identity(certificate: &Path, key: &Path, authorities: &Path) -> kute::Result<()> {
+    let config = tls::client_config(tls::load_certificates(certificate)?, tls::load_private_key(key)?, tls::load_certificates(authorities)?)?;
+    CLIENT_TLS.set(config).map_err(|_| KuteError::InvalidConfig("this side's certificate was given twice".into()))
+}
+
+/// The name a service's certificate must carry: the host, without the
+/// port and without the brackets of an IPv6 address.
+fn host_of(authority: &str) -> &str {
+    let host = authority.rsplit_once(':').map_or(authority, |(host, _)| host);
+    host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(host)
+}
+
+/// Where the address points: host and port, the path the routes are
+/// under, and whether the connection is TLS.
+pub fn parse_url(url: &str) -> kute::Result<Target> {
     let bad = |why: &str| KuteError::InvalidConfig(format!("registry address {url:?}: {why}"));
-    if url.starts_with("https://") {
-        return Err(bad("https is not built. What is fetched is checked against its digest whatever carried it, but a plain connection shows the network what was asked for and what was sent"));
+    let secure = url.starts_with("https://");
+    if secure && CLIENT_TLS.get().is_none() {
+        return Err(bad("https needs this side's certificate, its key and the authority that issued the other side's: the --tls options. Without them, http: what is fetched is checked against its digest whatever carried it, but a plain connection shows the network what was asked for and what was sent"));
     }
-    let rest = url.strip_prefix("http://").ok_or_else(|| bad("expected http://host:port"))?;
+    let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")).ok_or_else(|| bad("expected http://host:port or https://host:port"))?;
     let (authority, path) = rest.split_once('/').map_or((rest, ""), |(a, p)| (a, p));
     if authority.is_empty() || authority.contains('@') || authority.bytes().any(|b| b.is_ascii_whitespace() || b.is_ascii_control()) {
-        return Err(bad("expected http://host:port"));
+        return Err(bad("expected http://host:port or https://host:port"));
     }
     let path = path.trim_end_matches('/');
     if path.bytes().any(|b| !(b.is_ascii_alphanumeric() || b"-._~/".contains(&b))) {
@@ -57,8 +92,65 @@ pub fn parse_url(url: &str) -> kute::Result<(String, String)> {
     // A bare IPv6 address has colons of its own; in brackets it is told
     // from a port.
     let has_port = authority.rsplit_once(':').is_some_and(|(host, port)| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) && (!host.contains(':') || host.ends_with(']')));
-    let authority = if has_port { authority.to_string() } else { format!("{authority}:80") };
-    Ok((authority, if path.is_empty() { String::new() } else { format!("/{path}") }))
+    let authority = if has_port { authority.to_string() } else { format!("{authority}:{}", if secure { 443 } else { 80 }) };
+    Ok(Target { authority, base: if path.is_empty() { String::new() } else { format!("/{path}") }, secure })
+}
+
+/// A read that failed for a reason other than time. Over TLS the reason
+/// is kept: a service that does not accept this side's certificate says
+/// so in an alert, after the handshake, and that is where it shows.
+fn broke(e: &std::io::Error, secure: bool) -> KuteError {
+    if secure && e.kind() == std::io::ErrorKind::InvalidData {
+        let why: String = e.to_string().chars().filter(|c| !c.is_control()).take(200).collect();
+        return failed(format!("the service ended the TLS connection before a complete answer: {why}. If that names a certificate, it is this side's that was not accepted"));
+    }
+    // The alert does not always arrive: a service that closes while this
+    // side's request is still unread resets the connection, and the alert
+    // is lost with it (seen on Windows in CI, once).
+    if secure && matches!(e.kind(), std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted) {
+        return failed(format!("the connection failed before a complete answer: {}. Over TLS a service that does not accept this side's certificate can end it this way, with its reason lost", e.kind()));
+    }
+    failed(format!("the connection failed before a complete answer: {}", e.kind()))
+}
+
+/// A connection to a service, plain or not.
+enum Wire {
+    Plain(TcpStream),
+    Secure(Box<tls::ClientStream>),
+}
+
+impl Wire {
+    /// The socket, for setting how long a read or a write may take.
+    fn socket(&self) -> &TcpStream {
+        match self {
+            Wire::Plain(tcp) => tcp,
+            Wire::Secure(stream) => stream.socket(),
+        }
+    }
+}
+
+impl Read for Wire {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Wire::Plain(tcp) => tcp.read(buf),
+            Wire::Secure(stream) => stream.read(buf),
+        }
+    }
+}
+
+impl Write for Wire {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Wire::Plain(tcp) => tcp.write(buf),
+            Wire::Secure(stream) => stream.write(buf),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Wire::Plain(tcp) => tcp.flush(),
+            Wire::Secure(stream) => stream.flush(),
+        }
+    }
 }
 
 /// One GET. Returns the status and the body, which is at most `max_bytes`.
@@ -71,15 +163,22 @@ pub const VIA_HEADER: &str = "Kute-Registry-Via";
 /// Name lookups allowed to be unanswered at once in this process.
 const MAX_LOOKUPS: usize = 16;
 
-fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
-    request("GET", authority, path, None, max_bytes, timeout, via)
+fn get(at: &Target, path: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
+    request("GET", at, path, None, max_bytes, timeout, via)
 }
 
 /// One request, with a JSON body or none. Returns the status and the
 /// body, which is at most `max_bytes`. `kute job` uses it for the three
 /// methods a jobs service has; the method is this program's own word,
 /// never a caller's.
-pub fn request(method: &str, authority: &str, path: &str, body: Option<&[u8]>, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
+///
+/// `path` is under the target's own. To an `https` target the connection
+/// is TLS 1.3 with this process's certificate, the service's must be
+/// from an authority this process was given and carry the host's name,
+/// and the handshake is inside the same time as everything else.
+pub fn request(method: &str, at: &Target, path: &str, body: Option<&[u8]>, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
+    let authority = at.authority.as_str();
+    let path = &format!("{}{path}", at.base);
     let deadline = Instant::now() + timeout;
     let left = || deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(|| failed("no complete answer in time"));
     // Looking a name up has no deadline of its own in the standard
@@ -112,8 +211,18 @@ pub fn request(method: &str, authority: &str, path: &str, body: Option<&[u8]>, m
             Err(e) => last = Some(e),
         }
     }
-    let mut stream = stream.ok_or_else(|| failed(format!("could not connect to {authority}: {}", last.map_or("no address".to_string(), |e| e.to_string()))))?;
-    stream.set_write_timeout(Some(left()?))?;
+    let tcp = stream.ok_or_else(|| failed(format!("could not connect to {authority}: {}", last.map_or("no address".to_string(), |e| e.to_string()))))?;
+    let mut stream = if at.secure {
+        let config = CLIENT_TLS.get().ok_or_else(|| failed("https, and this side has no certificate"))?;
+        left()?;
+        // Who answered is the certificate's business: one from a trusted
+        // authority, for this host's name. Nothing is sent before that.
+        let (secured, _) = tls::connect_by(config, host_of(authority), tcp, deadline).map_err(|e| failed(format!("{authority}: {e}")))?;
+        Wire::Secure(Box::new(secured))
+    } else {
+        Wire::Plain(tcp)
+    };
+    stream.socket().set_write_timeout(Some(left()?))?;
     let via = if via { format!("{VIA_HEADER}: 1\r\n") } else { String::new() };
     let sending = body.map_or(String::new(), |b| format!("Content-Type: application/json\r\nContent-Length: {}\r\n", b.len()));
     stream.write_all(format!("{method} {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\n{sending}{via}Connection: close\r\n\r\n").as_bytes())?;
@@ -121,7 +230,7 @@ pub fn request(method: &str, authority: &str, path: &str, body: Option<&[u8]>, m
         // A body is sent in pieces so that the time allowed is for the
         // whole exchange, not for each write of a large corpus.
         for piece in body.chunks(64 * 1024) {
-            stream.set_write_timeout(Some(left()?))?;
+            stream.socket().set_write_timeout(Some(left()?))?;
             if stream.write_all(piece).is_err() {
                 // The other side may have answered and closed without
                 // reading it all: a refusal of a body too large does.
@@ -139,12 +248,12 @@ pub fn request(method: &str, authority: &str, path: &str, body: Option<&[u8]>, m
         if buffer.len() > MAX_HEAD_BYTES {
             return Err(failed("the answer's headers are larger than any this client reads"));
         }
-        stream.set_read_timeout(Some(left()?))?;
+        stream.socket().set_read_timeout(Some(left()?))?;
         match stream.read(&mut chunk) {
             Ok(0) => return Err(failed("the connection closed before an answer")),
             Ok(n) => buffer.extend_from_slice(&chunk[..n]),
             Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
-            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
+            Err(e) => return Err(broke(&e, at.secure)),
         }
     };
     let head = std::str::from_utf8(&buffer[..head_end]).map_err(|_| failed("the answer's headers are not text"))?;
@@ -174,13 +283,13 @@ pub fn request(method: &str, authority: &str, path: &str, body: Option<&[u8]>, m
         return Err(failed("more bytes than the stated length"));
     }
     while (body.len() as u64) < length {
-        stream.set_read_timeout(Some(left()?))?;
+        stream.socket().set_read_timeout(Some(left()?))?;
         let want = chunk.len().min((length - body.len() as u64) as usize);
         match stream.read(&mut chunk[..want]) {
             Ok(0) => return Err(failed("the connection closed before the whole answer")),
             Ok(n) => body.extend_from_slice(&chunk[..n]),
             Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
-            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
+            Err(e) => return Err(broke(&e, at.secure)),
         }
     }
     Ok((status, body))
@@ -201,8 +310,8 @@ fn refusal(status: u16, body: &[u8]) -> KuteError {
 /// a failure being that registry's row.
 pub fn list(from: &[String], timeout: Duration) -> kute::Result<Value> {
     let one = |registry: &str| -> kute::Result<Value> {
-        let (authority, base) = parse_url(registry)?;
-        let (status, body) = get(&authority, &format!("{base}{LIST_PATH}"), MAX_LISTING_BYTES, timeout, false)?;
+        let at = parse_url(registry)?;
+        let (status, body) = get(&at, LIST_PATH, MAX_LISTING_BYTES, timeout, false)?;
         if status != 200 {
             return Err(refusal(status, &body));
         }
@@ -236,8 +345,8 @@ pub enum Taken {
 /// arrives: it parses, it is valid, its content has that digest, and its
 /// own test vectors pass. Signatures are not looked at here.
 pub fn take(engine: &Engine, registry: &str, digest: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<Taken> {
-    let (authority, base) = parse_url(registry)?;
-    let (status, body) = get(&authority, &format!("{base}{LIST_PATH}/{digest}"), max_bytes, timeout, via)?;
+    let at = parse_url(registry)?;
+    let (status, body) = get(&at, &format!("{LIST_PATH}/{digest}"), max_bytes, timeout, via)?;
     if status == 404 {
         return Ok(Taken::Absent(refusal(status, &body[..body.len().min(MAX_LISTING_BYTES as usize)]).to_string()));
     }
@@ -349,8 +458,8 @@ pub fn mirror(engine: &Engine, from: &[String], dir: &Path, trusted: &[String], 
     let mut not_digests = 0usize;
     for registry in from {
         let listed = (|| -> kute::Result<Vec<Value>> {
-            let (authority, base) = parse_url(registry)?;
-            let (status, body) = get(&authority, &format!("{base}{LIST_PATH}"), MAX_LISTING_BYTES, timeout, false)?;
+            let at = parse_url(registry)?;
+            let (status, body) = get(&at, LIST_PATH, MAX_LISTING_BYTES, timeout, false)?;
             if status != 200 {
                 return Err(refusal(status, &body));
             }
@@ -461,10 +570,12 @@ mod tests {
 
     #[test]
     fn addresses_and_digests_are_read_strictly() {
-        assert_eq!(parse_url("http://127.0.0.1:8787").unwrap(), ("127.0.0.1:8787".to_string(), String::new()));
-        assert_eq!(parse_url("http://example.org/kute/").unwrap(), ("example.org:80".to_string(), "/kute".to_string()));
-        assert_eq!(parse_url("http://[::1]:9000").unwrap().0, "[::1]:9000");
-        assert_eq!(parse_url("http://[::1]").unwrap().0, "[::1]:80");
+        let plain = |authority: &str, base: &str| Target { authority: authority.to_string(), base: base.to_string(), secure: false };
+        assert_eq!(parse_url("http://127.0.0.1:8787").unwrap(), plain("127.0.0.1:8787", ""));
+        assert_eq!(parse_url("http://example.org/kute/").unwrap(), plain("example.org:80", "/kute"));
+        assert_eq!((host_of("example.org:443"), host_of("[::1]:9000"), host_of("127.0.0.1:1")), ("example.org", "::1", "127.0.0.1"));
+        assert_eq!(parse_url("http://[::1]:9000").unwrap().authority, "[::1]:9000");
+        assert_eq!(parse_url("http://[::1]").unwrap().authority, "[::1]:80");
         for bad in ["https://example.org", "example.org:80", "http://", "http://user@host", "http://host/a b", "http://host/x?y=1", "http://host/\r\nX: 1"] {
             assert!(parse_url(bad).is_err(), "{bad:?}");
         }

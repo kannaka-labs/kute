@@ -49,7 +49,7 @@ connection is plain loopback so the count is the protocol alone.
 
 ## What was measured
 
-`report-kute-0.9.4.json`, one run, seed fixed in the script. Sizes
+`report-kute-0.10.0.json`, one run, seed fixed in the script. Sizes
 are reproducible; times are not. Apart from the signed steps, which
 are new, every size in it equals the run recorded on 0.7.0. Each signed
 offer carries one batch of 100 tasks, about 67 kB when delivered; a
@@ -61,14 +61,14 @@ byte or two of these figures moves between runs with the port number.
 | tasks with unseen message kinds | 24 of 24 completed; 72 symbols escaped |
 | shadow decision | **reject**: the candidate saved 0.1% of bytes and its file costs 69,089 |
 | bytes on the socket, each completed task | 701 (both directions, with handshake and receipts) |
-| sending the vocabulary on first contact | 86,766 bytes on the socket for a 64,122-byte file |
-| negotiating the candidate (forced: the decision was reject) | 2,068 bytes on the socket; the same digest on both sides |
-| the candidate sent whole, unsigned, to a worker that requires the queen's signature | refused, told why; 0 of 100 tasks; 93,431 bytes on the socket before the refusal |
-| sent whole, signed by a key the worker was not told of | refused, told why; 0 of 100 tasks; 93,780 bytes |
-| sent whole, signed by the queen | taken; 100 of 100 tasks; 161,062 bytes with the tasks; the worker's copy verifies and has the digest of the unsigned file; the signature adds 267 bytes to the file |
-| proposed to the same worker, unsigned | refused before anything is derived; 0 of 100 tasks; 2,130 bytes |
-| proposed, signed by a key the worker was not told of | refused, nothing kept; 0 of 100 tasks; 2,337 bytes |
-| proposed, signed by the queen | taken; 100 of 100 tasks; 69,610 bytes with the tasks; the worker's copy verifies and has the same digest |
+| sending the vocabulary on first contact | 86,772 bytes on the socket for a 64,123-byte file |
+| negotiating the candidate (forced: the decision was reject) | 2,070 bytes on the socket; the same digest on both sides |
+| the candidate sent whole, unsigned, to a worker that requires the queen's signature | refused, told why; 0 of 100 tasks; 93,433 bytes on the socket before the refusal |
+| sent whole, signed by a key the worker was not told of | refused, told why; 0 of 100 tasks; 93,782 bytes |
+| sent whole, signed by the queen | taken; 100 of 100 tasks; 161,064 bytes with the tasks; the worker's copy verifies and has the digest of the unsigned file; the signature adds 267 bytes to the file |
+| proposed to the same worker, unsigned | refused before anything is derived; 0 of 100 tasks; 2,132 bytes |
+| proposed, signed by a key the worker was not told of | refused, nothing kept; 0 of 100 tasks; 2,339 bytes |
+| proposed, signed by the queen | taken; 100 of 100 tasks; 69,612 bytes with the tasks; the worker's copy verifies and has the same digest |
 | a dropped connection | sender reports failure; nothing delivered; sending the batch again delivers all 100. No resuming part way |
 | time for a batch of 100 tasks | about 1.2 s under either vocabulary, a new process and connection each batch |
 | language model tokens | not measured, and unchanged by construction: see below |
@@ -111,7 +111,7 @@ judgement and fallback by escape all ran through the released commands,
 and every task arrived exactly. The candidate was judged and rejected,
 so a deployment would not have negotiated it; the negotiation in the
 table was forced to exercise the path. It worked, and it is cheap:
-2,068 bytes against 86,766 for sending a whole vocabulary.
+2,070 bytes against 86,772 for sending a whole vocabulary.
 
 **The decision rule did its job.** The candidate had 1.1% fewer tokens
 and 0.1% fewer bytes. Shadow rejected it, and the live run confirms it:
