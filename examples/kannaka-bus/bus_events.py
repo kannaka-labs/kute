@@ -15,8 +15,9 @@ and the Python standard library:
      often they occur in the later part it had not seen.
 
 It only reads. Nothing it finds is sent anywhere or acted on, and the
-report it writes holds counts, sizes, operation names and agent names:
-no payload text.
+report it writes holds counts, sizes, the number of agents and operation
+names from a fixed list: no payload text, and no agent's name. Anything
+outside the list is written as "other".
 """
 import argparse
 import collections
@@ -35,6 +36,19 @@ try:  # Python 3.14 and later
     from compression import zstd
 except ImportError:  # pragma: no cover
     zstd = None
+
+# The only words from the bus that reach the report. A subject token or a
+# `via` value that is not one of these is counted as "other", so a
+# payload cannot put text of its own into what is published.
+OPERATIONS = {"remember", "recall", "forget"}
+SOURCES = {"perception", "cli", "daemon", "dream", "research"}
+
+
+def symbol(record):
+    op = record["bus_op"] if record["bus_op"] in OPERATIONS else "other"
+    via = record.get("via")
+    return f'{op}/{via if via in SOURCES else ("none" if via is None else "other")}'
+
 
 GAP_NS = 10 * 60 * 10**9  # a burst ends when an agent is silent this long
 LEARN_SHARE = 0.7
@@ -99,7 +113,7 @@ def bursts(records):
     """Each agent's operations, cut where it was silent for GAP_NS."""
     by_agent = collections.defaultdict(list)
     for r in records:
-        by_agent[r["bus_agent"]].append((r["bus_ns"], f'{r["bus_op"]}/{r.get("via") or "none"}'))
+        by_agent[r["bus_agent"]].append((r["bus_ns"], symbol(r)))
     out = []
     for agent, events in by_agent.items():
         events.sort()
@@ -190,7 +204,7 @@ def main():
     rows.sort(key=lambda r: -r["occurrences_held_out"])
     longer = [r for r in rows if len(set(r["sequence"])) > 1]
 
-    operations = collections.Counter(f'{r["bus_op"]}/{r.get("via") or "none"}' for r in records)
+    operations = collections.Counter(symbol(r) for r in records)
     report = {
         "what": "memory operation events of the Kannaka bus (NATS JetStream), read once, read-only",
         "kute_version": kute.__version__,

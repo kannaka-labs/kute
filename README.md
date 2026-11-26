@@ -212,7 +212,7 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
-* After 0.9.1, on `main`: Studio shows a running peer. `kute peer serve
+* Since 0.9.2, Studio shows a running peer. `kute peer serve
   --status-file` keeps a file saying what it is doing, and `kute serve
   --studio --peer-status` shows it, a second or two old. It is the
   peer's own account; a killed peer is shown as not running after a few
@@ -296,7 +296,7 @@ original = engine.decode(tokens, vocabulary=vocab)
 Five worked use cases, each independent of the others, are in
 `docs/use-cases.md`.
 
-`examples/kannaka-bus` (after 0.9.1) is the first use on a Kannaka
+`examples/kannaka-bus` (0.9.2) is the first use on a Kannaka
 system's own data: it reads the bus's memory events, read-only, keeps
 125,275 of them in a container 12.8% smaller than the best general
 compressor on the same bytes, and finds the timed loops of one or two

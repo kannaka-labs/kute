@@ -24,7 +24,9 @@ async def main(server, stream, out, most):
     js = nc.jetstream()
     info = await js.stream_info(stream)
     total = info.state.messages
-    sub = await js.subscribe(info.config.subjects[0], stream=stream, ordered_consumer=True, config=ConsumerConfig(deliver_policy=DeliverPolicy.ALL, ack_policy=AckPolicy.NONE))
+    # ">" within the stream: every subject it keeps, however many it was
+    # made with.
+    sub = await js.subscribe(">", stream=stream, ordered_consumer=True, config=ConsumerConfig(deliver_policy=DeliverPolicy.ALL, ack_policy=AckPolicy.NONE))
     n = 0
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         while n < min(total, most):

@@ -17,7 +17,7 @@
   "remember/none": 2110,
   "remember/dream": 1541,
   "remember/research": 337,
-  "v9zcf9/none": 1
+  "other/none": 1
  },
  "archive": {
   "source": "every event as canonical JSON, one a line, in bus order",
@@ -34,13 +34,13 @@
   },
   "container_over_best_general_compressor": 0.872,
   "general_compressor_seconds": {
-   "gzip_9": 1.49,
-   "xz_9_extreme": 160.79,
-   "zstd_19": 57.76,
-   "zstd_22": 170.74
+   "gzip_9": 1.24,
+   "xz_9_extreme": 145.12,
+   "zstd_19": 54.21,
+   "zstd_22": 150.34
   },
-  "pack_seconds": 29.47,
-  "unpack_seconds": 0.31,
+  "pack_seconds": 29.1,
+  "unpack_seconds": 0.32,
   "columns": 25
  },
  "archive_without_free_text": {

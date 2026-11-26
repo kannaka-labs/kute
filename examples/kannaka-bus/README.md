@@ -25,7 +25,7 @@ python bus_dump.py nats://HOST:4222 KANNAKA_MEMORY_EVENTS memory-events.jsonl
 python bus_events.py --dump memory-events.jsonl --work work
 ```
 
-`bus_dump.py` works on any JetStream stream. `bus_events.py` expects
+`bus_dump.py` reads every subject of any JetStream stream. `bus_events.py` expects
 subjects of the form `A.B.C.<agent>.<operation>` and JSON object
 payloads; other messages are counted and left out. It exits 0 when both
 round trips are exact and writes `work/report.json`.
@@ -43,9 +43,9 @@ those bytes exactly.
 | | bytes | seconds to make |
 |---|---|---|
 | KUTE events container (0.9.1, default codec) | 9,036,042 | 29 |
-| xz -9 extreme | 10,356,580 | 161 |
-| Zstandard -22 | 10,730,095 | 171 |
-| Zstandard -19 | 10,860,618 | 58 |
+| xz -9 extreme | 10,356,580 | 145 |
+| Zstandard -22 | 10,730,095 | 150 |
+| Zstandard -19 | 10,860,618 | 54 |
 | gzip -9 | 16,951,515 | under 2 |
 
 The container is 12.8% smaller than the best of the general compressors
@@ -53,7 +53,8 @@ on the same bytes, each at its strongest ordinary setting. With the
 free-text field removed from every event the figure is 13.4% (8,115,791
 against 9,373,936 for xz). Unpacking takes 0.3 s. Sizes are the same on
 every run; times are one run each and were not repeated, and an earlier
-run of the same packing took 63 s with other work on the machine.
+run of the same packing took 63 s with other work on the machine. Each
+of the five ran on one thread.
 
 What that does and does not show: on these events, laying the fields
 out as columns before compressing beats compressing the lines. The
@@ -65,7 +66,10 @@ through xz, which came within 7% of the container, was not run here. It
 is one stream of one system.
 
 **Recurring sequences.** Each event became a symbol, operation and
-source (`remember/cli`, `recall/daemon`, and so on: nine kinds). An
+source (`remember/cli`, `recall/daemon`, and so on: eight kinds, and
+one event whose subject named no operation, counted as `other`). Both
+words come from a fixed list in the script, so nothing a payload says
+can reach the report. An
 agent's events were cut into bursts wherever it was silent for ten
 minutes: 2,123 bursts. `kute.discover` was run on the bursts that ended
 in the first 70% of events by time (1,577 bursts, 87,191 events), and

@@ -49,7 +49,7 @@ backend output. Item by item:
 | vocabulary/merge inspection | Vocabulary. |
 | evolution comparison | Compare (two vocabularies on one input); Reports for a `kute shadow` report. The page cannot evolve a vocabulary. |
 | benchmark replay | Reports shows a report made earlier. It runs nothing. |
-| peer status | Peer (after 0.9.1): what a running `kute peer serve` says it is doing, read from the status file it keeps; see "A running peer" below. Reports reads what `kute peer serve` and `kute peer send` print when an exchange ends: who, with or without a certificate, what was delivered, which vocabularies were taken, whether a proposal was signed. A refused or failed exchange prints an error and no report; the status file records how the peer ended. |
+| peer status | Peer (0.9.2): what a running `kute peer serve` says it is doing, read from the status file it keeps; see "A running peer" below. Reports reads what `kute peer serve` and `kute peer send` print when an exchange ends: who, with or without a certificate, what was delivered, which vocabularies were taken, whether a proposal was signed. A refused or failed exchange prints an error and no report; the status file records how the peer ended. |
 | representation experiments | Not here: the service has no operation for them. One measurement exists (`docs/representations.md`). |
 
 The Reports view refuses a file over 32 MB.
