@@ -123,7 +123,9 @@ One request per connection: every answer carries `Connection: close`.
 
 Started with `--registry`, the service also gives the files of the
 vocabularies it was started with to whoever asks. It is off unless asked
-for, and without it these paths answer 404.
+for, and without it these paths answer 404. With `--jobs-dir` as well
+(after 0.9.4) it gives what its jobs trained too, as soon as a job is
+done: see "Training jobs".
 
 | request | answer |
 |---|---|
@@ -386,6 +388,18 @@ What it does not do:
   already withdrawn the answer is `409` (`not_waiting`), and nothing
   changes.
 * Jobs are not kept across a restart. The files are.
+* With `--registry`, a vocabulary a job made is listed under
+  `/v1/vocabularies` and given by its digest as soon as the job is done
+  (after 0.9.4), with `trained_by` naming the job. This adds no reader:
+  whoever can ask the registry could already read the file under the
+  job. The file is read from the directory and its digest computed each
+  time, so a file changed there since is answered `404`, not given
+  under the old name. After a restart the service has forgotten its
+  jobs, and gives those files only if started with `--vocab-dir`.
+* The operations are another matter: `/v1/encode` and the rest know
+  only the vocabularies the service was started with. A trained
+  vocabulary is used by a service after a restart with `--vocab-dir`,
+  or by fetching the file.
 
 What bounds it: one job runs at a time; `--jobs-queue` (4) may wait, and
 past that a job is answered `503`; each waiting job holds its corpus in

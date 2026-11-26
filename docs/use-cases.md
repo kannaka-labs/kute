@@ -154,8 +154,10 @@ digest the service named. That the service trained it on the corpus it
 was sent is the service's word; `kute train` on the same input gives the
 digest to compare.
 
-The service does not use what it trained until it is started again:
-what a service answers for is what its operator started it with. After a
+Started with `--registry` as well, the service gives the file by its
+digest as soon as the job is done (after 0.9.4). Its own operations do
+not use what it trained until it is started again: what a service
+encodes with is what its operator started it with. After a
 restart with the same command, `example:service` can be named to
 `/v1/encode`, and a copy of everything it lists can be taken:
 

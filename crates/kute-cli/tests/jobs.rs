@@ -329,12 +329,29 @@ fn what_a_job_trained_is_served_after_a_restart_and_can_be_mirrored() {
     assert_eq!(encoded["vocabulary"]["digest"], json!(digest), "{encoded}");
     let (status, decoded) = service.post("/v1/decode", &json!({ "container_base64": encoded["container_base64"] }));
     assert_eq!((status, decoded["text"].as_str()), (200, Some("The engine reads the event log.")), "{decoded}");
-    let (ok, _, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served:second", "--vocab-size", "290", "--output", "second.kvf"]);
+    let (ok, second, said) = kute(&dir, &["job", "--at", &format!("http://{}", service.address), "--input", "text.txt", "--id", "test:served:second", "--vocab-size", "290", "--output", "second.kvf"]);
     assert!(ok, "{said}");
-    // And it gives what it holds to a mirror, which holds the same file the job's caller got.
+    // As a registry it gives what a job made at once, by digest, without a restart;
+    // the operations still know only what the service was started with.
+    let second_digest = second["digest"].as_str().unwrap().to_string();
+    let (_, listing) = service.get("/v1/vocabularies");
+    let listed: Vec<&Value> = listing["vocabularies"].as_array().unwrap().iter().collect();
+    assert_eq!(listed.len(), 2, "{listing}");
+    assert_eq!((listed[1]["digest"].clone(), listed[1]["id"].clone(), listed[1]["trained_by"].clone()), (json!(second_digest), json!("test:served:second"), json!("job-1")), "{listing}");
+    let (ok, _, said) = kute(&dir, &["fetch", "--from", &format!("http://{}", service.address), "--digest", &second_digest, "--output", "second-by-digest.kvf"]);
+    assert!(ok, "{said}");
+    assert_eq!(std::fs::read(dir.join("second-by-digest.kvf")).unwrap(), std::fs::read(dir.join("second.kvf")).unwrap());
+    assert_eq!(service.post("/v1/encode", &json!({ "vocabulary": "test:served:second", "text": "The engine" })).0, 422);
+    // A file changed in the directory since the job wrote it is not given under the old name.
+    let made = dir.join("made").join(format!("{}.kvf", &second_digest["sha256:".len()..]));
+    let kept = std::fs::read(&made).unwrap();
+    std::fs::copy(dir.join("mine.kvf"), &made).unwrap();
+    assert_eq!(service.get(&format!("/v1/vocabularies/{second_digest}")).0, 404);
+    std::fs::write(&made, &kept).unwrap();
+    // And it gives all of it to a mirror, which holds the same file the job's caller got.
     let (ok, mirrored, said) = kute(&dir, &["fetch", "--from", &format!("http://{}", service.address), "--mirror", "copy"]);
     assert!(ok, "{said}");
-    assert_eq!((mirrored["listed"].clone(), mirrored["written"][0]["digest"].clone()), (json!(1), json!(digest)), "only what it was started with: {mirrored}");
+    assert_eq!((mirrored["listed"].clone(), mirrored["written"][0]["digest"].clone()), (json!(2), json!(digest)), "what it was started with, and what it trained since: {mirrored}");
     let (_, copy, _) = kute(&dir, &["inspect", &format!("copy/{}.kvf", &digest["sha256:".len()..])]);
     let (_, mine, _) = kute(&dir, &["inspect", "mine.kvf"]);
     assert_eq!(copy["summary"], mine["summary"]);

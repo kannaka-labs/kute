@@ -514,6 +514,15 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
         }
         let Some(digest) = operation.strip_prefix("vocabularies/") else {
             let mut listing = server.registry_list();
+            // What jobs trained since the start is given too: whoever can
+            // ask this registry could already read it under the job.
+            if let (Some(jobs), Some(held)) = (&options.jobs, listing["vocabularies"].as_array_mut()) {
+                for entry in jobs.trained() {
+                    if !held.iter().any(|h| h["digest"] == entry["digest"]) {
+                        held.push(entry);
+                    }
+                }
+            }
             // Who else this registry asks. What they hold is theirs to say.
             listing["upstreams"] = json!(options.federation.as_ref().map(|f| f.upstreams.clone()).unwrap_or_default());
             listing["upstream_files_need_a_trusted_signature"] = json!(options.federation.as_ref().is_some_and(|f| f.check.is_some()));
@@ -528,6 +537,9 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
             Some(Ok(file)) => Reply { file: Some(file.into_boxed_slice()), ..ok(Value::Null) },
             Some(Err(_)) => problem(500, "Internal Server Error", "internal", "the vocabulary could not be written out"),
             None => {
+                if let Some(file) = options.jobs.as_ref().and_then(|jobs| jobs.file_by_digest(digest)) {
+                    return Reply { file: Some(file.into_boxed_slice()), ..ok(Value::Null) };
+                }
                 // Not held here. A registry asking for another is answered
                 // from what is here and kept, and no further.
                 let found = match &options.federation {

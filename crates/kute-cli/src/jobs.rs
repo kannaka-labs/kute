@@ -336,6 +336,39 @@ impl Jobs {
         Some(std::fs::read(&path).map_err(|_| "the file is no longer in the jobs directory".to_string()))
     }
 
+    /// What finished jobs made, one entry a digest, in the form of a
+    /// registry's listing. Only jobs this process remembers: after a
+    /// restart the files are still in the directory and the jobs are not.
+    pub fn trained(&self) -> Vec<Value> {
+        let state = self.lock();
+        let mut seen = std::collections::BTreeSet::new();
+        state
+            .jobs
+            .iter()
+            .filter(|job| job.file.is_some())
+            .filter_map(|job| {
+                let result = job.result.as_ref()?;
+                let digest = result["digest"].as_str()?;
+                let summary = &result["summary"];
+                seen.insert(digest.to_string()).then(|| json!({ "id": summary["id"], "version": summary["version"], "digest": digest, "algorithm": summary["algorithm"], "tokens": summary["tokens"], "signed_by": [], "trained_by": job.id }))
+            })
+            .collect()
+    }
+
+    /// The file a finished job made whose content has this digest. The
+    /// file is read and its digest computed each time: the directory is
+    /// the operator's, and a file changed there since the job wrote it
+    /// is not given under the name of what it was.
+    pub fn file_by_digest(&self, digest: &str) -> Option<Vec<u8>> {
+        let path = {
+            let state = self.lock();
+            state.jobs.iter().find(|job| job.file.is_some() && job.result.as_ref().is_some_and(|r| r["digest"] == digest))?.file.clone()?
+        };
+        let bytes = std::fs::read(path).ok()?;
+        let vocabulary = vocab::from_slice(&bytes).ok()?;
+        (vocabulary.compute_digest().ok()? == digest).then_some(bytes)
+    }
+
     fn run(&self) {
         let engine = Engine::new();
         loop {

@@ -221,7 +221,9 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   registry lists, each file checked as a single fetch is; nothing in
   the directory is deleted or replaced. `kute serve --vocab-dir DIR`
   holds every vocabulary in a directory, so a mirror, or what jobs
-  trained, can be served after a restart.
+  trained, can be served after a restart. After 0.9.4 a registry that
+  takes jobs gives what they trained by digest at once; its own
+  operations still use only what it was started with.
 * Since 0.9.3, `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
