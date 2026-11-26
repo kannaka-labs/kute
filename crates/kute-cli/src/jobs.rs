@@ -6,7 +6,8 @@
 //! its digest. One job runs at a time. A job cannot be stopped once it
 //! runs, so what a job may cost is bounded when it is accepted: the corpus
 //! by the service's body limit, the vocabulary by a size limit, the line
-//! by a queue length.
+//! by a queue length, and the directory by a size past which no job is
+//! taken and no file is written.
 //!
 //! The service does not start using a vocabulary it trained: it is not
 //! added to what encode and decode can name, and it is not given by the
@@ -29,11 +30,14 @@ pub struct Limits {
     pub kept: usize,
     /// Largest vocabulary a job may ask for.
     pub max_vocab_size: u32,
+    /// Bytes of files the directory may hold. At or past it no job is
+    /// taken, and a job that would write past it fails instead.
+    pub max_dir_bytes: u64,
 }
 
 impl Default for Limits {
     fn default() -> Self {
-        Self { queue: 4, kept: 64, max_vocab_size: 65_536 }
+        Self { queue: 4, kept: 64, max_vocab_size: 65_536, max_dir_bytes: 1 << 30 }
     }
 }
 
@@ -90,6 +94,9 @@ impl std::fmt::Debug for Jobs {
 pub struct Jobs {
     dir: PathBuf,
     limits: Limits,
+    /// What the engine can train with, to refuse other names at the door.
+    algorithms: Vec<String>,
+    adapters: Vec<String>,
     state: Mutex<State>,
     wake: Condvar,
 }
@@ -104,6 +111,8 @@ pub enum Refusal {
     Bad(String),
     /// The line is full; try later.
     Full(String),
+    /// The directory holds as much as it may; the operator must make room.
+    NoRoom(String),
 }
 
 impl Jobs {
@@ -112,7 +121,8 @@ impl Jobs {
     pub fn start(dir: PathBuf, limits: Limits) -> kute::Result<Arc<Self>> {
         std::fs::create_dir_all(&dir)?;
         let dir = dir.canonicalize()?;
-        let jobs = Arc::new(Jobs { dir, limits, state: Mutex::new(State::default()), wake: Condvar::new() });
+        let engine = Engine::new();
+        let jobs = Arc::new(Jobs { dir, limits, algorithms: engine.registry().algorithm_names(), adapters: engine.registry().adapter_names(), state: Mutex::new(State::default()), wake: Condvar::new() });
         let runner = jobs.clone();
         std::thread::Builder::new().name("kute-jobs".into()).spawn(move || runner.run()).map_err(KuteError::Io)?;
         Ok(jobs)
@@ -125,7 +135,28 @@ impl Jobs {
     }
 
     pub fn limits(&self) -> Value {
-        json!({ "waiting_at_most": self.limits.queue, "finished_remembered": self.limits.kept, "max_vocab_size": self.limits.max_vocab_size, "running_at_once": 1 })
+        json!({ "waiting_at_most": self.limits.queue, "finished_remembered": self.limits.kept, "max_vocab_size": self.limits.max_vocab_size, "max_dir_bytes": self.limits.max_dir_bytes, "running_at_once": 1 })
+    }
+
+    /// Files in the directory and their bytes: everything there, whoever
+    /// put it there. Directories inside it are not entered.
+    fn held(&self) -> std::io::Result<(u64, u64)> {
+        let (mut files, mut bytes) = (0u64, 0u64);
+        for entry in std::fs::read_dir(&self.dir)? {
+            let meta = entry?.metadata()?;
+            if meta.is_file() {
+                files += 1;
+                bytes = bytes.saturating_add(meta.len());
+            }
+        }
+        Ok((files, bytes))
+    }
+
+    fn directory(&self) -> Value {
+        match self.held() {
+            Ok((files, bytes)) => json!({ "files": files, "bytes": bytes, "max_bytes": self.limits.max_dir_bytes }),
+            Err(e) => json!({ "error": format!("the jobs directory cannot be read: {e}"), "max_bytes": self.limits.max_dir_bytes }),
+        }
     }
 
     /// Check a request and put it in line.
@@ -161,6 +192,20 @@ impl Jobs {
         }
         let algorithm = text("algorithm", Some("bpe"))?;
         let adapter = text("adapter", Some("text"))?;
+        // What training would refuse for certain is refused here, so it
+        // does not take a place in the line.
+        if algorithm == kute::algorithms::DICTIONARY {
+            return Err(bad("the dictionary algorithm needs entries, which a job cannot give".into()));
+        }
+        if !self.algorithms.contains(&algorithm) {
+            return Err(bad(format!("unknown algorithm {algorithm:?}; this service has {}", self.algorithms.join(", "))));
+        }
+        if !self.adapters.contains(&adapter) {
+            return Err(bad(format!("unknown adapter {adapter:?}; this service has {}", self.adapters.join(", "))));
+        }
+        if algorithm == "bpe" && vocab_size < 256 {
+            return Err(bad(format!("vocab_size {vocab_size} is less than bpe can train: the 256 bytes come first")));
+        }
         let version = text("version", Some("0.1.0"))?;
         let id = text("vocabulary_id", None)?;
         let fail = |e: KuteError| Refusal::Bad(e.to_string());
@@ -180,6 +225,7 @@ impl Jobs {
             }
             Some(_) => return Err(bad("adapter_options must be an object of strings".into())),
         }
+        config.validate().map_err(fail)?;
         let corpus_bytes: usize = documents.iter().map(Vec::len).sum();
         let asked = json!({
             "operation": "train",
@@ -194,6 +240,13 @@ impl Jobs {
             "corpus_bytes": corpus_bytes,
         });
 
+        match self.held() {
+            Ok((_, bytes)) if bytes >= self.limits.max_dir_bytes => {
+                return Err(Refusal::NoRoom(format!("the jobs directory holds {bytes} bytes and may hold {}; no job is taken until its operator makes room", self.limits.max_dir_bytes)));
+            }
+            Ok(_) => {}
+            Err(e) => return Err(Refusal::NoRoom(format!("the jobs directory cannot be read: {e}"))),
+        }
         let mut state = self.lock();
         if state.waiting.len() >= self.limits.queue {
             return Err(Refusal::Full(format!("{} jobs are waiting already; this service lines up no more", state.waiting.len())));
@@ -217,7 +270,7 @@ impl Jobs {
 
     pub fn list(&self) -> Value {
         let state = self.lock();
-        json!({ "jobs": state.jobs.iter().map(Job::describe).collect::<Vec<_>>(), "limits": self.limits() })
+        json!({ "jobs": state.jobs.iter().map(Job::describe).collect::<Vec<_>>(), "limits": self.limits(), "directory": self.directory() })
     }
 
     pub fn get(&self, id: &str) -> Option<Value> {
@@ -290,6 +343,15 @@ impl Jobs {
         let name = format!("{hex}.kvf");
         let path = self.dir.join(&name);
         let bytes = vocab::to_vec(&vocabulary)?;
+        // Jobs taken while there was room may together pass the limit;
+        // the one that would is not written. A file already there under
+        // this name is replaced by the same bytes and adds nothing.
+        if !path.exists() {
+            let (_, held) = self.held()?;
+            if held.saturating_add(bytes.len() as u64) > self.limits.max_dir_bytes {
+                return Err(KuteError::LimitExceeded(format!("the vocabulary is {} bytes; the jobs directory holds {held} and may hold {}", bytes.len(), self.limits.max_dir_bytes)));
+            }
+        }
         // Two jobs that give the same vocabulary give the same file.
         let writing = self.dir.join(format!("{name}.writing-{}", std::process::id()));
         std::fs::write(&writing, &bytes)?;

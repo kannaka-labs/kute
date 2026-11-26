@@ -255,8 +255,22 @@ What bounds it: one job runs at a time; `--jobs-queue` (4) may wait, and
 past that a job is answered `503`; each waiting job holds its corpus in
 memory, and a corpus is at most one request body; `--jobs-max-vocab-size`
 (65,536) is the largest vocabulary. The last 64 finished jobs are
-remembered. Nothing bounds how long one job runs except those sizes, and
-nothing removes files from the directory.
+remembered. Nothing bounds how long one job runs except those sizes.
+
+`--jobs-max-dir-bytes` (1,073,741,824) bounds the directory: every file
+in it counts, whoever put it there. At or past the limit a job is
+answered `507 no_room`, and a job taken earlier that would write past it
+fails instead of writing. Nothing removes files; the operator makes
+room. `GET /v1/jobs` gives `directory`: the files, their bytes and the
+limit. Two services sharing one directory each check it and can pass
+the limit together by one file each.
+
+A job the trainer would refuse for certain is refused when given, with
+`422`: an algorithm or adapter the service does not have, `dictionary`
+(it needs entries a job cannot give), `vocab_size` 0 or under 256 for
+`bpe`, `min_frequency` 0. Other settings can still fail when the job
+runs, such as a vocabulary too small for the symbols of a
+`sequence-bpe` corpus.
 
 ## Errors
 
@@ -276,6 +290,7 @@ with one of these:
 | 409 | `not_ready` | the vocabulary of a job that is not done |
 | 422 | `refused` | the operation refused the arguments; the message says why |
 | 431 | `headers_too_large` | request line and headers over 16 KiB |
+| 507 | `no_room` | the jobs directory holds as much as it may |
 | 503 | `busy` | every worker is busy and the queue is full, or as many jobs wait as may |
 
 ## Limits

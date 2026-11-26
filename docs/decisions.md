@@ -1347,7 +1347,9 @@ record of who asked. A web page cannot post a job (the body must be
 declared JSON, which a browser asks permission for, and the service
 never grants it), but any local program can. Memory is the running
 corpus plus the waiting ones. Files accumulate until the operator
-removes them.
+removes them, up to a size the operator sets (1 GiB unless told), past
+which jobs are refused: a review put 224 MB there in 30 seconds from
+one client before that limit existed.
 
 Checked by tests against a real process: a job gives the digest `kute
 train` gives for the same corpus; the file is the one answer and the

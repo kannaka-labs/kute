@@ -393,6 +393,11 @@ enum Command {
         /// Largest vocabulary a job may ask for.
         #[arg(long, default_value_t = 65_536, requires = "jobs_dir")]
         jobs_max_vocab_size: u32,
+        /// Bytes of files the jobs directory may hold. At or past it no
+        /// job is taken, and a job that would write past it fails. Nothing
+        /// is removed: the operator makes room.
+        #[arg(long, default_value_t = 1 << 30, requires = "jobs_dir")]
+        jobs_max_dir_bytes: u64,
         /// Another registry (http://host:port) to ask for a vocabulary
         /// this one does not hold. What comes back is checked as `kute
         /// fetch` checks it, kept in memory, and given on. Repeatable;
@@ -1623,7 +1628,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 _ => Err(KuteError::InvalidConfig("give --digest and --output, or --list".into())),
             }
         }
-        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, peer_status, jobs_dir, jobs_queue, jobs_max_vocab_size, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
+        Command::Serve { vocab: paths, listen, insecure_remote, studio, registry, registry_only, peer_status, jobs_dir, jobs_queue, jobs_max_vocab_size, jobs_max_dir_bytes, upstream, upstream_trusted_key, upstream_timeout, upstream_max_bytes, upstream_cache_bytes, max_input_bytes, max_output_bytes, workers, timeout } => {
             let registry = registry || registry_only;
             if !upstream.is_empty() && !registry {
                 return Err(KuteError::InvalidConfig("--upstream is for a registry: add --registry or --registry-only".into()));
@@ -1660,7 +1665,7 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
                 return Err(KuteError::InvalidConfig("--jobs-dir is given on a loopback address only: the service has no authentication, and whoever reaches it could make it train".into()));
             }
             let jobs = match jobs_dir {
-                Some(dir) => Some(jobs::Jobs::start(dir, jobs::Limits { queue: jobs_queue, max_vocab_size: jobs_max_vocab_size, ..Default::default() })?),
+                Some(dir) => Some(jobs::Jobs::start(dir, jobs::Limits { queue: jobs_queue, max_vocab_size: jobs_max_vocab_size, max_dir_bytes: jobs_max_dir_bytes, ..Default::default() })?),
                 None => None,
             };
             print(&json!({ "listening": address.to_string(), "api": "v1", "jobs": jobs.is_some(), "loopback_only": http::is_loopback(&address), "studio": studio.then(|| format!("http://{address}/studio")), "registry": registry.then(|| format!("http://{address}")), "upstreams": upstream, "upstream_files_need_a_trusted_signature": !upstream_trusted_key.is_empty(), "operations": !registry_only }))?;

@@ -408,6 +408,7 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
                     Ok(job) => Reply { status: 202, reason: "Accepted", ..ok(job) },
                     Err(crate::jobs::Refusal::Bad(why)) => problem(422, "Unprocessable Content", "refused", why),
                     Err(crate::jobs::Refusal::Full(why)) => problem(503, "Service Unavailable", "busy", why),
+                    Err(crate::jobs::Refusal::NoRoom(why)) => problem(507, "Insufficient Storage", "no_room", why),
                 }
             }
             (_, None) => Reply { allow: Some("GET, POST"), ..problem(405, "Method Not Allowed", "method_not_allowed", "jobs are listed with GET and given with POST") },

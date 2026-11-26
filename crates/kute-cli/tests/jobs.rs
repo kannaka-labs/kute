@@ -141,11 +141,11 @@ fn a_job_trains_what_the_command_line_trains_and_leaves_a_file_named_by_its_dige
     assert_eq!(status, 422);
 
     // The list has it, and a job that fails says why and has no file.
-    let (status, bad) = service.post("/v1/jobs", &json!({ "texts": ["x"], "vocabulary_id": "test:jobs:none", "vocab_size": 300, "algorithm": "no-such-algorithm" }));
+    let (status, bad) = service.post("/v1/jobs", &json!({ "texts": ["x"], "vocabulary_id": "test:jobs:none", "vocab_size": 300, "adapter": "jsonl-events" }));
     assert_eq!(status, 202, "{bad}");
     let failed = service.finished(bad["id"].as_str().unwrap());
     assert_eq!(failed["state"], "failed");
-    assert!(failed["error"].as_str().unwrap().contains("no-such-algorithm"), "{failed}");
+    assert!(!failed["error"].as_str().unwrap().is_empty(), "{failed}");
     let (status, why) = service.get(&format!("/v1/jobs/{}/vocabulary", bad["id"].as_str().unwrap()));
     assert_eq!((status, why["error"]["code"].as_str()), (409, Some("not_ready")));
     let (_, list) = service.get("/v1/jobs");
@@ -170,6 +170,18 @@ fn what_a_job_may_ask_is_bounded_and_nothing_else_can_be_done_to_one() {
     assert!(refused(json!({ "texts": ["x"], "vocab_size": 300 })).contains("vocabulary_id is required"));
     assert!(refused(json!({ "texts": ["x"], "vocabulary_id": "test:a", "vocab_size": 300, "operation": "evolve" })).contains("only job is train"));
     assert!(refused(json!(["x"])).contains("JSON object"));
+    // What training would refuse for certain takes no place in the line.
+    let with = |name: &str, value: Value| {
+        let mut body = json!({ "texts": ["x"], "vocabulary_id": "test:a", "vocab_size": 300 });
+        body[name] = value;
+        body
+    };
+    assert!(refused(with("algorithm", json!("no-such-algorithm"))).contains("unknown algorithm"));
+    assert!(refused(with("algorithm", json!("dictionary"))).contains("needs entries"));
+    assert!(refused(with("adapter", json!("no-such-adapter"))).contains("unknown adapter"));
+    assert!(refused(with("vocab_size", json!(0))).contains("vocab_size"));
+    assert!(refused(with("vocab_size", json!(1))).contains("256"));
+    assert!(refused(with("min_frequency", json!(0))).contains("min_frequency"));
     let (_, list) = service.get("/v1/jobs");
     assert_eq!(list["jobs"].as_array().unwrap().len(), 0, "a refused job is not a job");
 
@@ -210,6 +222,47 @@ fn what_a_job_may_ask_is_bounded_and_nothing_else_can_be_done_to_one() {
     for id in &taken {
         assert_eq!(service.finished(id)["state"], "done");
     }
+}
+
+#[test]
+fn the_directory_holds_no_more_than_its_operator_allowed() {
+    let dir = scratch("jobs-room");
+    let job = |id: &str| json!({ "texts": [TEXT.repeat(30)], "vocabulary_id": id, "vocab_size": 300 });
+    let size = {
+        let service = Service::start(&dir, &["--jobs-dir", "made"]);
+        let (_, list) = service.get("/v1/jobs");
+        assert_eq!(list["directory"], json!({ "files": 0, "bytes": 0, "max_bytes": 1u64 << 30 }));
+        let (status, taken) = service.post("/v1/jobs", &job("test:room:a"));
+        assert_eq!(status, 202, "{taken}");
+        let done = service.finished(taken["id"].as_str().unwrap());
+        let size = done["result"]["file_bytes"].as_u64().unwrap();
+        let (_, list) = service.get("/v1/jobs");
+        assert_eq!(list["directory"]["files"], 1);
+        assert_eq!(list["directory"]["bytes"], size);
+        size
+    };
+    // Full: nothing is taken, and the answer says how full.
+    {
+        let service = Service::start(&dir, &["--jobs-dir", "made", "--jobs-max-dir-bytes", &size.to_string()]);
+        let (status, answer) = service.post("/v1/jobs", &job("test:room:b"));
+        assert_eq!((status, answer["error"]["code"].as_str()), (507, Some("no_room")), "{answer}");
+        assert!(answer["error"]["message"].as_str().unwrap().contains(&size.to_string()), "{answer}");
+        assert_eq!(service.get("/v1/jobs").1["jobs"].as_array().unwrap().len(), 0);
+    }
+    // Room for a job to be taken but not for its file: it fails and
+    // writes nothing. The vocabulary already there is given again.
+    let service = Service::start(&dir, &["--jobs-dir", "made", "--jobs-max-dir-bytes", &(size + 10).to_string()]);
+    let (status, taken) = service.post("/v1/jobs", &job("test:room:b"));
+    assert_eq!(status, 202, "{taken}");
+    let failed = service.finished(taken["id"].as_str().unwrap());
+    assert_eq!(failed["state"], "failed", "{failed}");
+    assert!(failed["error"].as_str().unwrap().contains("may hold"), "{failed}");
+    let (status, taken) = service.post("/v1/jobs", &job("test:room:a"));
+    assert_eq!(status, 202, "{taken}");
+    assert_eq!(service.finished(taken["id"].as_str().unwrap())["state"], "done");
+    let names: Vec<String> = std::fs::read_dir(dir.join("made")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(names.len(), 1, "{names:?}");
+    assert_eq!(std::fs::metadata(dir.join("made").join(&names[0])).unwrap().len(), size);
 }
 
 #[test]
