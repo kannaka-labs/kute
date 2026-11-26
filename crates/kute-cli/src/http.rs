@@ -69,6 +69,11 @@ pub struct Tls {
     /// If some, only clients whose own certificate has one of these
     /// fingerprints are answered; the rest are told so and nothing else.
     pub allow: Option<Arc<std::collections::BTreeSet<String>>>,
+    /// The handshake must finish within this, or within the time a
+    /// request has if that is shorter. A handshake needs milliseconds
+    /// and a request may need seconds, and before the handshake nobody
+    /// knows who is calling.
+    pub handshake: Duration,
 }
 
 impl std::fmt::Debug for Tls {
@@ -616,11 +621,11 @@ fn serve_one(server: &Server, stream: TcpStream, options: &Options) {
     let mut refused = None;
     let mut stream = match &options.tls {
         None => Wire::Plain(stream),
-        // The handshake has the time a request has, all of it counted:
-        // a connection that will not finish one costs a worker that
-        // long and no longer. One that fails it is closed and told
-        // nothing in HTTP: it has not shown who it is.
-        Some(tls) => match tls::accept_by(&tls.config, stream, Instant::now() + options.timeout) {
+        // The handshake has a time of its own, all of it counted: a
+        // connection that will not finish one costs a worker that long
+        // and no longer. One that fails it is closed and told nothing
+        // in HTTP: it has not shown who it is.
+        Some(tls) => match tls::accept_by(&tls.config, stream, Instant::now() + tls.handshake.min(options.timeout)) {
             Ok((secured, who)) => {
                 if tls.allow.as_ref().is_some_and(|allowed| !allowed.contains(&who.fingerprint)) {
                     refused = Some(problem(403, "Forbidden", "not_allowed", "this certificate is from an authority this service trusts, and is not one of the certificates it answers"));

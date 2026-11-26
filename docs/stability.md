@@ -91,7 +91,7 @@ not covered.
 ## Changes since v0.9.4 that need action
 
 - `kute serve --tls-cert --tls-key --tls-client-ca` (and `--allow`,
-  `--tls-ca`) and `--tls-cert --tls-key --tls-ca` on `kute fetch` and
+  `--tls-handshake-timeout`, `--tls-ca`) and `--tls-cert --tls-key --tls-ca` on `kute fetch` and
   `kute job` are new; without them everything is as it was, except the
   words of two refusals: an `https://` address, and a start on an
   address that is not loopback.
@@ -102,6 +102,8 @@ not covered.
   in place of an authority, with a path that is under the target's own.
   `http::Options` has a new field, `tls` (`None` is the service as it
   was). New: `registry::client_identity`, `http::Tls`.
+- `kute fetch` and `kute job` over `https`: a connection the service
+  ends with a TLS alert is reported with the alert's reason.
 - Rust, `kute-protocol`: `tls::accept_by` and `tls::connect_by` (a
   handshake with a deadline), `Secured::socket`, `Secured::close`, and
   `tls::ServerConfig` and `tls::ClientConfig` by name. Nothing changed

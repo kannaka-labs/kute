@@ -58,11 +58,25 @@ it, and an address that is not loopback needs no `--insecure-remote`.
   The service's certificate must be issued by an authority in
   `--tls-ca` and carry the host that is in the address, name or IP.
   The system's own list of authorities is never used.
-* The handshake has the time a request has (`--timeout`), all of it
-  counted, so a connection that will not finish one costs a worker that
-  long. When every worker is busy and the line is full, a new
-  connection is closed without the `503` a plain service sends: there
-  is nothing to say it in before a handshake.
+* `--jobs-dir` on an address that is not loopback needs `--allow`.
+  Reading by digest may be for everyone an authority knows; training
+  costs the machine minutes, memory and disk, and who may ask for it is
+  named.
+* **Whoever can reach the port can stop the service answering, for as
+  long as they like, with no certificate and almost no traffic.** A
+  connection that sends nothing holds a worker until the handshake's
+  time is up (`--tls-handshake-timeout`, 3 seconds, all of it counted),
+  and a caller that opens another whenever one is closed keeps every
+  worker held. A review measured it at a 4 second limit with 4 workers:
+  8 such connections kept open made a real caller wait 4 to 7 seconds,
+  and 24 left it 0 answers of 30. A plain service has the same
+  weakness; TLS is what puts the service where strangers can reach it.
+  The shorter time for the handshake shortens the waits and does not
+  change the kind. What limits who can reach the port is a firewall,
+  not this program.
+* When every worker is busy and the line is full, a new connection is
+  closed without the `503` a plain service sends: there is nothing to
+  say it in before a handshake.
 * What is not there: revocation other than taking a fingerprint off
   `--allow` or changing the authority, and restarting; reloading
   certificates without a restart; a browser. Studio is not served over

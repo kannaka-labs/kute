@@ -96,6 +96,17 @@ pub fn parse_url(url: &str) -> kute::Result<Target> {
     Ok(Target { authority, base: if path.is_empty() { String::new() } else { format!("/{path}") }, secure })
 }
 
+/// A read that failed for a reason other than time. Over TLS the reason
+/// is kept: a service that does not accept this side's certificate says
+/// so in an alert, after the handshake, and that is where it shows.
+fn broke(e: &std::io::Error, secure: bool) -> KuteError {
+    if secure && e.kind() == std::io::ErrorKind::InvalidData {
+        let why: String = e.to_string().chars().filter(|c| !c.is_control()).take(200).collect();
+        return failed(format!("the service ended the TLS connection before a complete answer: {why}. If that names a certificate, it is this side's that was not accepted"));
+    }
+    failed(format!("the connection failed before a complete answer: {}", e.kind()))
+}
+
 /// A connection to a service, plain or not.
 enum Wire {
     Plain(TcpStream),
@@ -236,7 +247,7 @@ pub fn request(method: &str, at: &Target, path: &str, body: Option<&[u8]>, max_b
             Ok(0) => return Err(failed("the connection closed before an answer")),
             Ok(n) => buffer.extend_from_slice(&chunk[..n]),
             Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
-            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
+            Err(e) => return Err(broke(&e, at.secure)),
         }
     };
     let head = std::str::from_utf8(&buffer[..head_end]).map_err(|_| failed("the answer's headers are not text"))?;
@@ -272,7 +283,7 @@ pub fn request(method: &str, at: &Target, path: &str, body: Option<&[u8]>, max_b
             Ok(0) => return Err(failed("the connection closed before the whole answer")),
             Ok(n) => body.extend_from_slice(&chunk[..n]),
             Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
-            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
+            Err(e) => return Err(broke(&e, at.secure)),
         }
     }
     Ok((status, body))

@@ -1411,11 +1411,20 @@ transport, and no new dependency:
   command line, and never the system's list of authorities: the
   operator names who is believed. An `https` address without it is an
   error before any connection, as `https` was before.
-* The handshake is driven here against one deadline, the request's.
+* The handshake is driven here against one deadline of its own
+  (`--tls-handshake-timeout`, 3 seconds, never more than the request's).
   `rustls` with blocking sockets will wait on each read for as long as
   the socket allows, and a socket timeout is per read: a caller sending
   a byte now and then would hold a worker without end. A test does
-  exactly that and is dropped at the deadline.
+  exactly that and is dropped at the deadline. It was the request's
+  deadline at first; the review's numbers (below) are why it is shorter:
+  a handshake needs milliseconds, and before it nobody knows who calls.
+* Jobs on an address that is not loopback need `--allow`. The first
+  version let any certificate from the authority train. The reviewer's
+  point: the reason for "the authority is the list" is a registry read
+  by a whole organization, and that reason covers reading. Training
+  costs CPU, memory and disk, and four waiting jobs from one caller
+  shut the rest out.
 * When the line is full a plain service says `503` from the accepting
   thread, without reading. Over TLS that would mean a handshake on the
   accepting thread, which is the thread that must never wait; the
@@ -1427,8 +1436,15 @@ transport, and no new dependency:
 What it costs: the service now reads certificates and keys at start
 and is one more place a private key lives. A handshake is the most
 expensive thing an unknown caller can ask for, and it is asked for
-before the service knows who is calling: the bound on it is workers
-times the timeout, the same as for slow requests, and nothing better.
+before the service knows who is calling. Each connection is bounded;
+the service is not: whoever can reach the port can keep every worker
+waiting on handshakes that never come, by opening a new connection
+whenever one is closed, with no certificate and no traffic to speak
+of. The review measured it (4 workers, a 4 second limit): 8 silent
+connections kept open, a real caller waits 4 to 7 seconds; 24, and it
+got 0 answers of 30. The plain service does no better (1 of 7), but
+only TLS puts the service where strangers reach it. Nothing here
+prevents that; a firewall does.
 Certificates are read once; renewing one is a restart. Revocation is a
 shorter `--allow` list or a new authority, and a restart.
 
@@ -1437,11 +1453,16 @@ run: fetch, list, a job and a registry's upstream over TLS; refused
 with no certificate, with one from another authority, with a service
 certificate from another authority, with the right certificate under
 another name for the same machine, and when not on the list; plain HTTP
-to the port gets no HTTP back; silent and dripping connections on
-every worker delay a real caller by the timeout and no more; an address
-that is not loopback starts, with jobs, without `--insecure-remote`.
-Not checked: anything about `rustls` itself, certificate chains longer
-than one, load, and any system but the three the tests run on.
+to the port gets no HTTP back; one round of silent and dripping
+connections on every worker delays a real caller by the handshake's
+time (one round: see what it costs); an address that is not loopback
+starts without `--insecure-remote`, and with jobs only when callers are
+named. Checked by the reviewing session with its own certificates and
+client, on Windows: expired, wrong-purpose and TLS 1.2 callers get no
+HTTP; chains longer than one work on both sides; IPv6. Not checked by
+anyone: anything about `rustls` itself, a service on a real network
+address, many callers with certificates at once, and load beyond the
+numbers above.
 
 ## Deferred
 

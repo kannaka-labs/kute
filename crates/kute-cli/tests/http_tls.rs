@@ -154,8 +154,10 @@ fn a_service_over_tls_answers_a_caller_with_a_certificate_and_nobody_else() {
     };
     // No certificate: refused on this side, before a connection.
     assert!(nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "a.kvf"], "a.kvf").contains("--tls"));
-    // A certificate from an authority the service was not given.
-    nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "b.kvf", "--tls-cert", "outsider.pem", "--tls-key", "outsider.key", "--tls-ca", "ours.pem"], "b.kvf");
+    // A certificate from an authority the service was not given. The service
+    // says why in an alert, and the caller is told (found in review: it was "invalid data").
+    let said = nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "b.kvf", "--tls-cert", "outsider.pem", "--tls-key", "outsider.key", "--tls-ca", "ours.pem"], "b.kvf");
+    assert!(said.contains("this side's that was not accepted"), "{said}");
     // A caller that believes another authority does not believe this service.
     assert!(nothing(&["fetch", "--from", &at, "--digest", &digest, "--output", "c.kvf", "--tls-cert", "caller.pem", "--tls-key", "caller.key", "--tls-ca", "theirs.pem"], "c.kvf").contains("tls"));
     // The certificate is for 127.0.0.1, and not for any other name of the same machine.
@@ -201,7 +203,8 @@ fn only_listed_certificates_are_answered_when_any_are_listed() {
 fn a_connection_that_will_not_finish_the_handshake_costs_a_worker_only_so_long() {
     let dir = scratch("http-tls-stall");
     let digest = prepare(&dir);
-    let service = Service::start(&dir, &with(&["--vocab", "held.kvf", "--registry", "--workers", "2", "--timeout", "2"], &SERVER));
+    // The handshake has its own time: a request may take 30 s here, a handshake 2.
+    let service = Service::start(&dir, &with(&["--vocab", "held.kvf", "--registry", "--workers", "2", "--timeout", "30", "--tls-handshake-timeout", "2"], &SERVER));
     // Every worker is given a connection that says nothing, and two more
     // that start a handshake and then send a byte now and then.
     let silent: Vec<TcpStream> = (0..2).map(|_| TcpStream::connect(&service.address).unwrap()).collect();
@@ -224,7 +227,7 @@ fn a_connection_that_will_not_finish_the_handshake_costs_a_worker_only_so_long()
         }
         gone_after
     });
-    // A real caller is answered once the time a request may take has passed.
+    // A real caller is answered once the time a handshake may take has passed.
     ok(&dir, &with(&["fetch", "--from", &service.https(), "--digest", &digest, "--output", "got.kvf", "--timeout", "30"], &CALLER));
     let waited = started.elapsed();
     assert!(waited < Duration::from_secs(12), "a real caller waited {waited:?}");
@@ -254,8 +257,13 @@ fn a_job_is_given_and_an_upstream_is_asked_over_tls() {
     // An https upstream and no certificate to show it stops the start.
     assert!(refused(&dir, &["--registry-only", "--upstream", &service.https()]).contains("--tls"));
 
-    // Over TLS, an address that is not loopback is served, jobs too, with no --insecure-remote.
-    let mut open = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(&dir).args(["serve", "--listen", "0.0.0.0:0", "--vocab", "held.kvf", "--jobs-dir", "made-open"]).args(SERVER).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+    // Over TLS, an address that is not loopback is served with no --insecure-remote.
+    // Jobs there need the callers named: an authority's whole issue may read, not train.
+    let unnamed = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(&dir).args(["serve", "--listen", "0.0.0.0:0", "--vocab", "held.kvf", "--jobs-dir", "made-open"]).args(SERVER).output().unwrap();
+    assert!(!unnamed.status.success() && String::from_utf8_lossy(&unnamed.stderr).contains("needs --allow"), "{}", String::from_utf8_lossy(&unnamed.stderr));
+    assert!(!dir.join("made-open").exists(), "the directory was made for a service that did not start");
+    let caller = ok(&dir, &["peer", "fingerprint", "--cert", "caller.pem"])["fingerprint"].as_str().unwrap().to_string();
+    let mut open = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(&dir).args(["serve", "--listen", "0.0.0.0:0", "--vocab", "held.kvf", "--jobs-dir", "made-open", "--allow", &caller]).args(SERVER).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
     let mut line = String::new();
     let mut text = String::new();
     let mut out = BufReader::new(open.stdout.take().unwrap());
