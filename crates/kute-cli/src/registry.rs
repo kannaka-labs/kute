@@ -392,9 +392,15 @@ pub fn mirror(engine: &Engine, from: &[String], dir: &Path, trusted: &[String], 
         let target = dir.join(format!("{}.kvf", &digest["sha256:".len()..]));
         let mut replace = false;
         if target.exists() {
-            let there = vocab::load(&target).and_then(|v| Ok((v.compute_digest()?, v)));
+            // Checked as one that arrives is: valid, its own test
+            // vectors, and the digest of its content.
+            let there = vocab::load(&target).and_then(|v| {
+                v.validate()?;
+                let passes = engine.verify(&v)?.ok();
+                Ok((v.compute_digest()?, passes, v))
+            });
             match there {
-                Ok((held, vocabulary)) if held == *digest => {
+                Ok((held, true, vocabulary)) if held == *digest => {
                     if gate.as_ref().is_none_or(|gate| gate(&vocabulary).is_ok()) {
                         already_there += 1;
                         continue;

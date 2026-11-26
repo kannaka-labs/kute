@@ -306,6 +306,99 @@ fn the_command_line_gives_a_job_and_keeps_only_a_file_that_is_what_it_was_told()
     assert!(!ok && said.contains("service:"), "{said}");
 }
 
+/// Something that is not a jobs service: it gives these answers, one a
+/// connection, in this order, whatever is asked. Returns its address.
+fn scripted(answers: Vec<(u16, Vec<u8>)>) -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    std::thread::spawn(move || {
+        for (status, body) in answers {
+            let Ok((mut stream, _)) = listener.accept() else { return };
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+            let mut seen = Vec::new();
+            let mut chunk = [0u8; 4096];
+            let mut wanted = None;
+            loop {
+                if wanted.is_none() {
+                    if let Some(at) = seen.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let head = String::from_utf8_lossy(&seen[..at]).to_ascii_lowercase();
+                        let length = head.lines().find_map(|l| l.strip_prefix("content-length:")).map_or(0, |v| v.trim().parse::<usize>().unwrap());
+                        wanted = Some(at + 4 + length);
+                    }
+                }
+                if wanted.is_some_and(|w| seen.len() >= w) {
+                    break;
+                }
+                match stream.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => seen.extend_from_slice(&chunk[..n]),
+                }
+            }
+            let mut answer = format!("HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).into_bytes();
+            answer.extend_from_slice(&body);
+            let _ = stream.write_all(&answer);
+        }
+    });
+    format!("http://{address}")
+}
+
+#[test]
+fn a_service_that_lies_to_the_command_line_gets_nothing_written() {
+    let dir = scratch("jobs-liar");
+    std::fs::write(dir.join("text.txt"), TEXT.repeat(30)).unwrap();
+    let train = |id: &str, version: &str, file: &str| {
+        let (ok, report, said) = kute(&dir, &["train", "--input", "text.txt", "--id", id, "--vocab-version", version, "--vocab-size", "300", "--output", file]);
+        assert!(ok, "{said}");
+        (report["summary"]["digest"].as_str().unwrap().to_string(), std::fs::read(dir.join(file)).unwrap())
+    };
+    let (digest, file) = train("test:liar", "0.1.0", "right.kvf");
+    let (other_digest, other_file) = train("test:else", "0.1.0", "else.kvf");
+    let (later_digest, later_file) = train("test:liar", "0.2.0", "later.kvf");
+    let takes = || (200, json!({ "jobs": {}, "limits": { "max_body_bytes": 3 << 20 } }).to_string().into_bytes());
+    let taken = |id: &str| (202, json!({ "id": id, "state": "waiting" }).to_string().into_bytes());
+    let done = |digest: &str| (200, json!({ "id": "job-1", "state": "done", "finished_unix": 1, "result": { "digest": digest } }).to_string().into_bytes());
+    let ask = |at: &str, extra: &[&str]| {
+        let mut args = vec!["job", "--at", at, "--input", "text.txt", "--id", "test:liar", "--vocab-size", "300", "--output", "out.kvf"];
+        args.extend_from_slice(extra);
+        let (ok, _, said) = kute(&dir, &args);
+        assert!(!ok, "{said}");
+        assert!(!dir.join("out.kvf").exists(), "a file was written: {said}");
+        said
+    };
+
+    // The honest sequence, to show the script itself is one the command accepts.
+    let at = scripted(vec![takes(), taken("job-1"), done(&digest), (200, file.clone())]);
+    let (ok, report, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:liar", "--vocab-size", "300", "--output", "honest.kvf"]);
+    assert!(ok && report["digest"] == json!(digest), "{said}");
+
+    // A job name that would be put in a path.
+    for id in ["job-1/../../v1/capabilities", "job-1?x=1", "../x", ""] {
+        assert!(ask(&scripted(vec![takes(), taken(id)]), &[]).contains("does not name it"), "{id:?}");
+    }
+    // A digest named, and other content sent.
+    let zero = format!("sha256:{}", "0".repeat(64));
+    assert!(ask(&scripted(vec![takes(), taken("job-1"), done(&zero), (200, file.clone())]), &[]).contains("whose content has digest"));
+    // Content that is what it says it is, and is another vocabulary.
+    assert!(ask(&scripted(vec![takes(), taken("job-1"), done(&other_digest), (200, other_file)]), &[]).contains("named test:else, not test:liar"));
+    // The name asked for, in another version.
+    assert!(ask(&scripted(vec![takes(), taken("job-1"), done(&later_digest), (200, later_file)]), &[]).contains("sent version 0.2.0"));
+    // Not a vocabulary at all, a result with no digest, and a file larger than allowed.
+    ask(&scripted(vec![takes(), taken("job-1"), done(&digest), (200, b"{}".to_vec())]), &[]);
+    assert!(ask(&scripted(vec![takes(), taken("job-1"), done("latest")]), &[]).contains("names no digest"));
+    assert!(ask(&scripted(vec![takes(), taken("job-1"), done(&digest), (200, file.clone())]), &["--max-bytes", "100"]).contains("--max-bytes"));
+    // A state nobody defined.
+    let odd = (200, json!({ "id": "job-1", "state": "paused", "finished_unix": 1 }).to_string().into_bytes());
+    assert!(ask(&scripted(vec![takes(), taken("job-1"), odd]), &[]).contains("does not know"));
+    // It goes silent after taking the job: said so, within the time one answer may take three times over.
+    let said = ask(&scripted(vec![takes(), taken("job-1")]), &["--wait", "2"]);
+    assert!(said.contains("could not be asked about") && said.contains("may still end on the service"), "{said}");
+
+    // This side's mistake, found before the service is asked: nowhere to write.
+    let at = scripted(vec![]);
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:liar", "--vocab-size", "300", "--output", "nodir/out.kvf"]);
+    assert!(!ok && said.contains("is not a directory") && said.contains("was not asked"), "{said}");
+}
+
 #[test]
 fn a_job_given_from_the_command_line_that_does_not_start_in_time_is_withdrawn() {
     let dir = scratch("jobs-client-wait");

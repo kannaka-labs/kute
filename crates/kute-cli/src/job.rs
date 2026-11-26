@@ -86,6 +86,11 @@ pub fn run(engine: &Engine, ask: Ask) -> kute::Result<Value> {
     if ask.output.exists() && !ask.force {
         return Err(KuteError::InvalidConfig(format!("{} exists; pass --force to replace it", ask.output.display())));
     }
+    if let Some(parent) = ask.output.parent().filter(|p| !p.as_os_str().is_empty()) {
+        if !parent.is_dir() {
+            return Err(KuteError::InvalidConfig(format!("{} is not a directory, so {} could not be written; the service was not asked", parent.display(), ask.output.display())));
+        }
+    }
     let mut options = serde_json::Map::new();
     for option in &ask.adapter_options {
         let (key, value) = option.split_once('=').ok_or_else(|| KuteError::InvalidConfig(format!("adapter option {option:?}: expected key=value")))?;
@@ -137,8 +142,28 @@ pub fn run(engine: &Engine, ask: Ask) -> kute::Result<Value> {
 
     let started = Instant::now();
     let mut pause = Duration::from_millis(100);
+    let mut misses = 0u32;
     let job = loop {
-        let job = service.job(&id)?;
+        let job = match service.job(&id) {
+            Ok(job) => {
+                misses = 0;
+                job
+            }
+            // One answer lost is not the job lost. Three running, and
+            // the job is not left in the line for nobody.
+            Err(e) => {
+                misses += 1;
+                if misses < 3 && started.elapsed() < ask.wait {
+                    std::thread::sleep(Duration::from_millis(500));
+                    continue;
+                }
+                let withdrawn = service.ask("DELETE", &format!("/v1/jobs/{id}"), None, MAX_ANSWER_BYTES).is_ok_and(|(status, _)| status == 200);
+                return Err(failed(format!(
+                    "{id} could not be asked about ({e}). {}",
+                    if withdrawn { "It had not started and was withdrawn." } else { "It was not withdrawn, so it may still end on the service." }
+                )));
+            }
+        };
         if job["finished_unix"].is_u64() {
             break job;
         }
@@ -177,6 +202,9 @@ pub fn run(engine: &Engine, ask: Ask) -> kute::Result<Value> {
     if vocabulary.id().as_str() != ask.id {
         return Err(KuteError::Integrity(format!("the service sent a vocabulary named {}, not {}; nothing was written", vocabulary.id(), ask.id)));
     }
+    if vocabulary.version().to_string() != ask.vocab_version {
+        return Err(KuteError::Integrity(format!("the service sent version {} of {}, not {}; nothing was written", vocabulary.version(), ask.id, ask.vocab_version)));
+    }
     let report = engine.verify(&vocabulary)?;
     if !report.ok() {
         return Err(KuteError::Integrity(format!("the vocabulary fails its own test vectors: {}", report.failures.join("; "))));
@@ -195,7 +223,7 @@ pub fn run(engine: &Engine, ask: Ask) -> kute::Result<Value> {
         "test_vectors_pass": true,
         "service_says": { "train_seconds": job["result"]["train_seconds"], "file": job["result"]["file"] },
         "output": ask.output,
-        "means": "the file is a valid vocabulary with the name asked for, and its content is what the digest names. That the service trained it on the corpus sent, with the settings sent, is its word: `kute train` on the same input gives the digest to compare.",
+        "means": "the file is a valid vocabulary with the name and version asked for, and its content is what the digest names. That the service trained it on the corpus sent, with the settings sent, is its word: `kute train` on the same input gives the digest to compare.",
     }))
 }
 

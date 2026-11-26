@@ -251,6 +251,15 @@ fn a_mirror_takes_everything_listed_checks_each_file_and_deletes_nothing() {
     let report: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!((out.status.success(), report["written"].as_array().unwrap().len(), report["already_there"].clone(), report["not_tried"].clone()), (true, 1, json!(1), json!(0)), "{report}");
 
+    // A file already there is checked as one that arrives is. One with the
+    // right name that cannot be read as a vocabulary is not counted as there.
+    let broken = dir.join("steps").join(name(&other));
+    std::fs::write(&broken, b"{}").unwrap();
+    let out = kute(&dir, &["fetch", "--from", &url, "--mirror", "steps"]);
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!((out.status.success(), report["already_there"].clone(), report["failed"].as_array().unwrap().len()), (false, json!(1), 1), "{report}");
+    assert_eq!(std::fs::read(&broken).unwrap(), b"{}", "left as it is");
+
     // A registry that cannot be reached makes the run incomplete, and what the other holds is still taken.
     let out = kute(&dir, &["fetch", "--from", "http://127.0.0.1:1", "--from", &url, "--mirror", "two", "--timeout", "5"]);
     assert!(!out.status.success());

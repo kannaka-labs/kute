@@ -218,7 +218,8 @@ into `DIR`, as `<64 hex digits of the digest>.kvf`. Each file is fetched
 by digest and checked exactly as a single fetch is: the digest computed
 from the content, the file's own test vectors, and with `--trusted-key`
 a signature by one of those keys. Run again, it asks only for what is
-not there.
+not there, and a file that is there is checked the same way before it
+is counted.
 
 * The listing is the registries' word and is used only to know what to
   ask for. A name in it that is not a digest is counted and never asked
@@ -283,7 +284,8 @@ kute job --at http://127.0.0.1:8080 --input corpus.txt     --id example:text --v
 (`--wait`, 600 seconds unless given) and writes the vocabulary. Before
 anything is written the file is read as a vocabulary, its digest is
 computed from its content and must be the one the service named, its
-name must be the one asked for, and its own test vectors must pass.
+name and version must be the ones asked for, and its own test vectors
+must pass.
 What that does not show is that the service trained on the corpus it
 was sent: that is the service's word, and `kute train` on the same
 input gives the digest to compare. When the wait runs out, a job that
