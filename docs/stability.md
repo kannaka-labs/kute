@@ -88,6 +88,22 @@ All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
 
+## Changes since v0.9.3 that need action
+
+- `DELETE /v1/jobs/{id}` withdraws a waiting job; it was answered `405`.
+  A job's `state` can now be `withdrawn`, with `finished_unix` set and
+  no `started_unix`: a reader that takes any finished job without an
+  error for a trained one needs to look at `state`.
+- `kute job` is a new command. Rust, `kute-cli` as a library: a new
+  module `job`, and `registry::request`.
+- `kute serve --vocab-dir DIR` is new and off unless given.
+- `kute fetch --mirror DIR`, `--max-files` and `--max-total-bytes` are
+  new. Rust: `registry::mirror`, `registry::MirrorLimits`.
+- `kute fetch`: a connection that fails while an answer is read is
+  reported as failed, with the kind of failure, where it was reported
+  as "no complete answer in time". Only running out of time says that
+  now.
+
 ## Changes since v0.9.2 that need action
 
 - Python `Engine.unpack`, `translate` and `inspect_container` are new

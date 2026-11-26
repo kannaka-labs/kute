@@ -72,6 +72,14 @@ pub const VIA_HEADER: &str = "Kute-Registry-Via";
 const MAX_LOOKUPS: usize = 16;
 
 fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
+    request("GET", authority, path, None, max_bytes, timeout, via)
+}
+
+/// One request, with a JSON body or none. Returns the status and the
+/// body, which is at most `max_bytes`. `kute job` uses it for the three
+/// methods a jobs service has; the method is this program's own word,
+/// never a caller's.
+pub fn request(method: &str, authority: &str, path: &str, body: Option<&[u8]>, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
     let deadline = Instant::now() + timeout;
     let left = || deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(|| failed("no complete answer in time"));
     // Looking a name up has no deadline of its own in the standard
@@ -107,7 +115,21 @@ fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool
     let mut stream = stream.ok_or_else(|| failed(format!("could not connect to {authority}: {}", last.map_or("no address".to_string(), |e| e.to_string()))))?;
     stream.set_write_timeout(Some(left()?))?;
     let via = if via { format!("{VIA_HEADER}: 1\r\n") } else { String::new() };
-    stream.write_all(format!("GET {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\n{via}Connection: close\r\n\r\n").as_bytes())?;
+    let sending = body.map_or(String::new(), |b| format!("Content-Type: application/json\r\nContent-Length: {}\r\n", b.len()));
+    stream.write_all(format!("{method} {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\n{sending}{via}Connection: close\r\n\r\n").as_bytes())?;
+    if let Some(body) = body {
+        // A body is sent in pieces so that the time allowed is for the
+        // whole exchange, not for each write of a large corpus.
+        for piece in body.chunks(64 * 1024) {
+            stream.set_write_timeout(Some(left()?))?;
+            if stream.write_all(piece).is_err() {
+                // The other side may have answered and closed without
+                // reading it all: a refusal of a body too large does.
+                // What it said is read below.
+                break;
+            }
+        }
+    }
     let mut buffer: Vec<u8> = Vec::with_capacity(4096);
     let mut chunk = [0u8; 16 * 1024];
     let head_end = loop {
@@ -121,7 +143,8 @@ fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool
         match stream.read(&mut chunk) {
             Ok(0) => return Err(failed("the connection closed before an answer")),
             Ok(n) => buffer.extend_from_slice(&chunk[..n]),
-            Err(_) => return Err(failed("no complete answer in time")),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
+            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
         }
     };
     let head = std::str::from_utf8(&buffer[..head_end]).map_err(|_| failed("the answer's headers are not text"))?;
@@ -156,7 +179,8 @@ fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool
         match stream.read(&mut chunk[..want]) {
             Ok(0) => return Err(failed("the connection closed before the whole answer")),
             Ok(n) => body.extend_from_slice(&chunk[..n]),
-            Err(_) => return Err(failed("no complete answer in time")),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
+            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
         }
     }
     Ok((status, body))
@@ -289,6 +313,146 @@ pub fn fetch(engine: &Engine, from: &[String], digest: &str, output: &Path, trus
     }
     let said: Vec<String> = passed_over.iter().map(|p| format!("{}: {}", p["registry"].as_str().unwrap_or(""), p["why"].as_str().unwrap_or(""))).collect();
     Err(KuteError::Integrity(format!("nothing was written. {}", said.join(" | "))))
+}
+
+/// What a mirror may take.
+pub struct MirrorLimits {
+    /// Vocabularies asked for, at most. A listing is the other side's
+    /// and can be as long as it likes.
+    pub max_files: usize,
+    /// Bytes written in one run, at most. The file that passes it is
+    /// kept and nothing after it is asked for.
+    pub max_total_bytes: u64,
+    /// Largest single file, as for a fetch.
+    pub max_bytes: u64,
+}
+
+/// Bring every vocabulary the registries say they hold into `dir`, each
+/// as `<64 hex digits>.kvf`, each fetched and checked as `fetch` does.
+/// A file already there with the right content is kept and not asked
+/// for. Nothing is ever deleted, and a file there under a digest's name
+/// that is not that vocabulary is left alone and reported.
+///
+/// Returns the report, and whether everything listed is now in `dir`.
+pub fn mirror(engine: &Engine, from: &[String], dir: &Path, trusted: &[String], limits: &MirrorLimits, timeout: Duration) -> kute::Result<(Value, bool)> {
+    let gate = if trusted.is_empty() { None } else { Some(sign::gate(trusted)?) };
+    for registry in from {
+        parse_url(registry)?;
+    }
+    std::fs::create_dir_all(dir)?;
+    // What each says it holds. A listing is not believed about content,
+    // only about what to ask for.
+    let mut complete = true;
+    let mut registries = Vec::new();
+    let mut digests: Vec<String> = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut not_digests = 0usize;
+    for registry in from {
+        let listed = (|| -> kute::Result<Vec<Value>> {
+            let (authority, base) = parse_url(registry)?;
+            let (status, body) = get(&authority, &format!("{base}{LIST_PATH}"), MAX_LISTING_BYTES, timeout, false)?;
+            if status != 200 {
+                return Err(refusal(status, &body));
+            }
+            let listing: Value = serde_json::from_slice(&body).map_err(|_| failed("the listing is not JSON"))?;
+            listing["vocabularies"].as_array().cloned().ok_or_else(|| failed("the listing names no vocabularies"))
+        })();
+        match listed {
+            Ok(rows) => {
+                for row in &rows {
+                    match row["digest"].as_str().filter(|d| is_digest(d)) {
+                        Some(digest) => {
+                            if seen.insert(digest.to_string()) {
+                                digests.push(digest.to_string());
+                            }
+                        }
+                        None => not_digests += 1,
+                    }
+                }
+                registries.push(json!({ "registry": registry, "listed": rows.len() }));
+            }
+            Err(e) => {
+                complete = false;
+                registries.push(json!({ "registry": registry, "error": e.to_string() }));
+            }
+        }
+    }
+    let listed = digests.len();
+    let mut written = Vec::new();
+    let mut already_there = 0usize;
+    let mut failures = Vec::new();
+    let mut not_tried = 0usize;
+    let mut total = 0u64;
+    // Counted where a vocabulary is asked for, not by its place in the
+    // listing: what is already there takes none of a run's allowance,
+    // or the run after one that stopped at the limit would stop at the
+    // same place.
+    let mut asked = 0usize;
+    for digest in &digests {
+        let target = dir.join(format!("{}.kvf", &digest["sha256:".len()..]));
+        let mut replace = false;
+        if target.exists() {
+            // Checked as one that arrives is: valid, its own test
+            // vectors, and the digest of its content.
+            let there = vocab::load(&target).and_then(|v| {
+                v.validate()?;
+                let passes = engine.verify(&v)?.ok();
+                Ok((v.compute_digest()?, passes, v))
+            });
+            match there {
+                Ok((held, true, vocabulary)) if held == *digest => {
+                    if gate.as_ref().is_none_or(|gate| gate(&vocabulary).is_ok()) {
+                        already_there += 1;
+                        continue;
+                    }
+                    // The right content with no trusted signature on it:
+                    // a registry may have a signed copy.
+                    replace = true;
+                }
+                _ => {
+                    complete = false;
+                    failures.push(json!({ "digest": digest, "why": format!("{} is there and is not that vocabulary; it was left as it is", target.display()) }));
+                    continue;
+                }
+            }
+        }
+        if asked >= limits.max_files || total >= limits.max_total_bytes {
+            not_tried += 1;
+            continue;
+        }
+        asked += 1;
+        match fetch(engine, from, digest, &target, trusted, replace, limits.max_bytes, timeout) {
+            Ok(report) => {
+                total += report["bytes_received"].as_u64().unwrap_or(0);
+                written.push(json!({ "digest": digest, "id": report["id"], "version": report["version"], "bytes": report["bytes_received"], "registry": report["registry"], "file": target }));
+            }
+            Err(e) => {
+                complete = false;
+                failures.push(json!({ "digest": digest, "why": e.to_string() }));
+            }
+        }
+    }
+    if not_tried > 0 {
+        complete = false;
+    }
+    Ok((
+        json!({
+            "mirror": dir,
+            "registries": registries,
+            "listed": listed,
+            "listed_without_a_digest": not_digests,
+            "written": written,
+            "bytes_written": total,
+            "already_there": already_there,
+            "failed": failures,
+            "not_tried": not_tried,
+            "not_tried_because": if not_tried > 0 { json!(format!("this run takes at most {} vocabularies and {} bytes (--max-files, --max-total-bytes); run it again to go on", limits.max_files, limits.max_total_bytes)) } else { Value::Null },
+            "complete": complete,
+            "signature": if gate.is_some() { "every file written or kept carries a signature by a trusted key over its content" } else { "not checked: no --trusted-key was given" },
+            "means": "every file written, and every file counted as already there, holds the content its name says and passes its own test vectors. What there was to mirror is the registries' word: one can leave out what it holds. Nothing was deleted: a file in the directory that no registry lists any more is still there.",
+        }),
+        complete,
+    ))
 }
 
 #[cfg(test)]

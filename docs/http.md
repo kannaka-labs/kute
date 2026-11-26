@@ -202,9 +202,57 @@ What it does not do:
   another's listing, so there is no listing to believe at second hand.
 * Nothing is written to disk, nothing is refreshed, and nothing is
   announced: a registry learns of a vocabulary only by being asked for
-  its digest. There is no discovery of registries, no mirroring of a
-  whole registry, and no agreement between registries about anything.
+  its digest. There is no discovery of registries and no agreement
+  between registries about anything. A registry does not mirror
+  another; a client can, since 0.9.4 (below).
 * Upstream connections are plain HTTP, as every other connection here.
+
+### A copy of everything a registry lists (0.9.4)
+
+```
+kute fetch --from http://registry:8787 --mirror DIR [--trusted-key BASE64]
+```
+
+asks each registry what it holds and brings every vocabulary listed
+into `DIR`, as `<64 hex digits of the digest>.kvf`. Each file is fetched
+by digest and checked exactly as a single fetch is: the digest computed
+from the content, the file's own test vectors, and with `--trusted-key`
+a signature by one of those keys. Run again, it asks only for what is
+not there, and a file that is there is checked the same way before it
+is counted.
+
+* The listing is the registries' word and is used only to know what to
+  ask for. A name in it that is not a digest is counted and never asked
+  for; a registry can leave out what it holds, and nothing can show that.
+* Nothing is deleted and nothing is replaced. A file no registry lists
+  any more stays. A file under a digest's name that is not that
+  vocabulary is left as it is and reported, and `--force` is refused.
+  The one replacement: with `--trusted-key`, a file with the right
+  content and no trusted signature is fetched again, since signatures
+  are not part of the digest.
+* One run takes at most `--max-files` (1024) vocabularies and stops
+  asking once `--max-total-bytes` (1 GiB) have been written; each file
+  is at most `--max-bytes`. What was not tried is counted, and the next
+  run goes on from there.
+* The report is printed either way. The command ends with an error
+  unless every vocabulary listed is in the directory afterwards and
+  every registry answered.
+* It is a copy made once, by hand or by a scheduler. Nothing watches
+  the registry.
+
+`kute serve --vocab-dir DIR` (0.9.4) holds every `.kvf` and
+`.kvfb` file in a directory, as if each had been named with `--vocab`,
+so `--vocab-dir DIR --registry-only` gives a mirror on. The same serves
+what `--jobs-dir` trained. The directory is read once, at start, and
+not the directories under it: a file added later is held after a
+restart. It is read strictly, because the operator named it: a file
+with one of those endings that is not a vocabulary stops the start, and
+so does a file named for a digest that its content does not have. Other
+files are not looked at, and a directory with no vocabulary in it is
+not a mistake: the service starts and holds none from it. Nor is a
+directory that does not exist yet when it is also the `--jobs-dir`,
+which the service makes. At most 4,096 files are read from one
+directory, each held whole in memory.
 
 ## Training jobs (0.9.3)
 
@@ -230,13 +278,35 @@ other field is refused. The answer is `202` and the job:
 | request | answer |
 |---|---|
 | `GET /v1/jobs` | every job remembered, and the limits |
-| `GET /v1/jobs/job-1` | that job; `state` is `waiting`, `running`, `done` or `failed` |
+| `GET /v1/jobs/job-1` | that job; `state` is `waiting`, `running`, `done`, `failed` or, since 0.9.4, `withdrawn` |
+| `DELETE /v1/jobs/job-1` | since 0.9.4: the job, withdrawn, if it was waiting; `409 not_waiting` otherwise |
 | `GET /v1/jobs/job-1/vocabulary` | the vocabulary file of a job that is done; `409 not_ready` otherwise |
 
 A job that is done has `result`: the `digest`, the `file` name, its
 size, the summary `kute inspect` gives, and the seconds training took.
 The file is `DIR/<64 hex digits of the digest>.kvf`. The same corpus and
 settings give the vocabulary `kute train` gives, with the same digest.
+
+From the command line, since 0.9.4:
+
+```
+kute job --at http://127.0.0.1:8080 --input corpus.txt     --id example:text --vocab-size 8192 --output example.kvf
+```
+
+`kute job` asks the service what it takes, gives the job, waits for it
+(`--wait`, 600 seconds unless given) and writes the vocabulary. Before
+anything is written the file is read as a vocabulary, its digest is
+computed from its content and must be the one the service named, its
+name and version must be the ones asked for, and its own test vectors
+must pass.
+What that does not show is that the service trained on the corpus it
+was sent: that is the service's word, and `kute train` on the same
+input gives the digest to compare. When the wait runs out, a job that
+has not started is withdrawn; one that has started is left to end on
+the service, and the error says where to ask about it. Each input file
+is one document and must be UTF-8, because a corpus travels as JSON
+strings; all of them go in one request, so a corpus larger than the
+service reads is refused before it is sent.
 
 What it does not do:
 
@@ -247,8 +317,14 @@ What it does not do:
   added to what `encode` and the other operations can name, and the
   registry does not give it. The operator takes the file and starts a
   service with it, or does not.
-* **A job cannot be stopped or changed.** There is no `DELETE`. What a
-  job may cost is bounded when it is taken, not while it runs.
+* **A job that has started cannot be stopped, and none can be
+  changed.** What a job may cost is bounded when it is taken, not while
+  it runs. A job that is still waiting can be withdrawn, since 0.9.4:
+  `DELETE /v1/jobs/{id}` takes it out of the line, lets its corpus go
+  and answers with the job, whose state is now `withdrawn`. It stays in
+  the list as what happened. For a job that is running, done, failed or
+  already withdrawn the answer is `409` (`not_waiting`), and nothing
+  changes.
 * Jobs are not kept across a restart. The files are.
 
 What bounds it: one job runs at a time; `--jobs-queue` (4) may wait, and

@@ -1,4 +1,4 @@
-# Five use cases
+# Six use cases
 
 Each case stands alone. All of them start from the seeded example data:
 
@@ -8,7 +8,8 @@ kute sample-data --output data
 
 That data is synthetic, generated from small templates, so the token counts
 you see here are better than real data will give. The commands are exercised
-by `crates/kute-cli/tests/cli.rs`.
+by `crates/kute-cli/tests/cli.rs`, and those of the sixth case by
+`crates/kute-cli/tests/jobs.rs`.
 
 ## 1. A text vocabulary
 
@@ -127,3 +128,43 @@ enc = tiktoken.Encoding(
 produces the same ids as KUTE on a set of inputs including non-Latin text and
 unseen words. Export is refused for vocabularies tiktoken cannot represent
 (symbol vocabularies, or two tokens with the same bytes).
+
+## 6. A vocabulary service on one machine (0.9.4)
+
+One process trains vocabularies when asked, another machine keeps a
+checked copy of them. Nothing here has authentication or encryption:
+the service is for loopback, or for a network you would trust with the
+corpus.
+
+```
+kute serve --listen 127.0.0.1:8787 --jobs-dir trained --vocab-dir trained --registry
+```
+
+It takes training jobs into `trained`, holds every vocabulary that was
+in `trained` when it started, and gives those by digest. From another
+terminal:
+
+```
+kute job --at http://127.0.0.1:8787 --input data/words-train.txt --id example:service --vocab-size 1000 --output mine.kvf
+```
+
+The command waits for the job and writes `mine.kvf` only if the file is
+a valid vocabulary with that name and version whose content has the
+digest the service named. That the service trained it on the corpus it
+was sent is the service's word; `kute train` on the same input gives the
+digest to compare.
+
+The service does not use what it trained until it is started again:
+what a service answers for is what its operator started it with. After a
+restart with the same command, `example:service` can be named to
+`/v1/encode`, and a copy of everything it lists can be taken:
+
+```
+kute fetch --from http://127.0.0.1:8787 --mirror copy
+kute serve --listen 127.0.0.1:8788 --vocab-dir copy --registry-only
+```
+
+Each file in `copy` is named by its digest and was checked as it
+arrived. The mirror never deletes, so a file the first service stops
+listing stays in the copy. `docs/http.md` has the limits of each step
+and what none of them does.

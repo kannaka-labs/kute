@@ -421,7 +421,13 @@ fn route(server: &Server, request: &Request, options: &Options) -> Reply {
                 },
                 Some(_) => no_job(),
             },
-            (_, Some(_)) => Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "a job is read with GET; it cannot be changed or stopped") },
+            ("DELETE", Some(rest)) if !rest.contains('/') => match jobs.withdraw(rest) {
+                None => no_job(),
+                Some(Ok(job)) => ok(job),
+                Some(Err(why)) => problem(409, "Conflict", "not_waiting", why),
+            },
+            (_, Some(rest)) if !rest.contains('/') => Reply { allow: Some("GET, DELETE"), ..problem(405, "Method Not Allowed", "method_not_allowed", "a job is read with GET and, while it waits, withdrawn with DELETE; it cannot be changed, or stopped once it runs") },
+            (_, Some(_)) => Reply { allow: Some("GET"), ..problem(405, "Method Not Allowed", "method_not_allowed", "a vocabulary a job made is read with GET") },
         };
     }
     if operation == "vocabularies" || operation.starts_with("vocabularies/") {

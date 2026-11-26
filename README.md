@@ -212,10 +212,18 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
+* Since 0.9.4, a training job that is still waiting can be
+  withdrawn (`DELETE /v1/jobs/{id}`), and `kute job` gives a job from
+  the command line, waits, and keeps the file only if its content is
+  what the service named. `kute fetch --mirror DIR` copies everything a
+  registry lists, each file checked as a single fetch is; nothing in
+  the directory is deleted or replaced. `kute serve --vocab-dir DIR`
+  holds every vocabulary in a directory, so a mirror, or what jobs
+  trained, can be served after a restart.
 * Since 0.9.3, `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
-  what it trained, and a job cannot be stopped. Studio lists the
+  what it trained, and a job cannot be stopped once it starts. Studio lists the
   jobs and what the directory holds. The Python package
   gains wire containers and `translate`, and `discover` takes times
   and held-out records. `docs/http.md`.
@@ -224,7 +232,7 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   --studio --peer-status` shows it, a second or two old. It is the
   peer's own account; a killed peer is shown as not running after a few
   seconds. `docs/studio.md`.
-* Not built: discovery or mirroring of registries, uploads to one, TLS for
+* Not built: discovery of registries, uploads to one, TLS for
   the HTTP service, expiry or revocation of keys,
   learned representations.
 
@@ -300,7 +308,7 @@ tokens = engine.encode('{"from": "kannaka", "intent": "accept"}', vocabulary=voc
 original = engine.decode(tokens, vocabulary=vocab)
 ```
 
-Five worked use cases, each independent of the others, are in
+Six worked use cases, each independent of the others, are in
 `docs/use-cases.md`.
 
 `examples/kannaka-bus` (0.9.2) is the first use on a Kannaka
