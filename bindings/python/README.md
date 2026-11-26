@@ -44,6 +44,12 @@ found["patterns"]   # recurring runs and gapped pairs, strongest first
 Added in 0.9:
 
 ```python
+# Wire containers: bytes that name their vocabulary by digest.
+container = engine.pack(text, vocabulary)                    # unknown="escape" keeps symbols it lacks
+engine.unpack(container, vocabulary)                         # bytes; refused under another vocabulary
+Engine.inspect_container(container)                          # which vocabulary, how many tokens
+moved = engine.translate(container, vocabulary, another)     # same content under another vocabulary
+
 # Whole event records, by column. Every field comes back.
 container, report = kute.events_pack(open("events.jsonl", "rb").read(),
                                      symbol_field="event", time_field="t", group_field="unit")

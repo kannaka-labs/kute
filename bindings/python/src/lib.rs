@@ -278,6 +278,79 @@ impl Engine {
         Ok(PyBytes::new(py, &self.decode_raw(py, tokens, vocabulary)?))
     }
 
+    /// Encode into a wire container: `bytes` that name the vocabulary by
+    /// its digest and can be given to another process or kept in a file.
+    ///
+    /// `unknown="escape"` carries a symbol the vocabulary lacks literally
+    /// in the container, so nothing is lost; the default, `"strict"`,
+    /// refuses the input. `compact=False` writes the plain form.
+    #[pyo3(signature = (data, vocabulary, *, unknown="strict", compact=true))]
+    fn pack<'py>(&self, py: Python<'py>, data: &Bound<'py, PyAny>, vocabulary: &Vocabulary, unknown: &str, compact: bool) -> PyResult<Bound<'py, PyBytes>> {
+        let raw = raw_bytes(data)?;
+        let policy = kute::UnknownPolicy::parse(unknown).map_err(err)?;
+        let tokenizer = vocabulary.tokenizer(&self.inner)?;
+        let bytes = py
+            .detach(|| {
+                let sequence = self.inner.encode_raw_open(tokenizer.as_ref().as_ref(), &raw, policy)?;
+                if compact { sequence.to_bytes_compressed() } else { sequence.to_bytes() }
+            })
+            .map_err(err)?;
+        Ok(PyBytes::new(py, &bytes))
+    }
+
+    /// Decode a wire container to `bytes`. The container must name this
+    /// vocabulary. It is refused before decoding when it would come to
+    /// more than `max_units` bytes or symbols, or more than `max_bytes`.
+    #[pyo3(signature = (container, vocabulary, *, max_units=1 << 28, max_bytes=1 << 30))]
+    fn unpack<'py>(&self, py: Python<'py>, container: &[u8], vocabulary: &Vocabulary, max_units: u64, max_bytes: u64) -> PyResult<Bound<'py, PyBytes>> {
+        let tokenizer = vocabulary.tokenizer(&self.inner)?;
+        let bytes = py
+            .detach(|| {
+                let sequence = kute::TokenSequence::from_bytes_bounded(container, max_units)?;
+                self.inner.decode_raw_within(tokenizer.as_ref().as_ref(), &sequence, max_units, max_bytes)
+            })
+            .map_err(err)?;
+        Ok(PyBytes::new(py, &bytes))
+    }
+
+    /// What a wire container says about itself, without a vocabulary:
+    /// the vocabulary it names, how many tokens and escaped symbols.
+    #[staticmethod]
+    #[pyo3(signature = (container, *, max_tokens=1 << 28))]
+    fn inspect_container(py: Python<'_>, container: &[u8], max_tokens: u64) -> PyResult<Py<PyAny>> {
+        let s = kute::TokenSequence::from_bytes_bounded(container, max_tokens).map_err(err)?;
+        to_python(
+            py,
+            &serde_json::json!({
+                "vocabulary_id": s.vocabulary_id,
+                "vocabulary_version": s.vocabulary_version,
+                "vocabulary_digest": s.vocabulary_digest,
+                "modality": s.modality,
+                "adapter": s.adapter,
+                "tokens": s.ids.len(),
+                "escaped_symbols": s.escapes.len(),
+                "bytes": container.len(),
+            }),
+        )
+    }
+
+    /// Re-encode a wire container under another vocabulary. Symbols the
+    /// target lacks are escaped, so the result decodes to what the
+    /// original decodes to. The same limits as `unpack`.
+    #[pyo3(signature = (container, source, target, *, max_units=1 << 28, max_bytes=1 << 30))]
+    fn translate<'py>(&self, py: Python<'py>, container: &[u8], source: &Vocabulary, target: &Vocabulary, max_units: u64, max_bytes: u64) -> PyResult<Bound<'py, PyBytes>> {
+        let from = source.tokenizer(&self.inner)?;
+        let to = target.tokenizer(&self.inner)?;
+        let bytes = py
+            .detach(|| {
+                let sequence = kute::TokenSequence::from_bytes_bounded(container, max_units)?;
+                let raw = self.inner.decode_raw_within(from.as_ref().as_ref(), &sequence, max_units, max_bytes)?;
+                self.inner.encode_raw_open(to.as_ref().as_ref(), &raw, kute::UnknownPolicy::Escape)?.to_bytes_compressed()
+            })
+            .map_err(err)?;
+        Ok(PyBytes::new(py, &bytes))
+    }
+
     /// Measure a vocabulary on a dataset (file or directory). Returns a dict.
     #[pyo3(signature = (vocabulary, dataset, iterations=3))]
     fn evaluate(&self, py: Python<'_>, vocabulary: &Vocabulary, dataset: PathBuf, iterations: usize) -> PyResult<Py<PyAny>> {
