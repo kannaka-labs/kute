@@ -212,6 +212,12 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
+* After 0.9.2, on `next`: `kute serve --jobs-dir DIR` takes training
+  jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
+  each ending as a file named by its digest. The service does not use
+  what it trained, and a job cannot be stopped. The Python package
+  gains wire containers and `translate`, and `discover` takes times
+  and held-out records. `docs/http.md`.
 * Since 0.9.2, Studio shows a running peer. `kute peer serve
   --status-file` keeps a file saying what it is doing, and `kute serve
   --studio --peer-status` shows it, a second or two old. It is the

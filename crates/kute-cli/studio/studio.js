@@ -507,7 +507,7 @@ views["Not here"] = async (root) => {
     el("div", { class: "panel" }, table([{ name: "view" }, { name: "why not" }, { name: "where it is today" }], [
       ["Running a benchmark again", "The service is read-only and runs nothing but its five operations.", "The scripts in benchmarks/; open their reports under Reports."],
       ["Representation experiments", "The service has no operation for them. One measurement exists, and its result is negative.", "docs/representations.md; its report opens under Reports as plain JSON."],
-      ["Training and evolving", "The service cannot create or change a vocabulary.", "kute train, kute evolve, kute shadow."],
+      ["Training and evolving", "This page starts no training and changes no vocabulary.", "kute train, kute evolve, kute shadow; training jobs over HTTP with kute serve --jobs-dir."],
     ])));
 };
 

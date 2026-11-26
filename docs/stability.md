@@ -90,6 +90,9 @@ not covered.
 
 ## Changes since v0.9.2 that need action
 
+- Rust, `kute-cli` as a library: `http::Options` has a new field,
+  `jobs` (`None` is the service as it was). `kute serve --jobs-dir` is
+  new and off unless given.
 - **Python `kute.signals_unpack` reads at most 16,777,216 values by
   default, not 134,217,728.** This is the command line's default. A
   container with more needs `max_values=`. The old default let a small

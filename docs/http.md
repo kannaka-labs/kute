@@ -19,7 +19,8 @@ Stability: **experimental**. Paths, arguments and results may change before
 It works on the vocabularies named with `--vocab` and on data sent in each
 request. A request reads no file, writes no file and opens no connection.
 Nothing is trained, evolved, stored between requests or published; those
-operations are not offered. There is no `/v1/train`.
+operations are not offered. There is no `/v1/train`. The one exception
+is asked for by the operator and off otherwise: training jobs, below.
 
 **There is no TLS and no authentication.** For that reason it listens on
 the loopback interface, and refuses to start on any other address unless
@@ -205,6 +206,58 @@ What it does not do:
   whole registry, and no agreement between registries about anything.
 * Upstream connections are plain HTTP, as every other connection here.
 
+## Training jobs (after 0.9.2)
+
+`kute serve --jobs-dir DIR` takes training jobs. It is off unless the
+directory is named, and refused on any address but loopback: the service
+has no authentication, so whoever can reach it could make it train.
+
+```
+POST /v1/jobs
+{"texts": ["...the corpus, one string a document..."],
+ "vocabulary_id": "example:text", "vocab_size": 8192}
+```
+
+Also taken: `version` (default `0.1.0`), `algorithm` (`bpe`), `adapter`
+(`text`), `adapter_options` (an object of strings), `min_frequency`. Any
+other field is refused. The answer is `202` and the job:
+
+```
+{"id": "job-1", "state": "waiting", "asked": {...}, "submitted_unix": ...,
+ "started_unix": null, "finished_unix": null, "result": null, "error": null}
+```
+
+| request | answer |
+|---|---|
+| `GET /v1/jobs` | every job remembered, and the limits |
+| `GET /v1/jobs/job-1` | that job; `state` is `waiting`, `running`, `done` or `failed` |
+| `GET /v1/jobs/job-1/vocabulary` | the vocabulary file of a job that is done; `409 not_ready` otherwise |
+
+A job that is done has `result`: the `digest`, the `file` name, its
+size, the summary `kute inspect` gives, and the seconds training took.
+The file is `DIR/<64 hex digits of the digest>.kvf`. The same corpus and
+settings give the vocabulary `kute train` gives, with the same digest.
+
+What it does not do:
+
+* **It reads no file a caller names and writes nowhere a caller names.**
+  The corpus is in the request; the file's name is the digest of what
+  was trained.
+* **The service does not use what it trained.** The vocabulary is not
+  added to what `encode` and the other operations can name, and the
+  registry does not give it. The operator takes the file and starts a
+  service with it, or does not.
+* **A job cannot be stopped or changed.** There is no `DELETE`. What a
+  job may cost is bounded when it is taken, not while it runs.
+* Jobs are not kept across a restart. The files are.
+
+What bounds it: one job runs at a time; `--jobs-queue` (4) may wait, and
+past that a job is answered `503`; each waiting job holds its corpus in
+memory, and a corpus is at most one request body; `--jobs-max-vocab-size`
+(65,536) is the largest vocabulary. The last 64 finished jobs are
+remembered. Nothing bounds how long one job runs except those sizes, and
+nothing removes files from the directory.
+
 ## Errors
 
 Every answer is JSON. A failure is `{"error": {"code": ..., "message": ...}}`
@@ -220,9 +273,10 @@ with one of these:
 | 411 | `length_required` | a POST without `Content-Length`, or with a transfer encoding |
 | 413 | `too_large` | a declared body longer than the limit; refused before any of it is read |
 | 415 | `unsupported_media_type` | a body not declared as `application/json` |
+| 409 | `not_ready` | the vocabulary of a job that is not done |
 | 422 | `refused` | the operation refused the arguments; the message says why |
 | 431 | `headers_too_large` | request line and headers over 16 KiB |
-| 503 | `busy` | every worker is busy and the queue is full |
+| 503 | `busy` | every worker is busy and the queue is full, or as many jobs wait as may |
 
 ## Limits
 
