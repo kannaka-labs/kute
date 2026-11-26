@@ -189,13 +189,18 @@ fn what_a_job_may_ask_is_bounded_and_nothing_else_can_be_done_to_one() {
     for path in ["/v1/jobs/job-99", "/v1/jobs/..%2F..%2Fetc", "/v1/jobs/job-1/vocabulary/more", "/v1/jobs/job-1/corpus"] {
         assert_eq!(service.get(path).0, 404, "{path}");
     }
-    // A job cannot be changed or stopped.
-    for method in ["DELETE", "PUT", "PATCH"] {
+    // A job cannot be changed, and there is nothing to withdraw.
+    for method in ["PUT", "PATCH"] {
         let (status, head, _) = service.call(method, "/v1/jobs/job-1");
         assert_eq!(status, 405, "{method}");
-        assert!(head.contains("Allow: GET"), "{head}");
+        assert!(head.contains("Allow: GET, DELETE"), "{head}");
         assert_eq!(service.call(method, "/v1/jobs").0, 405);
     }
+    assert_eq!(service.call("DELETE", "/v1/jobs").0, 405, "the list cannot be emptied");
+    assert_eq!(service.call("DELETE", "/v1/jobs/job-1").0, 404, "no such job");
+    let (status, head, _) = service.call("DELETE", "/v1/jobs/job-1/vocabulary");
+    assert_eq!(status, 405, "a file is not withdrawn");
+    assert!(head.contains("Allow: GET") && !head.contains("DELETE"), "{head}");
     // A form post from another page is not JSON and is not read.
     let body = "texts=x";
     let (status, _, _) = service.raw(format!("POST /v1/jobs HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{body}", body.len()).as_bytes());
@@ -227,6 +232,58 @@ fn what_a_job_may_ask_is_bounded_and_nothing_else_can_be_done_to_one() {
 /// A vocabulary larger than the whole limit fits no directory. It fails,
 /// and the jobs after it that do fit are still taken: one job cannot
 /// close the door on a directory with room in it.
+/// Text that takes training a while: many different words.
+fn slow_text() -> String {
+    let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+    let mut text = String::new();
+    while text.len() < 600_000 {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        for shift in [0, 5, 10, 15, 20, 25] {
+            text.push((b'a' + ((seed >> shift) & 15) as u8) as char);
+        }
+        text.push(' ');
+    }
+    text
+}
+
+#[test]
+fn a_waiting_job_is_withdrawn_and_one_that_finished_is_not() {
+    let dir = scratch("jobs-withdraw");
+    let service = Service::start(&dir, &["--jobs-dir", "made"]);
+    let slow = slow_text();
+    let give = |id: &str, text: &str, size: u32| {
+        let (status, job) = service.post("/v1/jobs", &json!({ "texts": [text], "vocabulary_id": id, "vocab_size": size }));
+        assert_eq!(status, 202, "{job}");
+        job["id"].as_str().unwrap().to_string()
+    };
+    // Two slow jobs stand before the third, so it is still in the line
+    // when it is withdrawn.
+    let first = give("test:w:a", &slow, 20_000);
+    let second = give("test:w:b", &slow, 20_000);
+    let third = give("test:w:c", TEXT, 300);
+    let (status, _, gone) = service.call("DELETE", &format!("/v1/jobs/{third}"));
+    assert_eq!(status, 200, "{gone}");
+    assert_eq!(gone["state"], "withdrawn", "{gone}");
+    let (status, _, again) = service.call("DELETE", &format!("/v1/jobs/{third}"));
+    assert_eq!((status, again["error"]["code"].as_str()), (409, Some("not_waiting")), "{again}");
+
+    assert_eq!(service.finished(&first)["state"], "done");
+    assert_eq!(service.finished(&second)["state"], "done");
+    let (status, _, late) = service.call("DELETE", &format!("/v1/jobs/{first}"));
+    assert_eq!(status, 409, "{late}");
+    assert!(late["error"]["message"].as_str().unwrap().contains("only a waiting job"), "{late}");
+    // The withdrawn job never ran: no start, no file, and nothing of it in the directory.
+    let (_, job) = service.get(&format!("/v1/jobs/{third}"));
+    assert_eq!(job["state"], "withdrawn");
+    assert!(job["started_unix"].is_null() && job["result"].is_null(), "{job}");
+    assert_eq!(service.get(&format!("/v1/jobs/{third}/vocabulary")).0, 409);
+    let (_, list) = service.get("/v1/jobs");
+    assert_eq!(list["directory"]["files"], 2, "{list}");
+    assert_eq!(list["jobs"].as_array().unwrap().len(), 3, "a withdrawn job is still listed");
+}
+
 #[test]
 fn a_vocabulary_larger_than_the_whole_limit_does_not_stop_the_jobs_after_it() {
     let dir = scratch("jobs-too-large");

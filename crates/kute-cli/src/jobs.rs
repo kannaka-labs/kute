@@ -294,6 +294,34 @@ impl Jobs {
         self.lock().jobs.iter().find(|j| j.id == id).map(Job::describe)
     }
 
+    /// Take a job out of the line before it starts. `None` when there is
+    /// no such job; `Err` says why a job that exists cannot be withdrawn:
+    /// only a waiting one can, because training has no point at which it
+    /// looks for a request to stop. The corpus the job held is let go.
+    pub fn withdraw(&self, id: &str) -> Option<Result<Value, String>> {
+        let mut state = self.lock();
+        let at = state.jobs.iter().position(|j| j.id == id)?;
+        // The line is the truth about what has not started: the runner
+        // takes a job from it and marks it running under this same lock.
+        let Some(place) = state.waiting.iter().position(|(waiting, _)| waiting == id) else {
+            let job = &state.jobs[at];
+            return Some(Err(match job.state {
+                "running" => "the job is running; training cannot be stopped".to_string(),
+                "withdrawn" => "the job was withdrawn already".to_string(),
+                other => format!("the job is {other}; only a waiting job can be withdrawn"),
+            }));
+        };
+        let work = state.waiting.remove(place);
+        let job = &mut state.jobs[at];
+        job.state = "withdrawn";
+        job.finished = Some(now());
+        let described = job.describe();
+        drop(state);
+        // The corpus is freed outside the lock.
+        drop(work);
+        Some(Ok(described))
+    }
+
     /// The vocabulary file of a job that is done. `None` when there is no
     /// such job; `Err` says why a job that exists has no file to give.
     pub fn file(&self, id: &str) -> Option<Result<Vec<u8>, String>> {
@@ -387,6 +415,59 @@ impl Jobs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Jobs with nothing running them, so that what waits stays waiting.
+    fn idle(name: &str) -> (Jobs, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("kute-jobs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let engine = Engine::new();
+        let jobs = Jobs { dir: dir.canonicalize().unwrap(), limits: Limits { queue: 2, ..Limits::default() }, algorithms: engine.registry().algorithm_names(), adapters: engine.registry().adapter_names(), state: Mutex::new(State::default()), wake: Condvar::new() };
+        (jobs, dir)
+    }
+
+    #[test]
+    fn a_waiting_job_can_be_withdrawn_and_no_other() {
+        let (jobs, dir) = idle("withdraw");
+        let ask = |id: &str| json!({ "texts": ["the engine reads the log ".repeat(20)], "vocabulary_id": id, "vocab_size": 260 });
+        let first = jobs.submit(&ask("test:a")).ok().unwrap()["id"].as_str().unwrap().to_string();
+        let second = jobs.submit(&ask("test:b")).ok().unwrap()["id"].as_str().unwrap().to_string();
+        assert!(matches!(jobs.submit(&ask("test:c")), Err(Refusal::Full(_))), "the line holds two");
+
+        assert!(jobs.withdraw("job-99").is_none());
+        let gone = jobs.withdraw(&second).unwrap().unwrap();
+        assert_eq!(gone["state"], "withdrawn");
+        assert!(gone["finished_unix"].is_u64() && gone["started_unix"].is_null() && gone["error"].is_null(), "{gone}");
+        assert_eq!(jobs.get(&second).unwrap()["state"], "withdrawn", "it is still listed, as what happened");
+        assert!(jobs.withdraw(&second).unwrap().unwrap_err().contains("already"));
+        assert!(jobs.file(&second).unwrap().unwrap_err().contains("withdrawn"));
+        // Its place in the line is free, and the job before it kept its own.
+        {
+            let state = jobs.lock();
+            assert_eq!(state.waiting.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(), [first.as_str()]);
+        }
+        let third = jobs.submit(&ask("test:c")).ok().expect("room again")["id"].as_str().unwrap().to_string();
+
+        // What the runner does when it takes a job: out of the line, running.
+        {
+            let mut state = jobs.lock();
+            let (id, _) = state.waiting.pop_front().unwrap();
+            assert_eq!(id, first);
+            state.jobs.iter_mut().find(|j| j.id == id).unwrap().state = "running";
+        }
+        assert!(jobs.withdraw(&first).unwrap().unwrap_err().contains("cannot be stopped"));
+        assert_eq!(jobs.get(&first).unwrap()["state"], "running");
+        {
+            let mut state = jobs.lock();
+            let job = state.jobs.iter_mut().find(|j| j.id == first).unwrap();
+            job.state = "done";
+            job.finished = Some(now());
+        }
+        assert!(jobs.withdraw(&first).unwrap().unwrap_err().contains("only a waiting job"));
+        assert!(jobs.withdraw(&third).unwrap().is_ok());
+        assert!(jobs.lock().waiting.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_directory_that_went_away_refuses_jobs_and_one_that_came_back_takes_them() {

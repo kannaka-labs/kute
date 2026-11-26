@@ -247,8 +247,14 @@ What it does not do:
   added to what `encode` and the other operations can name, and the
   registry does not give it. The operator takes the file and starts a
   service with it, or does not.
-* **A job cannot be stopped or changed.** There is no `DELETE`. What a
-  job may cost is bounded when it is taken, not while it runs.
+* **A job that has started cannot be stopped, and none can be
+  changed.** What a job may cost is bounded when it is taken, not while
+  it runs. A job that is still waiting can be withdrawn, after 0.9.3:
+  `DELETE /v1/jobs/{id}` takes it out of the line, lets its corpus go
+  and answers with the job, whose state is now `withdrawn`. It stays in
+  the list as what happened. For a job that is running, done, failed or
+  already withdrawn the answer is `409` (`not_waiting`), and nothing
+  changes.
 * Jobs are not kept across a restart. The files are.
 
 What bounds it: one job runs at a time; `--jobs-queue` (4) may wait, and

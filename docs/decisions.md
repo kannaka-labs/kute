@@ -1334,7 +1334,11 @@ Considered and not chosen:
 * Stopping a running job. Training has no point at which it checks for
   a request to stop, and killing a thread is not available. So cost is
   bounded at the door, and the documentation says a job cannot be
-  stopped.
+  stopped. (After 0.9.3 a job that has not started can be withdrawn
+  with `DELETE`: that needs nothing from training, and frees a place in
+  the line and the corpus held for it. Anything on the machine that can
+  give a job can withdraw any job, its own or not; there are no callers
+  to tell apart.)
 * Jobs for `evolve` or `shadow`. Nothing asked for them yet, and each
   needs a held vocabulary as input, which raises the question above.
 * Offering jobs through the MCP tool. The same code would serve it; it

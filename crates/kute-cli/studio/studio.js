@@ -478,10 +478,11 @@ function jobsList(result) {
     : refusing ? ` No job is taken until its operator makes room: the last vocabulary trained was ${fmt(dir.did_not_fit_bytes)} bytes and did not fit.` : "";
   const headline = d.jobs.length === 0
     ? "No job has been given to this service since it started."
-    : `${fmt(d.jobs.length)} job(s) remembered: ${fmt(count("running"))} running, ${fmt(count("waiting"))} waiting, ${fmt(count("done"))} done, ${fmt(count("failed"))} failed.`;
+    : `${fmt(d.jobs.length)} job(s) remembered: ${fmt(count("running"))} running, ${fmt(count("waiting"))} waiting, ${fmt(count("done"))} done, ${fmt(count("failed"))} failed, ${fmt(count("withdrawn"))} withdrawn.`;
   const outcome = (j) => {
     if (j.state === "done") return el("span", {}, `${j.result.digest} · ${fmt(j.result.file_bytes)} bytes · trained in ${fmt(j.result.train_seconds)} s · `, el("a", { href: `/v1/jobs/${encodeURIComponent(j.id)}/vocabulary`, download: j.result.file }, "the file"));
     if (j.state === "failed") return String(j.error);
+    if (j.state === "withdrawn") return `taken out of the line at ${clock(j.finished_unix)}, before it started`;
     return j.state === "running" ? `since ${clock(j.started_unix)}` : "in the line";
   };
   return [
@@ -500,7 +501,7 @@ function jobsList(result) {
 
 views["Jobs"] = async (root) => {
   root.append(el("h2", {}, "Training jobs"));
-  const about = el("p", { class: "note" }, "A job is given with POST /v1/jobs by a program on this machine; this page gives none and cannot stop one. The service does not use a vocabulary it trained: the file stays in the directory until its operator takes it. Jobs are forgotten when the service restarts, and the oldest finished ones after enough later ones; the files are not.");
+  const about = el("p", { class: "note" }, "A job is given with POST /v1/jobs by a program on this machine; this page gives none and withdraws none, and nothing can stop one that has started. The service does not use a vocabulary it trained: the file stays in the directory until its operator takes it. Jobs are forgotten when the service restarts, and the oldest finished ones after enough later ones; the files are not.");
   if (!state.capabilities.jobs) {
     return root.append(
       el("p", { class: "limit" }, "This service takes no jobs, so there is nothing to show."),

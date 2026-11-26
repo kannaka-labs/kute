@@ -88,6 +88,13 @@ All of them pass at this release, so no migration is needed for anything
 written since v0.2.0. Files from v0.1.0 are not among the vectors and are
 not covered.
 
+## Changes since v0.9.3 that need action (unreleased, on `next`)
+
+- `DELETE /v1/jobs/{id}` withdraws a waiting job; it was answered `405`.
+  A job's `state` can now be `withdrawn`, with `finished_unix` set and
+  no `started_unix`: a reader that takes any finished job without an
+  error for a trained one needs to look at `state`.
+
 ## Changes since v0.9.2 that need action
 
 - Python `Engine.unpack`, `translate` and `inspect_container` are new

@@ -212,10 +212,12 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   representations did no better than exact counting; on OpenSSH a longer
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
+* After 0.9.3, on `next`: a training job that is still waiting can be
+  withdrawn (`DELETE /v1/jobs/{id}`).
 * Since 0.9.3, `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
-  what it trained, and a job cannot be stopped. Studio lists the
+  what it trained, and a job cannot be stopped once it starts. Studio lists the
   jobs and what the directory holds. The Python package
   gains wire containers and `translate`, and `discover` takes times
   and held-out records. `docs/http.md`.
