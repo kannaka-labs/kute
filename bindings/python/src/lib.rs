@@ -299,14 +299,21 @@ impl Engine {
     }
 
     /// Decode a wire container to `bytes`. The container must name this
-    /// vocabulary. It is refused before decoding when it would come to
-    /// more than `max_units` bytes or symbols, or more than `max_bytes`.
-    #[pyo3(signature = (container, vocabulary, *, max_units=1 << 28, max_bytes=1 << 30))]
+    /// vocabulary. It is refused before decoding when it holds more than
+    /// `max_units` tokens, or would come to more than `max_units` bytes
+    /// or symbols or more than `max_bytes`.
+    ///
+    /// A container can be a thousand times smaller than what it claims,
+    /// so the limits are what bound memory: about 8 bytes for each unit
+    /// allowed (measured: 139 MB at the default of 16,777,216). Raise
+    /// `max_units` for containers you made yourself.
+    #[pyo3(signature = (container, vocabulary, *, max_units=1 << 24, max_bytes=1 << 30))]
     fn unpack<'py>(&self, py: Python<'py>, container: &[u8], vocabulary: &Vocabulary, max_units: u64, max_bytes: u64) -> PyResult<Bound<'py, PyBytes>> {
         let tokenizer = vocabulary.tokenizer(&self.inner)?;
         let bytes = py
             .detach(|| {
                 let sequence = kute::TokenSequence::from_bytes_bounded(container, max_units)?;
+                made_with(&sequence, &vocabulary.inner)?;
                 self.inner.decode_raw_within(tokenizer.as_ref().as_ref(), &sequence, max_units, max_bytes)
             })
             .map_err(err)?;
@@ -315,8 +322,10 @@ impl Engine {
 
     /// What a wire container says about itself, without a vocabulary:
     /// the vocabulary it names, how many tokens and escaped symbols.
+    /// The ids are read to check the container is whole: about 6 bytes
+    /// of memory for each token up to `max_tokens`.
     #[staticmethod]
-    #[pyo3(signature = (container, *, max_tokens=1 << 28))]
+    #[pyo3(signature = (container, *, max_tokens=1 << 24))]
     fn inspect_container(py: Python<'_>, container: &[u8], max_tokens: u64) -> PyResult<Py<PyAny>> {
         let s = kute::TokenSequence::from_bytes_bounded(container, max_tokens).map_err(err)?;
         to_python(
@@ -336,14 +345,17 @@ impl Engine {
 
     /// Re-encode a wire container under another vocabulary. Symbols the
     /// target lacks are escaped, so the result decodes to what the
-    /// original decodes to. The same limits as `unpack`.
-    #[pyo3(signature = (container, source, target, *, max_units=1 << 28, max_bytes=1 << 30))]
+    /// original decodes to. The same limits as `unpack`; it decodes and
+    /// encodes again, so it takes about 20 bytes of memory for each unit
+    /// allowed (measured: 348 MB at the default).
+    #[pyo3(signature = (container, source, target, *, max_units=1 << 24, max_bytes=1 << 30))]
     fn translate<'py>(&self, py: Python<'py>, container: &[u8], source: &Vocabulary, target: &Vocabulary, max_units: u64, max_bytes: u64) -> PyResult<Bound<'py, PyBytes>> {
         let from = source.tokenizer(&self.inner)?;
         let to = target.tokenizer(&self.inner)?;
         let bytes = py
             .detach(|| {
                 let sequence = kute::TokenSequence::from_bytes_bounded(container, max_units)?;
+                made_with(&sequence, &source.inner)?;
                 let raw = self.inner.decode_raw_within(from.as_ref().as_ref(), &sequence, max_units, max_bytes)?;
                 self.inner.encode_raw_open(to.as_ref().as_ref(), &raw, kute::UnknownPolicy::Escape)?.to_bytes_compressed()
             })
@@ -457,6 +469,16 @@ fn discover(
         })
         .map_err(err)?;
     to_python(py, &answer)
+}
+
+/// A container given the wrong vocabulary is told so, before any id in
+/// it is looked up under a vocabulary it was not made with.
+fn made_with(sequence: &kute::TokenSequence, vocabulary: &kute::Vocabulary) -> kute::Result<()> {
+    let digest = vocabulary.digest()?;
+    if sequence.vocabulary_digest != digest {
+        return Err(kute::KuteError::VocabularyMismatch(format!("the container was made with {}; the vocabulary given is {digest}", sequence.vocabulary_digest)));
+    }
+    Ok(())
 }
 
 mod erased {

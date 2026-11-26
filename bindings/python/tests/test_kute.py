@@ -205,8 +205,10 @@ def test_wire_containers_carry_their_vocabulary_and_translate_without_loss(engin
     # which it was made with, and the wrong one is refused.
     other = engine.train(texts=["a different corpus of words entirely"] * 20, vocabulary_id="test:other", vocab_size=300)
     assert other.digest != vocab.digest
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match="was made with"):
         engine.unpack(container, other)
+    with pytest.raises(Exception, match="was made with"):
+        engine.translate(container, other, vocab)
     moved = engine.translate(container, vocab, other)
     assert Engine.inspect_container(moved)["vocabulary_digest"] == other.digest
     assert engine.unpack(moved, other).decode("utf-8") == text

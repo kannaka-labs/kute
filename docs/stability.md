@@ -90,6 +90,9 @@ not covered.
 
 ## Changes since v0.9.2 that need action
 
+- Python `Engine.unpack`, `translate` and `inspect_container` are new
+  and read at most 16,777,216 units by default (`max_units=`,
+  `max_tokens=`): a container can claim a thousand times what it weighs.
 - Rust, `kute-cli` as a library: `http::Options` has a new field,
   `jobs` (`None` is the service as it was). `kute serve --jobs-dir` is
   new and off unless given.
