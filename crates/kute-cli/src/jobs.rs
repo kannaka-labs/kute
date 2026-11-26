@@ -375,3 +375,36 @@ impl Jobs {
         Ok((json!({ "digest": digest, "file": name, "file_bytes": bytes.len(), "summary": vocab::summarize(&vocabulary)? }), path))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_directory_that_went_away_refuses_jobs_and_one_that_came_back_takes_them() {
+        let dir = std::env::temp_dir().join(format!("kute-jobs-gone-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let jobs = Jobs::start(dir.clone(), Limits::default()).unwrap();
+        let job = json!({ "texts": ["the engine reads the log ".repeat(20)], "vocabulary_id": "test:gone", "vocab_size": 260 });
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(matches!(jobs.submit(&job), Err(Refusal::NoRoom(why)) if why.contains("cannot be read")));
+        assert!(jobs.list()["directory"]["error"].is_string());
+        assert_eq!(jobs.list()["jobs"].as_array().unwrap().len(), 0);
+        // The operator puts it back: the same service takes jobs again.
+        std::fs::create_dir_all(&dir).unwrap();
+        let taken = jobs.submit(&job).ok().expect("taken");
+        let id = taken["id"].as_str().unwrap();
+        let started = std::time::Instant::now();
+        let done = loop {
+            let job = jobs.get(id).unwrap();
+            if job["finished_unix"].is_u64() {
+                break job;
+            }
+            assert!(started.elapsed().as_secs() < 120, "{job}");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        assert_eq!(done["state"], "done", "{done}");
+        assert_eq!(jobs.list()["directory"]["files"], 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
