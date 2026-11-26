@@ -72,6 +72,14 @@ pub const VIA_HEADER: &str = "Kute-Registry-Via";
 const MAX_LOOKUPS: usize = 16;
 
 fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
+    request("GET", authority, path, None, max_bytes, timeout, via)
+}
+
+/// One request, with a JSON body or none. Returns the status and the
+/// body, which is at most `max_bytes`. `kute job` uses it for the three
+/// methods a jobs service has; the method is this program's own word,
+/// never a caller's.
+pub fn request(method: &str, authority: &str, path: &str, body: Option<&[u8]>, max_bytes: u64, timeout: Duration, via: bool) -> kute::Result<(u16, Vec<u8>)> {
     let deadline = Instant::now() + timeout;
     let left = || deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or_else(|| failed("no complete answer in time"));
     // Looking a name up has no deadline of its own in the standard
@@ -107,7 +115,21 @@ fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool
     let mut stream = stream.ok_or_else(|| failed(format!("could not connect to {authority}: {}", last.map_or("no address".to_string(), |e| e.to_string()))))?;
     stream.set_write_timeout(Some(left()?))?;
     let via = if via { format!("{VIA_HEADER}: 1\r\n") } else { String::new() };
-    stream.write_all(format!("GET {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\n{via}Connection: close\r\n\r\n").as_bytes())?;
+    let sending = body.map_or(String::new(), |b| format!("Content-Type: application/json\r\nContent-Length: {}\r\n", b.len()));
+    stream.write_all(format!("{method} {path} HTTP/1.1\r\nHost: {authority}\r\nAccept: application/json\r\n{sending}{via}Connection: close\r\n\r\n").as_bytes())?;
+    if let Some(body) = body {
+        // A body is sent in pieces so that the time allowed is for the
+        // whole exchange, not for each write of a large corpus.
+        for piece in body.chunks(64 * 1024) {
+            stream.set_write_timeout(Some(left()?))?;
+            if stream.write_all(piece).is_err() {
+                // The other side may have answered and closed without
+                // reading it all: a refusal of a body too large does.
+                // What it said is read below.
+                break;
+            }
+        }
+    }
     let mut buffer: Vec<u8> = Vec::with_capacity(4096);
     let mut chunk = [0u8; 16 * 1024];
     let head_end = loop {
@@ -121,7 +143,8 @@ fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool
         match stream.read(&mut chunk) {
             Ok(0) => return Err(failed("the connection closed before an answer")),
             Ok(n) => buffer.extend_from_slice(&chunk[..n]),
-            Err(_) => return Err(failed("no complete answer in time")),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
+            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
         }
     };
     let head = std::str::from_utf8(&buffer[..head_end]).map_err(|_| failed("the answer's headers are not text"))?;
@@ -156,7 +179,8 @@ fn get(authority: &str, path: &str, max_bytes: u64, timeout: Duration, via: bool
         match stream.read(&mut chunk[..want]) {
             Ok(0) => return Err(failed("the connection closed before the whole answer")),
             Ok(n) => body.extend_from_slice(&chunk[..n]),
-            Err(_) => return Err(failed("no complete answer in time")),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Err(failed("no complete answer in time")),
+            Err(e) => return Err(failed(format!("the connection failed before a complete answer: {}", e.kind()))),
         }
     }
     Ok((status, body))

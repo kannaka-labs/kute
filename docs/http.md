@@ -230,13 +230,34 @@ other field is refused. The answer is `202` and the job:
 | request | answer |
 |---|---|
 | `GET /v1/jobs` | every job remembered, and the limits |
-| `GET /v1/jobs/job-1` | that job; `state` is `waiting`, `running`, `done` or `failed` |
+| `GET /v1/jobs/job-1` | that job; `state` is `waiting`, `running`, `done`, `failed` or, after 0.9.3, `withdrawn` |
+| `DELETE /v1/jobs/job-1` | after 0.9.3: the job, withdrawn, if it was waiting; `409 not_waiting` otherwise |
 | `GET /v1/jobs/job-1/vocabulary` | the vocabulary file of a job that is done; `409 not_ready` otherwise |
 
 A job that is done has `result`: the `digest`, the `file` name, its
 size, the summary `kute inspect` gives, and the seconds training took.
 The file is `DIR/<64 hex digits of the digest>.kvf`. The same corpus and
 settings give the vocabulary `kute train` gives, with the same digest.
+
+From the command line, after 0.9.3:
+
+```
+kute job --at http://127.0.0.1:8080 --input corpus.txt     --id example:text --vocab-size 8192 --output example.kvf
+```
+
+`kute job` asks the service what it takes, gives the job, waits for it
+(`--wait`, 600 seconds unless given) and writes the vocabulary. Before
+anything is written the file is read as a vocabulary, its digest is
+computed from its content and must be the one the service named, its
+name must be the one asked for, and its own test vectors must pass.
+What that does not show is that the service trained on the corpus it
+was sent: that is the service's word, and `kute train` on the same
+input gives the digest to compare. When the wait runs out, a job that
+has not started is withdrawn; one that has started is left to end on
+the service, and the error says where to ask about it. Each input file
+is one document and must be UTF-8, because a corpus travels as JSON
+strings; all of them go in one request, so a corpus larger than the
+service reads is refused before it is sent.
 
 What it does not do:
 

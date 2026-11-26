@@ -94,6 +94,12 @@ not covered.
   A job's `state` can now be `withdrawn`, with `finished_unix` set and
   no `started_unix`: a reader that takes any finished job without an
   error for a trained one needs to look at `state`.
+- `kute job` is a new command. Rust, `kute-cli` as a library: a new
+  module `job`, and `registry::request`.
+- `kute fetch`: a connection that fails while an answer is read is
+  reported as failed, with the kind of failure, where it was reported
+  as "no complete answer in time". Only running out of time says that
+  now.
 
 ## Changes since v0.9.2 that need action
 

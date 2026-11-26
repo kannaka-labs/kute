@@ -4,6 +4,7 @@
 //! stderr. Exit status is 0 on success and 1 on any error.
 
 pub mod http;
+pub mod job;
 pub mod jobs;
 pub mod live;
 pub mod peer_status;
@@ -467,6 +468,49 @@ enum Command {
         /// Seconds the whole exchange may take.
         #[arg(long, default_value_t = 60)]
         timeout: u64,
+    },
+    /// Give a training job to a `kute serve --jobs-dir`, wait for it,
+    /// and write the vocabulary it made, checked against its digest.
+    Job {
+        /// The service, as http://127.0.0.1:port.
+        #[arg(long)]
+        at: String,
+        /// Text files, the corpus: one document each, UTF-8. They travel
+        /// in one request, so together they must fit the service's
+        /// largest body (3 MiB unless its operator raised it).
+        #[arg(long, required = true, num_args = 1..)]
+        input: Vec<PathBuf>,
+        /// Vocabulary identifier, e.g. kute:industrial:events.
+        #[arg(long)]
+        id: String,
+        /// Vocabulary version (semantic versioning).
+        #[arg(long, default_value = "0.1.0")]
+        vocab_version: String,
+        #[arg(long, default_value = "bpe")]
+        algorithm: String,
+        #[arg(long, default_value = "text")]
+        adapter: String,
+        /// Adapter option as key=value. Repeatable.
+        #[arg(long = "adapter-option", value_name = "KEY=VALUE")]
+        adapter_options: Vec<String>,
+        #[arg(long, default_value_t = 4096)]
+        vocab_size: u32,
+        #[arg(long, default_value_t = 1)]
+        min_frequency: u64,
+        /// Where to write the vocabulary.
+        #[arg(long)]
+        output: PathBuf,
+        /// Replace the output if it exists.
+        #[arg(long)]
+        force: bool,
+        /// Seconds to wait for the job to finish. When they pass, a job
+        /// that has not started is withdrawn; one that has started
+        /// cannot be stopped and is left to end on the service.
+        #[arg(long, default_value_t = 600)]
+        wait: u64,
+        /// Largest vocabulary file taken.
+        #[arg(long, default_value_t = 67_108_864)]
+        max_bytes: u64,
     },
     /// List registered algorithms and adapters and what each declares.
     Capabilities,
@@ -1620,6 +1664,9 @@ fn run(engine: Engine, cli: Cli) -> kute::Result<()> {
             }
             SignalsAction::Inspect { input } => print(&kute_signals::header(&std::fs::read(&input)?)?),
         },
+        Command::Job { at, input, id, vocab_version, algorithm, adapter, adapter_options, vocab_size, min_frequency, output, force, wait, max_bytes } => {
+            print(&job::run(&engine, job::Ask { at, input, id, vocab_version, algorithm, adapter, adapter_options, vocab_size, min_frequency, output, force, wait: std::time::Duration::from_secs(wait), max_bytes })?)
+        }
         Command::Fetch { from, digest, output, trusted_keys, force, list, max_bytes, timeout } => {
             let timeout = std::time::Duration::from_secs(timeout.max(1));
             match (list, digest, output) {

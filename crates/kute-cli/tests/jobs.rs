@@ -248,6 +248,81 @@ fn slow_text() -> String {
     text
 }
 
+fn kute(dir: &Path, args: &[&str]) -> (bool, Value, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_kute")).current_dir(dir).args(args).output().unwrap();
+    (out.status.success(), serde_json::from_slice(&out.stdout).unwrap_or(Value::Null), String::from_utf8_lossy(&out.stderr).into_owned())
+}
+
+#[test]
+fn the_command_line_gives_a_job_and_keeps_only_a_file_that_is_what_it_was_told() {
+    let dir = scratch("jobs-client");
+    std::fs::write(dir.join("text.txt"), TEXT.repeat(30)).unwrap();
+    let (ok, by_hand, said) = kute(&dir, &["train", "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "by-hand.kvf"]);
+    assert!(ok, "{said}");
+    let service = Service::start(&dir, &["--jobs-dir", "made", "--jobs-max-vocab-size", "400"]);
+    let at = format!("http://{}", service.address);
+
+    let (ok, report, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "from-job.kvf"]);
+    assert!(ok, "{said}");
+    assert_eq!(report["job"], "job-1");
+    assert_eq!(report["digest"], by_hand["summary"]["digest"], "the service trained what the command line trains");
+    assert_eq!(report["digest_recomputed_from_content"], true);
+    assert!(report["means"].as_str().unwrap().contains("its word"), "what was not checked is said");
+    let (ok, inspected, said) = kute(&dir, &["inspect", "from-job.kvf"]);
+    assert!(ok, "{said}");
+    assert_eq!(inspected["summary"]["digest"], report["digest"], "{inspected}");
+
+    // An output that exists is this side's mistake: the service is given nothing.
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "from-job.kvf"]);
+    assert!(!ok && said.contains("exists"), "{said}");
+    // So is a corpus that cannot travel as text.
+    std::fs::write(dir.join("bytes.bin"), [0xffu8, 0xfe, 0x00]).unwrap();
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "bytes.bin", "--id", "test:client", "--vocab-size", "300", "--output", "other.kvf"]);
+    assert!(!ok && said.contains("not UTF-8"), "{said}");
+    assert_eq!(service.get("/v1/jobs").1["jobs"].as_array().unwrap().len(), 1);
+
+    // What the service refuses is passed on in its words, and nothing is written.
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "401", "--output", "refused.kvf"]);
+    assert!(!ok && said.contains("answered 422") && said.contains("more than this service trains"), "{said}");
+    assert!(!dir.join("refused.kvf").exists());
+    // A job that fails when it runs: the reason comes back, and no file.
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--adapter", "jsonl-events", "--output", "failed.kvf"]);
+    assert!(!ok && said.contains("failed:"), "{said}");
+    assert!(!dir.join("failed.kvf").exists());
+    // A corpus larger than the service reads is not sent.
+    std::fs::write(dir.join("large.txt"), TEXT.repeat(60_000)).unwrap();
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "large.txt", "--id", "test:client", "--vocab-size", "300", "--output", "large.kvf"]);
+    assert!(!ok && said.contains("the service reads at most"), "{said}");
+    assert_eq!(service.get("/v1/jobs").1["jobs"].as_array().unwrap().len(), 2, "one done and one failed; nothing else was given");
+    // A service that takes no jobs says so before the corpus is sent.
+    let plain = Service::start(&dir, &[]);
+    let (ok, _, said) = kute(&dir, &["job", "--at", &format!("http://{}", plain.address), "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "plain.kvf"]);
+    assert!(!ok && said.contains("takes no jobs"), "{said}");
+    let (ok, _, said) = kute(&dir, &["job", "--at", "https://127.0.0.1:1", "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "tls.kvf"]);
+    assert!(!ok && said.contains("service address") && said.contains("https is not built"), "{said}");
+    // Nobody there.
+    drop(service);
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "nobody.kvf"]);
+    assert!(!ok && said.contains("service:"), "{said}");
+}
+
+#[test]
+fn a_job_given_from_the_command_line_that_does_not_start_in_time_is_withdrawn() {
+    let dir = scratch("jobs-client-wait");
+    std::fs::write(dir.join("text.txt"), TEXT.repeat(30)).unwrap();
+    let service = Service::start(&dir, &["--jobs-dir", "made"]);
+    let at = format!("http://{}", service.address);
+    let slow = slow_text();
+    for name in ["test:s:a", "test:s:b", "test:s:c"] {
+        let (status, job) = service.post("/v1/jobs", &json!({ "texts": [slow, slow], "vocabulary_id": name, "vocab_size": 60_000 }));
+        assert_eq!(status, 202, "{job}");
+    }
+    let (ok, _, said) = kute(&dir, &["job", "--at", &at, "--input", "text.txt", "--id", "test:client", "--vocab-size", "300", "--output", "late.kvf", "--wait", "0"]);
+    assert!(!ok && said.contains("job-4 had not started after 0 s and was withdrawn"), "{said}");
+    assert!(!dir.join("late.kvf").exists());
+    assert_eq!(service.get("/v1/jobs/job-4").1["state"], "withdrawn");
+}
+
 #[test]
 fn a_waiting_job_is_withdrawn_and_one_that_finished_is_not() {
     let dir = scratch("jobs-withdraw");

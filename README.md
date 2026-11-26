@@ -213,7 +213,9 @@ Added in v0.8 (each has a doc under `docs/` and a record in
   past predicts the next event worse than the previous event alone; the
   signals container adds a checked contract and not bytes.
 * After 0.9.3, on `next`: a training job that is still waiting can be
-  withdrawn (`DELETE /v1/jobs/{id}`).
+  withdrawn (`DELETE /v1/jobs/{id}`), and `kute job` gives a job from
+  the command line, waits, and keeps the file only if its content is
+  what the service named.
 * Since 0.9.3, `kute serve --jobs-dir DIR` takes training
   jobs over HTTP (`POST /v1/jobs`), on loopback only, one at a time,
   each ending as a file named by its digest. The service does not use
