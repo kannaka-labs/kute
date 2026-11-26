@@ -820,7 +820,10 @@ fn peer(engine: Engine, action: PeerAction) -> kute::Result<()> {
             peer_status::set(|status| {
                 status["exchange"]["messages_handled"] = json!(handled);
                 status["exchange"]["delivered"] = json!(inbox.len());
-                status["exchange"]["vocabularies_received"] = json!(new);
+                // The count is whole; the list is cut so that the file stays
+                // far under what a reader takes, however many were sent.
+                status["exchange"]["vocabularies_received_count"] = json!(new.len());
+                status["exchange"]["vocabularies_received"] = json!(new.iter().take(100).collect::<Vec<_>>());
             });
             print(&json!({
                 "from": from.to_string(),
