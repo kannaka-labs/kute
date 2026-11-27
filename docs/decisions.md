@@ -1459,10 +1459,16 @@ time (one round: see what it costs); an address that is not loopback
 starts without `--insecure-remote`, and with jobs only when callers are
 named. Checked by the reviewing session with its own certificates and
 client, on Windows: expired, wrong-purpose and TLS 1.2 callers get no
-HTTP; chains longer than one work on both sides; IPv6. Not checked by
-anyone: anything about `rustls` itself, a service on a real network
-address, many callers with certificates at once, and load beyond the
-numbers above.
+HTTP; chains longer than one work on both sides; IPv6. Checked after
+0.10.0 with the published `kute-cli` built on Debian 13, service and
+caller on two machines of one private network: a listed caller lists,
+trains, fetches by digest and mirrors; an unlisted one gets `403`; one
+from another authority is refused and told why (30 of 30); plain HTTP
+gets nothing; a silent connection is closed after 3.2 s; and with 8
+silent connections held against 4 workers a real caller is answered 10
+times of 10 after 5 to 6 seconds each. Not checked by anyone: anything
+about `rustls` itself, the public internet, many callers with
+certificates at once, and load beyond these numbers.
 
 ## Deferred
 
